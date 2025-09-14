@@ -1,6 +1,6 @@
 # adafmt — Ada Language Formatter
 
-**Version:** 1.1.0  
+**Version:** 1.0.0  
 **License:** MIT  
 **Copyright:** © 2025 Michael Gardner, A Bit of Help, Inc.
 
@@ -10,7 +10,7 @@
 
 - **Language Server Protocol (LSP) Integration**: Uses the official Ada Language Server for accurate, specification-compliant formatting
 - **Multiple UI Modes**: Choose from pretty (curses), basic, plain, or headless operation modes
-- **Alire Support**: Automatic detection and integration with Alire package manager
+- **Standalone Operation**: Works directly with Ada Language Server without external package managers
 - **Robust Error Handling**: Retry logic for transient failures with configurable timeouts
 - **Dry-Run by Default**: Preview changes safely before applying them
 - **CI/CD Ready**: Exit codes and check mode for integration into automated workflows
@@ -37,7 +37,7 @@ Download the appropriate package from the [latest release](https://github.com/ab
 **Python Wheel (All Platforms)**
 ```bash
 # Download the wheel file, then:
-pip install adafmt-1.1.0-py3-none-any.whl
+pip install adafmt-1.0.0-py3-none-any.whl
 ```
 
 **Python Zipapp (Portable, No Installation)**
@@ -96,11 +96,11 @@ adafmt --version
 
 ```bash
 # Preview changes (dry-run mode)
-adafmt --project-file-path /path/to/project.gpr \
+adafmt --project-path /path/to/project.gpr \
        --include-path /path/to/src
 
 # Apply changes
-adafmt --project-file-path /path/to/project.gpr \
+adafmt --project-path /path/to/project.gpr \
        --include-path /path/to/src \
        --write
 ```
@@ -109,11 +109,11 @@ adafmt --project-file-path /path/to/project.gpr \
 
 ```bash
 # Format individual files
-adafmt --project-file-path /path/to/project.gpr \
+adafmt --project-path /path/to/project.gpr \
        main.adb utils.ads types.ads
 
 # Mix files and directories
-adafmt --project-file-path /path/to/project.gpr \
+adafmt --project-path /path/to/project.gpr \
        --include-path /path/to/src \
        special_file.adb
 ```
@@ -122,12 +122,12 @@ adafmt --project-file-path /path/to/project.gpr \
 
 ```bash
 # Check if any files need formatting (exits 1 if changes needed)
-adafmt --project-file-path /path/to/project.gpr \
+adafmt --project-path /path/to/project.gpr \
        --include-path /path/to/src \
        --check
 
 # Use plain output for CI logs
-adafmt --project-file-path /path/to/project.gpr \
+adafmt --project-path /path/to/project.gpr \
        --include-path /path/to/src \
        --ui plain \
        --check
@@ -137,7 +137,7 @@ adafmt --project-file-path /path/to/project.gpr \
 
 ### Required Arguments
 
-- `--project-file-path PATH`: Path to your GNAT project file (.gpr)
+- `--project-path PATH`: Path to your GNAT project file (.gpr)
   
 ### Optional Arguments
 
@@ -159,12 +159,10 @@ adafmt --project-file-path /path/to/project.gpr \
   - `basic`: Simple text UI
   - `plain`: Minimal output for scripts
 
-#### Alire Integration
-- `--alr-mode {auto,yes,no}`: Use 'alr exec' for Alire projects
-  - `auto`: Detect automatically (default)
-  - `yes`: Force usage
-  - `no`: Never use
-- `--crate-dir PATH`: Override Alire crate directory detection
+#### Advanced Error Handling
+- **Smart Error Detection**: Distinguishes between syntax errors (prevent formatting) and semantic errors (allow formatting)
+- **Compiler Verification**: Automatically verifies GNATFORMAT syntax errors to detect false positives
+- **Detailed Error Reporting**: Comprehensive stderr output with timestamps, error types, and actionable guidance
 
 #### Advanced Options
 - `--preflight {off,warn,safe,kill,kill+clean,aggressive,fail}`: Handle existing ALS processes
@@ -283,7 +281,7 @@ jobs:
 
 #### "Ada Language Server not found"
 - Ensure ALS is installed: `which ada_language_server`
-- Add ALS to PATH or use `--alr-mode yes` for Alire projects
+- Add ALS to PATH or ensure it's available in your environment
 
 #### "Existing ALS processes detected"
 - Use `--preflight kill` to clean up stuck processes
@@ -308,6 +306,8 @@ jobs:
 - adafmt attempts compilation to verify (only for .adb/.ada files)
 - False positives are tracked and shown as yellow warnings
 - Real syntax errors prevent formatting and are reported as failures
+- Failed files show "(details in the stderr log)" on terminal
+- Full error details with timestamps are written to the stderr log file
 
 #### No Changes Applied
 - Ensure `--write` flag is used (default is dry-run)
@@ -367,10 +367,12 @@ adafmt/
 ├── tests/               # Test suite
 │   ├── test_*.py        # Unit tests for each module
 │   └── test_integration.py # Integration tests with ALS
-├── docs/                # Documentation
-│   ├── SRS.md           # Software Requirements Specification
-│   ├── SDD.md           # Software Design Document
-│   └── DEVELOPER_GUIDE.md # Development setup and guidelines
+├── docs/                # Comprehensive documentation
+│   ├── api/            # API reference documentation
+│   ├── developer/      # Developer guides and resources  
+│   ├── formal/         # Requirements and design documents
+│   ├── reference/      # Technical references and deep-dives
+│   └── user/           # User guides and troubleshooting
 ├── scripts/             # Build and release scripts
 ├── pyproject.toml       # Project configuration and dependencies
 ├── Makefile            # Common development tasks
@@ -385,11 +387,11 @@ adafmt/
 - **File Discovery** (`file_discovery.py`): Smart Ada source file detection with exclusion support
 - **Edit Engine** (`edits.py`): LSP TextEdit application with unified diff generation
 - **Logger** (`logging_jsonl.py`): Structured logging for debugging and auditing
-- **Utilities** (`utils.py`): Atomic file writes, Alire detection, process management
+- **Utilities** (`utils.py`): Atomic file writes, process management, preflight checks
 
 ## Contributing
 
-We welcome contributions! Please see our [Developer Guide](docs/DEVELOPER_GUIDE.md) for:
+We welcome contributions! Please see our [Developer Documentation](docs/developer/index.md) for:
 
 - Setting up a development environment
 - Code style guidelines
@@ -398,9 +400,22 @@ We welcome contributions! Please see our [Developer Guide](docs/DEVELOPER_GUIDE.
 
 ## Documentation
 
-- [Software Requirements Specification (SRS)](docs/SRS.md)
-- [Software Design Document (SDD)](docs/SDD.md)
-- [Developer Guide](docs/DEVELOPER_GUIDE.md)
+📚 **Complete documentation is available in the [`docs/`](docs/) directory:**
+
+### For Users
+- **[Getting Started Guide](docs/user/getting-started.md)** - **New users start here!** Complete examples and workflows
+- **[User Guides](docs/user/index.md)** - Troubleshooting, configuration, and usage guides
+- **[Timeout Configuration](docs/user/timeout-guide.md)** - ALS timeout tuning and optimization
+
+### For Developers  
+- **[Developer Documentation](docs/developer/index.md)** - Complete development guide
+- **[API Reference](docs/api/index.md)** - Technical API documentation
+- **[Testing Guide](docs/developer/testing.md)** - Comprehensive testing documentation
+
+### Technical References
+- **[Software Requirements Specification](docs/formal/SRS.md)** - Formal requirements
+- **[Software Design Document](docs/formal/SDD.md)** - Architecture and design decisions
+- **[Technical Reference](docs/reference/index.md)** - Advanced technical details
 
 ## License
 

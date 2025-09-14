@@ -1,0 +1,21 @@
+# .github/workflows/release.yml
+name: release
+on:
+  push:
+    branches: [ main ]
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write    # create tags/releases
+      id-token: write    # for PyPI trusted publishing (optional)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install build python-semantic-release
+      - name: semantic-release
+        env:
+          PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}   # or use trusted publishing
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: semantic-release publish
