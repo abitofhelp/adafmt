@@ -28,6 +28,7 @@ from enum import Enum
 
 import typer
 from typing_extensions import Annotated
+from tabulate import tabulate
 
 from .als_client import ALSClient, ALSProtocolError, build_als_command
 from .file_discovery import collect_files
@@ -753,7 +754,7 @@ async def run_formatter(
             if patterns_applied > 0:
                 pattern_info = f" | Patterns: applied={patterns_applied} ({replacements})"
         
-        line = f"{prefix} [{status:<7}] {path}"
+        line = f"{prefix} [{status:^7}] {path}"
         if edits:
             line += f" | ALS: ✓ edits={len(edits)}"
         else:
@@ -870,35 +871,47 @@ async def run_formatter(
     
     # Print formatted metrics
     print("\n" + "=" * 80)
-    print(f"ADAFMT STARTED: {adafmt_start_time.strftime('%Y%m%dT%H%M%SZ')}")
-    
     # ALS Metrics
-    print("\nALS METRICS")
-    print(f"  Started:    {als_start_time.strftime('%Y%m%dT%H%M%SZ')}")
+    print("ALS METRICS")
     total = len(file_paths)
     pct_changed = (changed * 100 // total) if total > 0 else 0
     pct_unchanged = (unchanged * 100 // total) if total > 0 else 0
     pct_failed = (failed * 100 // total) if total > 0 else 0
     
-    print(f"  Files:      {total:3d} (100%)")
-    print(f"  Changed:    {changed:3d} ({pct_changed:3d}%)")
-    print(f"  Unchanged:  {unchanged:3d} ({pct_unchanged:3d}%)")
-    print(f"  Failed:     {failed:3d} ({pct_failed:3d}%)")
-    print(f"  Completed:  {adafmt_end_time.strftime('%Y%m%dT%H%M%SZ')}")
-    print(f"  Elapsed:    {als_elapsed:6.1f}s")
-    print(f"  Rate:       {rate:6.1f} files/s")
+    # File statistics table
+    file_stats = [
+        ["Files", total, "100%"],
+        ["Changed", changed, f"{pct_changed}%"],
+        ["Unchanged", unchanged, f"{pct_unchanged}%"],
+        ["Failed", failed, f"{pct_failed}%"]
+    ]
+    
+    # Print table with 2-space indent
+    table_str = tabulate(file_stats, tablefmt="plain", colalign=("left", "right", "right"))
+    for line in table_str.split('\n'):
+        print(f"  {line}")
+    
+    # Show Started timestamp before other timing info (no blank line)
+    print(f"  Started    {als_start_time.strftime('%Y%m%dT%H%M%SZ')}")
+    
+    # Timing table (without Started since it's shown above)
+    timing_data = [
+        ["Completed", adafmt_end_time.strftime('%Y%m%dT%H%M%SZ')],
+        ["Elapsed", f"{als_elapsed:.1f}s"],
+        ["Rate", f"{rate:.1f} files/s"]
+    ]
+    table_str = tabulate(timing_data, tablefmt="plain")
+    for line in table_str.split('\n'):
+        print(f"  {line}")
     
     # Pattern Metrics if enabled
     if pattern_formatter and pattern_formatter.enabled:
         pattern_summary = pattern_formatter.get_summary()
         print("\nPATTERN METRICS")
-        print(f"  Started:    {pattern_start_time.strftime('%Y%m%dT%H%M%SZ')}")
         
         if pattern_summary:
-            # Calculate max widths for alignment
-            max_name_len = max(len(name) for name in pattern_summary.keys())
-            
-            # Track totals
+            # Build pattern data table
+            pattern_data = []
             total_files = 0
             total_replacements = 0
             total_failures = 0
@@ -906,64 +919,101 @@ async def run_formatter(
             for name, metrics in sorted(pattern_summary.items()):
                 files_touched = metrics['files_touched']
                 replacements = metrics['replacements']
-                # Pattern failures aren't tracked yet, so show 0
-                failures = 0
-                print(f"  Pattern {name:>{max_name_len}}: files={files_touched:3d}, replacements={replacements:4d}, failed={failures:2d}")
+                failures = 0  # Pattern failures aren't tracked yet
                 
-                # Add to totals
+                pattern_data.append([name, files_touched, replacements, failures])
                 total_files += files_touched
                 total_replacements += replacements
                 total_failures += failures
             
-            # Print totals line with same alignment (add 1 for the space after "Pattern")
-            print(f"  {'Totals:':>{max_name_len + 9}} files={total_files:3d}, replacements={total_replacements:4d}, failed={total_failures:2d}")
+            # Add separator and totals
+            pattern_data.append(["--------", "-------", "--------", "------"])
+            pattern_data.append(["Totals", total_files, total_replacements, total_failures])
+            
+            # Print table with consistent alignment
+            headers = ["Pattern", "Applied", "Replaced", "Failed"]
+            table_str = tabulate(pattern_data, headers=headers, tablefmt="simple", colalign=("left", "right", "right", "right"))
+            for line in table_str.split('\n'):
+                print(f"  {line}")
         else:
             print("  No patterns were applied to any files")
         
-        print(f"  Completed:  {pattern_end_time.strftime('%Y%m%dT%H%M%SZ')}")
-        print(f"  Elapsed:    {pattern_elapsed:6.1f}s")
+        # Leave blank line before timing info
+        print()
+        
+        # Show Started timestamp before other timing info (aligned with table)
+        print(f"  Started              {pattern_start_time.strftime('%Y%m%dT%H%M%SZ')}")
+        
+        # Pattern timing table (without Started since it's shown above)
+        pattern_timing_data = [
+            ["Completed", pattern_end_time.strftime('%Y%m%dT%H%M%SZ')],
+            ["Elapsed", f"{pattern_elapsed:.1f}s"]
+        ]
+        
         if pattern_elapsed > 0:
             # Primary rate: same as ALS (total files scanned)
             scan_rate = len(file_paths) / pattern_elapsed
-            print(f"  Rate:       {scan_rate:6.1f} files/s (scanned)")
+            pattern_timing_data.append(["Rate (scanned)", f"{scan_rate:.1f} files/s"])
             
             # Additional pattern-specific rates  
             if pattern_summary:
-                if 'total_files' in locals() and total_files > 0:  # Files where patterns were applied
-                    processed_rate = total_files / pattern_elapsed
-                    print(f"              {processed_rate:6.1f} files/s (processed)")
+                if 'total_files' in locals() and total_files > 0:  # Pattern applications
+                    applied_rate = total_files / pattern_elapsed
+                    pattern_timing_data.append(["Rate (applied)", f"{applied_rate:.1f} patterns/s"])
                 if 'total_replacements' in locals() and total_replacements > 0:  # Replacements
                     replacements_rate = total_replacements / pattern_elapsed
-                    print(f"              {replacements_rate:6.1f} replacements/s")
+                    pattern_timing_data.append(["Rate (replacements)", f"{replacements_rate:.1f} replacements/s"])
+        
+        table_str = tabulate(pattern_timing_data, tablefmt="plain")
+        for line in table_str.split('\n'):
+            print(f"  {line}")
     
     # Final summary
-    print(f"\nADAFMT COMPLETED: {adafmt_end_time.strftime('%Y%m%dT%H%M%SZ')}")
-    print(f"  Total Elapsed: {elapsed_seconds:6.1f}s")
-    print("=" * 80)
+    print()
+    print("ADAFMT RUN")
+    completion_data = [
+        ["Started", adafmt_start_time.strftime('%Y%m%dT%H%M%SZ')],
+        ["Completed", adafmt_end_time.strftime('%Y%m%dT%H%M%SZ')],
+        ["Total Elapsed", f"{elapsed_seconds:.1f}s"]
+    ]
+    table_str = tabulate(completion_data, tablefmt="plain")
+    for line in table_str.split('\n'):
+        print(f"  {line}")
 
     # Print log paths to stdout after UI closes so they're copyable
     if ui and (log_path or client.als_log_path or stderr_path):
-        print("\nLog files:")
+        print("\nLOG FILES")
+        
+        # Build log files table
+        log_files = []
+        
+        # Main Log
         if log_path:
             log_display = f"./{log_path} (default location)" if using_default_log else str(log_path)
-            print(f"  Log:         {log_display}")
+            log_files.append(["Main Log", log_display])
         else:
-            print(f"  Log:         Not configured")
+            log_files.append(["Main Log", "Not configured"])
         
         # Pattern Log
         pattern_log_display = f"./{pattern_log_path} (default location)" if using_default_patterns else str(pattern_log_path)
-        print(f"  Pattern Log: {pattern_log_display}")
+        log_files.append(["Pattern Log", pattern_log_display])
         
         # Stderr
         if stderr_path:
             stderr_display = f"./{stderr_path} (default location)" if using_default_stderr else str(stderr_path)
-            print(f"  Stderr:      {stderr_display}")
+            log_files.append(["Stderr", stderr_display])
         else:
-            print(f"  Stderr:      Not configured")
+            log_files.append(["Stderr", "Not configured"])
         
         # ALS Log
         als_log_display = client.als_log_path or "~/.als/ada_ls_log.*.log (default location)"
-        print(f"  ALS Log:     {als_log_display}")
+        log_files.append(["ALS Log", als_log_display])
+        
+        # Print table with consistent formatting
+        table_str = tabulate(log_files, tablefmt="plain")
+        for line in table_str.split('\n'):
+            print(f"  {line}")
+        print("=" * 80)
 
     # Log pattern run_end event
     pattern_logger.write({
@@ -1096,6 +1146,8 @@ def main() -> None:
         print(f"[FATAL ERROR] {type(e).__name__}: {e}", file=sys.stderr)
         import traceback
         traceback.print_exc()
+        # Ensure cleanup runs even on exceptions
+        _cleanup_handler()
         sys.exit(1)
 
 if __name__ == "__main__":

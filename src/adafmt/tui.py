@@ -268,6 +268,13 @@ class PlainUI(BaseUI):
                     # Print with ANSI color codes for bright yellow
                     colored_msg = msg[:start_idx] + "\033[93m\033[1m[changed]\033[0m" + msg[end_idx:]
                     print(colored_msg)
+                # Color [ok     ] in bright green
+                elif "[ok     ]" in msg:
+                    start_idx = msg.find("[ok     ]")
+                    end_idx = start_idx + len("[ok     ]")
+                    # Print with ANSI color codes for bright green
+                    colored_msg = msg[:start_idx] + "\033[92m\033[1m[ok     ]\033[0m" + msg[end_idx:]
+                    print(colored_msg)
                 else:
                     print(msg)
             else:
