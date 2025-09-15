@@ -29,6 +29,7 @@ import shutil
 import subprocess
 
 from adafmt.cli import run_formatter
+from adafmt.utils import kill_als_processes
 
 
 async def run_formatter_with_defaults(**kwargs):
@@ -60,7 +61,31 @@ class TestALSIntegration:
     
     All tests in this class require ALS to be installed and will be skipped if it's
     not available in the system PATH.
+    
+    Note: All tests use preflight_mode="aggressive" to ensure clean state by killing
+    all ALS processes before each test. This prevents test interference and hangs
+    caused by lingering ALS processes from previous test runs.
     """
+    
+    @pytest.fixture(autouse=True)
+    def ensure_clean_als_state(self):
+        """Ensure clean ALS state before and after each test.
+        
+        This fixture emulates adafmt's preflight and cleanup behavior:
+        1. Kill all ALS processes before test (preflight)
+        2. Run the test
+        3. Kill all ALS processes after test (cleanup)
+        
+        This ensures tests are completely isolated and prevents hangs
+        from lingering ALS processes.
+        """
+        # Preflight: Kill any existing ALS processes
+        kill_als_processes(mode="aggressive", dry_run=False)
+        
+        yield  # Run the test
+        
+        # Cleanup: Kill any ALS processes created by the test
+        kill_als_processes(mode="aggressive", dry_run=False)
     
     @pytest.fixture
     def temp_project(self, tmp_path):
@@ -124,7 +149,7 @@ end Hello;""")
             diff=False,
             check=False,
             ui_mode="off",
-            preflight_mode="safe",
+            preflight_mode="aggressive",
             als_stale_minutes=30,
             pre_hook=None,
             post_hook=None,
@@ -182,7 +207,7 @@ end Bad;""")
             diff=False,
             check=True,
             ui_mode="off",
-            preflight_mode="safe",
+            preflight_mode="aggressive",
             als_stale_minutes=30,
             pre_hook=None,
             post_hook=None,
@@ -235,7 +260,7 @@ end File{i};""")
                 diff=False,
                 check=False,
                 ui_mode="off",
-                preflight_mode="safe",
+                preflight_mode="aggressive",
                 als_stale_minutes=30,
                 pre_hook=None,
                 post_hook=None,
@@ -271,7 +296,7 @@ end File{i};""")
             diff=False,
             check=False,
             ui_mode="off",
-            preflight_mode="safe",
+            preflight_mode="aggressive",
             als_stale_minutes=30,
             pre_hook=None,
             post_hook=None,
