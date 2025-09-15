@@ -18,7 +18,7 @@ end Demo;"""
    --  foo
    Z : array (1 .. 10)  of Integer := (1, 2, 3);
 begin
-   Put_Line("value -- inside string");  --  EOL comment
+   Put_Line("value -- inside string"); --  EOL comment
 end Demo;
 """
     after_als = fake_als(before)

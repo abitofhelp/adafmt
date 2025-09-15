@@ -1,0 +1,71 @@
+import re, json
+from dataclasses import dataclass
+from typing import List, Tuple, Dict
+from pathlib import Path
+
+try:
+    import regex as rx  # type: ignore
+except Exception:
+    rx = None
+
+NAME_RE = re.compile(r'^[a-z0-9\-_]{12}$')
+ALLOWED_FLAGS = {"MULTILINE": re.MULTILINE, "IGNORECASE": re.IGNORECASE, "DOTALL": re.DOTALL}
+
+# Load patterns from the actual patterns file
+patterns_file = Path(__file__).parent / "test_patterns.json"
+if patterns_file.exists():
+    with open(patterns_file) as f:
+        DEFAULT_PATTERNS = json.load(f)
+else:
+    # Fallback to empty patterns
+    DEFAULT_PATTERNS = []
+
+@dataclass
+class ApplyStats:
+    replacements_by_rule: Dict[str,int]
+    total_replacements: int
+    applied_rules: list
+
+class PatternEngine:
+    @staticmethod
+    def load_list(items: list):
+        # validate + compile
+        rules = []
+        seen = set()
+        for it in items:
+            name = it["name"]
+            assert NAME_RE.fullmatch(name), f"invalid name: {name}"
+            assert name not in seen, f"duplicate name: {name}"
+            seen.add(name)
+            flags_bits = 0
+            for f in it.get("flags", []):
+                flags_bits |= ALLOWED_FLAGS[f]
+            comp = (rx.compile if rx else re.compile)(it["find"], flags_bits)
+            rules.append((name, comp, it["replace"]))
+        rules.sort(key=lambda x: x[0])
+        return rules
+
+    @staticmethod
+    def apply(text: str, rules, timeout_ms: int = 50) -> Tuple[str, ApplyStats]:
+        out = text
+        hits = {}
+        total = 0
+        for (name, pat, repl) in rules:
+            if rx:
+                try:
+                    out, n = pat.subn(repl, out, timeout=timeout_ms/1000.0 if timeout_ms else None)
+                except rx.TimeoutError:  # pragma: no cover
+                    continue
+            else:
+                out, n = pat.subn(repl, out)
+            if n:
+                total += n
+                hits[name] = hits.get(name, 0) + n
+        return out, ApplyStats(hits, total, sorted(hits.keys()))
+
+def fake_als(text: str) -> str:
+    # minimal ALS-like normalization for tests
+    text = re.sub(r"[ \t]*:=[ \t]*", " := ", text)
+    if not text.endswith("\n"):
+        text += "\n"
+    return text

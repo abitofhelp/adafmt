@@ -10,7 +10,7 @@ import os
 import sys
 from pathlib import Path
 from typing import Generator, List, Any
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock, MagicMock, AsyncMock
 
 import pytest
 
@@ -224,8 +224,6 @@ async def async_als_client(temp_project_file: Path, mock_logger: Mock) -> AsyncM
     Returns:
         AsyncMock configured for async/await testing.
     """
-    from unittest.mock import AsyncMock
-    
     client = AsyncMock(spec=ALSClient)
     client.format_file.return_value = []
     client.start.return_value = None
