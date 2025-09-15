@@ -178,7 +178,7 @@ class TestUIMode:
     def test_ui_mode_selection(self, mock_make_ui):
         """Test UI mode parameter is correctly passed to UI factory.
         
-        Given: A specific UI mode string ("pretty", "simple", etc.)
+        Given: UI mode "plain"
         When: make_ui is called with the mode
         Then: UI factory is called with the correct mode parameter
         """
@@ -186,9 +186,9 @@ class TestUIMode:
         mock_make_ui.return_value = mock_ui
         
         # This would be called within run_formatter
-        ui = cli.make_ui("pretty")
+        ui = cli.make_ui("plain")
         
-        mock_make_ui.assert_called_once_with("pretty")
+        mock_make_ui.assert_called_once_with("plain")
 
 
 class TestCleanupHandler:
