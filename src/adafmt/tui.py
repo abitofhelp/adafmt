@@ -236,7 +236,8 @@ class PlainUI(BaseUI):
         """
         if not self._start_banner_printed:
             ver = f" v{self.state.version}" if self.state.version else ""
-            print(f"{self.state.title}{ver}")
+            mode = f" - {self.state.mode}" if self.state.mode else ""
+            print(f"{self.state.title}{ver}{mode}")
             self._start_banner_printed = True
 
     def log_line(self, msg: str) -> None:
@@ -251,13 +252,24 @@ class PlainUI(BaseUI):
         """
         self._print_banner_once()
         try:
-            # Color [failed ] in bright red if present and we're in a terminal
-            if "[failed ]" in msg and _have_tty():
-                start_idx = msg.find("[failed ]")
-                end_idx = start_idx + len("[failed ]")
-                # Print with ANSI color codes for bright red
-                colored_msg = msg[:start_idx] + "\033[91m\033[1m[failed ]\033[0m" + msg[end_idx:]
-                print(colored_msg)
+            # Apply colors if we're in a terminal
+            if _have_tty():
+                # Color [failed ] in bright red
+                if "[failed ]" in msg:
+                    start_idx = msg.find("[failed ]")
+                    end_idx = start_idx + len("[failed ]")
+                    # Print with ANSI color codes for bright red
+                    colored_msg = msg[:start_idx] + "\033[91m\033[1m[failed ]\033[0m" + msg[end_idx:]
+                    print(colored_msg)
+                # Color [changed] in bright yellow
+                elif "[changed]" in msg:
+                    start_idx = msg.find("[changed]")
+                    end_idx = start_idx + len("[changed]")
+                    # Print with ANSI color codes for bright yellow
+                    colored_msg = msg[:start_idx] + "\033[93m\033[1m[changed]\033[0m" + msg[end_idx:]
+                    print(colored_msg)
+                else:
+                    print(msg)
             else:
                 print(msg)
         except Exception:
@@ -751,8 +763,12 @@ def make_ui(mode: str = "auto") -> Optional[BaseUI]:
             return PlainUI()
 
         if mode == "auto":
-            dbg("auto -> pretty (TTY+curses detected)")
-            return PrettyCursesUI()
+            # TEMPORARILY DISABLED: Always use PlainUI for better scrollback support
+            dbg("auto -> plain (graphical UI disabled)")
+            return PlainUI()
+            # Original code (preserved):
+            # dbg("auto -> pretty (TTY+curses detected)")
+            # return PrettyCursesUI()
         if mode == "pretty":
             try:
                 dbg("trying PrettyCursesUI")

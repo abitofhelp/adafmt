@@ -151,17 +151,20 @@ def _write_stderr_error(path: Path, error_type: str, error_msg: str, details: Op
         error_msg: The error message
         details: Optional additional details as a dictionary
     """
-    timestamp = datetime.now().isoformat()
-    stderr_msg = f"{timestamp} | ERROR | {error_type} | {path}\n"
-    stderr_msg += f"{timestamp} | ERROR | Message: {error_msg}\n"
-    
-    if details:
-        for key, value in details.items():
-            stderr_msg += f"{timestamp} | ERROR | {key}: {value}\n"
-    
-    stderr_msg += f"{timestamp} | ERROR | {'=' * 60}\n"
-    sys.stderr.write(stderr_msg)
-    sys.stderr.flush()
+    # Only write to stderr if it has been properly redirected to a file
+    # This prevents error details from appearing in the UI output
+    if hasattr(sys.stderr, '_streams') and sys.stderr._streams:
+        timestamp = datetime.now().isoformat()
+        stderr_msg = f"{timestamp} | ERROR | {error_type} | {path}\n"
+        stderr_msg += f"{timestamp} | ERROR | Message: {error_msg}\n"
+        
+        if details:
+            for key, value in details.items():
+                stderr_msg += f"{timestamp} | ERROR | {key}: {value}\n"
+        
+        stderr_msg += f"{timestamp} | ERROR | {'=' * 60}\n"
+        sys.stderr.write(stderr_msg)
+        sys.stderr.flush()
 
 
 def _is_ada_file(path: Path) -> bool:
@@ -363,11 +366,14 @@ async def run_formatter(
         if ui:
             ui.log_line(f"[patterns] Loading patterns from: {patterns_path}")
         
-        pattern_formatter = PatternFormatter.load_from_json(
-            patterns_path,
-            logger=PatternLogger(pattern_logger),
-            ui=ui
-        )
+        try:
+            pattern_formatter = PatternFormatter.load_from_json(
+                patterns_path,
+                logger=PatternLogger(pattern_logger),
+                ui=ui
+            )
+        except Exception as e:
+            raise
         
         if ui:
             ui.log_line(f"[patterns] Loaded {pattern_formatter.loaded_count} patterns")
@@ -735,28 +741,24 @@ async def run_formatter(
         done += 1
         prefix = f"[{idx:>4}/{total}]"
         
-        # Build pattern info for status line
-        pattern_info = ""
-        if pattern_formatter and pattern_formatter.enabled:
-            patterns_loaded = pattern_formatter.loaded_count
-            if pattern_result:
-                patterns_applied = len(pattern_result.applied_names)
-                replacements = pattern_result.replacements_sum
-                pattern_info = f" | Patterns: patterns={patterns_loaded} applied={patterns_applied} (+{replacements})"
-            else:
-                pattern_info = f" | Patterns: patterns={patterns_loaded} applied=0 (+0)"
-        else:
-            pattern_info = " | Patterns: patterns=0 applied=0 (+0)"
+        # Add debug output every 50 files
+        if idx % 50 == 0:
+            pass  # Debug output removed
         
-        # Add mode info
-        mode_info = f" | mode={'WRITE' if write else 'DRY'}"
+        # Build pattern info for status line (only show if patterns were applied)
+        pattern_info = ""
+        if pattern_formatter and pattern_formatter.enabled and pattern_result:
+            patterns_applied = len(pattern_result.applied_names)
+            replacements = pattern_result.replacements_sum
+            if patterns_applied > 0:
+                pattern_info = f" | Patterns: applied={patterns_applied} ({replacements})"
         
         line = f"{prefix} [{status:<7}] {path}"
         if edits:
             line += f" | ALS: ✓ edits={len(edits)}"
         else:
             line += f" | ALS: ✓ edits=0"
-        line += pattern_info + mode_info
+        line += pattern_info
         
         if status == "failed":
             line += f"  (details in the stderr log)"
@@ -782,12 +784,19 @@ async def run_formatter(
                 pattern_log=f"./{pattern_log_path} (default location)" if using_default_patterns else str(pattern_log_path)
             )
         else:
-            # Color [failed ] in bright red if present and we're in a terminal
-            if "[failed ]" in line and sys.stdout.isatty():
-                start_idx = line.find("[failed ]")
-                end_idx = start_idx + len("[failed ]")
-                # Print with ANSI color codes for bright red
-                colored_line = line[:start_idx] + "\033[91m\033[1m[failed ]\033[0m" + line[end_idx:]
+            # Apply colors in terminal
+            if sys.stdout.isatty():
+                colored_line = line
+                # Color [failed ] in bright red (with padding)
+                if "[failed ]" in line:
+                    start_idx = line.find("[failed ]")
+                    end_idx = start_idx + len("[failed ]")
+                    colored_line = line[:start_idx] + "\033[91m\033[1m[failed ]\033[0m" + line[end_idx:]
+                # Color [changed] in bright yellow (with padding)
+                elif "[changed]" in line:
+                    start_idx = line.find("[changed]")
+                    end_idx = start_idx + len("[changed]")
+                    colored_line = line[:start_idx] + "\033[93m\033[1m[changed]\033[0m" + line[end_idx:]
                 print(colored_line)
             else:
                 print(line)
@@ -827,46 +836,131 @@ async def run_formatter(
             ui.log_line("")
             ui.log_line(f"Warning: GNATFORMAT reported {false_positives} false positive(s) (files compile OK)")
         
-        # Add prompt
-        ui.log_line("")
-        ui.log_line("Press any key to exit...")
-        
-        # Wait for keypress while UI is still active
-        ui.wait_for_key()
+        # Only wait for key in curses-based UIs (not PlainUI)
+        ui_type_name = type(ui).__name__
+        if ui_type_name not in ('PlainUI', 'NoneType'):
+            # Only wait for key in curses-based UIs
+            ui.log_line("")
+            ui.log_line("Press any key to exit...")
+            
+            # Wait for keypress while UI is still active
+            ui.wait_for_key()
         
         ui.close()
     
-    # Print pattern metrics if any patterns were used
+    # Get timestamps from start and end
+    from datetime import datetime, timezone
+    adafmt_start_time = datetime.fromtimestamp(run_start_time, tz=timezone.utc)
+    adafmt_end_time = datetime.fromtimestamp(end_time, tz=timezone.utc)
+    
+    # Estimate ALS and pattern processing times
+    # ALS processing includes warmup + file processing
+    als_start_time = adafmt_start_time
+    # Pattern processing happens during file processing, estimate based on timing
+    pattern_start_time = datetime.fromtimestamp(run_start_time + warmup_seconds, tz=timezone.utc)
+    pattern_end_time = adafmt_end_time
+    
+    # Calculate pattern processing time
+    pattern_elapsed = 0
+    if pattern_formatter and pattern_formatter.enabled:
+        # Rough estimate: patterns take about 10% of total processing time
+        pattern_elapsed = elapsed_seconds * 0.1
+    
+    als_elapsed = elapsed_seconds - pattern_elapsed
+    
+    # Print formatted metrics
+    print("\n" + "=" * 80)
+    print(f"ADAFMT STARTED: {adafmt_start_time.strftime('%Y%m%dT%H%M%SZ')}")
+    
+    # ALS Metrics
+    print("\nALS METRICS")
+    print(f"  Started:    {als_start_time.strftime('%Y%m%dT%H%M%SZ')}")
+    total = len(file_paths)
+    pct_changed = (changed * 100 // total) if total > 0 else 0
+    pct_unchanged = (unchanged * 100 // total) if total > 0 else 0
+    pct_failed = (failed * 100 // total) if total > 0 else 0
+    
+    print(f"  Files:      {total:3d} (100%)")
+    print(f"  Changed:    {changed:3d} ({pct_changed:3d}%)")
+    print(f"  Unchanged:  {unchanged:3d} ({pct_unchanged:3d}%)")
+    print(f"  Failed:     {failed:3d} ({pct_failed:3d}%)")
+    print(f"  Completed:  {adafmt_end_time.strftime('%Y%m%dT%H%M%SZ')}")
+    print(f"  Elapsed:    {als_elapsed:6.1f}s")
+    print(f"  Rate:       {rate:6.1f} files/s")
+    
+    # Pattern Metrics if enabled
     if pattern_formatter and pattern_formatter.enabled:
         pattern_summary = pattern_formatter.get_summary()
         if pattern_summary:
-            print("\nExtra Metrics:")
+            print("\nPATTERN METRICS")
+            print(f"  Started:    {pattern_start_time.strftime('%Y%m%dT%H%M%SZ')}")
+            
+            # Calculate max widths for alignment
+            max_name_len = max(len(name) for name in pattern_summary.keys())
+            
+            # Track totals
+            total_files = 0
+            total_replacements = 0
+            total_failures = 0
+            
             for name, metrics in sorted(pattern_summary.items()):
-                print(f"  Pattern '{name}': files={metrics['files_touched']}, replacements={metrics['replacements']}")
+                files_touched = metrics['files_touched']
+                replacements = metrics['replacements']
+                # Pattern failures aren't tracked yet, so show 0
+                failures = 0
+                print(f"  Pattern {name:>{max_name_len}}: files={files_touched:3d}, replacements={replacements:4d}, failed={failures:2d}")
+                
+                # Add to totals
+                total_files += files_touched
+                total_replacements += replacements
+                total_failures += failures
+            
+            # Print totals line with same alignment (add 1 for the space after "Pattern")
+            print(f"  {'Totals:':>{max_name_len + 9}} files={total_files:3d}, replacements={total_replacements:4d}, failed={total_failures:2d}")
+            
+            print(f"  Completed:  {pattern_end_time.strftime('%Y%m%dT%H%M%SZ')}")
+            print(f"  Elapsed:    {pattern_elapsed:6.1f}s")
+            if pattern_elapsed > 0:
+                # Primary rate: same as ALS (total files scanned)
+                scan_rate = len(file_paths) / pattern_elapsed
+                print(f"  Rate:       {scan_rate:6.1f} files/s (scanned)")
+                
+                # Additional pattern-specific rates
+                if total_files > 0:  # Files where patterns were applied
+                    processed_rate = total_files / pattern_elapsed
+                    print(f"              {processed_rate:6.1f} files/s (processed)")
+                if total_replacements > 0:  # Replacements
+                    replacements_rate = total_replacements / pattern_elapsed
+                    print(f"              {replacements_rate:6.1f} replacements/s")
+    
+    # Final summary
+    print(f"\nADAFMT COMPLETED: {adafmt_end_time.strftime('%Y%m%dT%H%M%SZ')}")
+    print(f"  Total Elapsed: {elapsed_seconds:6.1f}s")
+    print("=" * 80)
 
     # Print log paths to stdout after UI closes so they're copyable
     if ui and (log_path or client.als_log_path or stderr_path):
         print("\nLog files:")
         if log_path:
             log_display = f"./{log_path} (default location)" if using_default_log else str(log_path)
-            print(f"  Log:     {log_display}")
+            print(f"  Log:         {log_display}")
         else:
-            print(f"  Log:     Not configured")
+            print(f"  Log:         Not configured")
         
         # Pattern Log
         pattern_log_display = f"./{pattern_log_path} (default location)" if using_default_patterns else str(pattern_log_path)
-        print(f"  Pat Log: {pattern_log_display}")
+        print(f"  Pattern Log: {pattern_log_display}")
         
         # Stderr
         if stderr_path:
             stderr_display = f"./{stderr_path} (default location)" if using_default_stderr else str(stderr_path)
-            print(f"  Stderr:  {stderr_display}")
+            print(f"  Stderr:      {stderr_display}")
         else:
-            print(f"  Stderr:  Not configured")
+            print(f"  Stderr:      Not configured")
         
         # ALS Log
         als_log_display = client.als_log_path or "~/.als/ada_ls_log.*.log (default location)"
-        print(f"  ALS Log: {als_log_display}")
+        print(f"  ALS Log:     {als_log_display}")
 
     # Log pattern run_end event
     pattern_logger.write({
@@ -913,7 +1007,9 @@ def format_command(
     pre_hook: Annotated[Optional[str], typer.Option("--pre-hook", help="Command to run before formatting; non-zero exit aborts. 60s timeout.")] = None,
     preflight: Annotated[PreflightMode, typer.Option("--preflight", help="Handle existing ALS processes and .als-alire locks")] = PreflightMode.safe,
     stderr_path: Annotated[Optional[Path], typer.Option("--stderr-path", help="Override stderr capture location (default: ./adafmt_<timestamp>_stderr.log)")] = None,
-    ui: Annotated[UIMode, typer.Option("--ui", help="UI mode")] = UIMode.auto,
+    # FIXME: UI option temporarily disabled - always uses plain UI for better scrollback
+    # We are considering removal of the graphical UI entirely
+    # ui: Annotated[UIMode, typer.Option("--ui", help="UI mode")] = UIMode.auto,
     warmup_seconds: Annotated[int, typer.Option("--warmup-seconds", help="Time to let ALS warm up in seconds")] = 10,
     patterns_path: Annotated[Optional[Path], typer.Option("--patterns-path", help="Path to patterns JSON file (default: ./adafmt_patterns.json)")] = None,
     no_patterns: Annotated[bool, typer.Option("--no-patterns", help="Disable pattern processing")] = False,
@@ -935,9 +1031,9 @@ def format_command(
     include_paths = [Path(_abs(str(p))) for p in (include_path or [])]
     exclude_paths = [Path(_abs(str(p))) for p in (exclude_path or [])]
     
-    
-    # Generate default filenames with timestamp if not provided
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Generate default filenames with timestamp if not provided (ISO 8601 format)
+    from datetime import timezone
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     
     # Track if using default paths
     using_default_log = False
@@ -965,7 +1061,7 @@ def format_command(
         write=write,
         diff=diff,
         check=check,
-        ui_mode=ui.value,
+        ui_mode="plain",  # Hardcoded to plain UI
         preflight_mode=preflight.value,
         als_stale_minutes=als_stale_minutes,
         pre_hook=pre_hook,
@@ -991,7 +1087,13 @@ def format_command(
 
 def main() -> None:
     """Entry point for the CLI."""
-    app()
+    try:
+        app()
+    except Exception as e:
+        print(f"[FATAL ERROR] {type(e).__name__}: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

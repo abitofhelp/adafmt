@@ -339,8 +339,6 @@ class PatternFormatter:
         if ui:
             if formatter.loaded_count == 0:
                 ui.show_info("No valid patterns loaded")
-            else:
-                ui.show_info(f"Loaded {formatter.loaded_count} patterns")
         
         return formatter
     
