@@ -52,6 +52,27 @@ _cleanup_logger: Optional[JsonlLogger] = None
 _cleanup_pattern_logger: Optional[JsonlLogger] = None
 _cleanup_restore_stderr = None
 
+
+class _Tee(io.TextIOBase):
+    """Redirect output to multiple streams."""
+    def __init__(self, *streams):
+        self._streams = [s for s in streams if s is not None]
+    
+    def write(self, s):
+        wrote = 0
+        for st in self._streams:
+            try:
+                wrote = st.write(s)
+                st.flush()
+            except Exception:
+                pass
+        return wrote
+    
+    def flush(self):
+        for st in self._streams:
+            with contextlib.suppress(Exception):
+                st.flush()
+
 def _cleanup_handler(signum=None, frame=None):
     """Clean up resources on exit or signal."""
     try:
@@ -212,23 +233,6 @@ async def run_formatter(
     global _cleanup_ui
     _cleanup_ui = ui
     # --- Redirect stderr to the configured stderr file (suppress terminal output) ---
-    class _Tee(io.TextIOBase):
-        def __init__(self, *streams):
-            self._streams = [s for s in streams if s is not None]
-        def write(self, s):
-            wrote = 0
-            for st in self._streams:
-                try:
-                    wrote = st.write(s)
-                    st.flush()
-                except Exception:
-                    pass
-            return wrote
-        def flush(self):
-            for st in self._streams:
-                with contextlib.suppress(Exception):
-                    st.flush()
-
     _orig_stderr = sys.stderr
     _tee_fp = None
     def _restore_stderr():
@@ -286,7 +290,12 @@ async def run_formatter(
     _cleanup_logger = logger
     
     # pattern logger - create pattern log file
-    timestamp = log_path.name.split('_')[1]  # Extract timestamp from main log filename
+    # Try to extract timestamp from log filename, or use current time
+    try:
+        timestamp = log_path.name.split('_')[1].split('.')[0]  # Extract timestamp from main log filename
+    except (IndexError, AttributeError):
+        from datetime import datetime as dt
+        timestamp = dt.now().strftime('%Y%m%dT%H%M%SZ')
     pattern_log_path = log_path.parent / f"adafmt_{timestamp}_patterns.log"
     pattern_logger = JsonlLogger(pattern_log_path)
     pattern_logger.start_fresh()

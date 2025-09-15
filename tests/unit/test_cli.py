@@ -199,23 +199,20 @@ class TestCleanupHandler:
     application exits or receives termination signals.
     """
     
-    @patch('adafmt.cli._cleanup_state')
-    def test_cleanup_handler_basic(self, mock_state):
+    def test_cleanup_handler_basic(self):
         """Test _cleanup_handler properly closes UI and logger resources.
         
         Given: Active UI and logger instances in cleanup state
         When: _cleanup_handler is called
         Then: Both UI and logger close methods are called
         """
-        # Setup mock state
-        mock_client = AsyncMock()
+        # Setup mock instances
         mock_ui = MagicMock()
         mock_logger = MagicMock()
         
-        mock_state.als_client = mock_client
-        mock_state.ui = mock_ui
-        mock_state.logger = mock_logger
-        mock_state.original_stderr = sys.stderr
+        # Set global cleanup variables
+        cli._cleanup_ui = mock_ui
+        cli._cleanup_logger = mock_logger
         
         # Call cleanup
         cli._cleanup_handler()
@@ -223,30 +220,29 @@ class TestCleanupHandler:
         # Verify UI and logger were closed
         mock_ui.close.assert_called_once()
         mock_logger.close.assert_called_once()
+        
+        # Cleanup
+        cli._cleanup_ui = None
+        cli._cleanup_logger = None
     
-    @patch('adafmt.cli._cleanup_state')
-    def test_cleanup_handler_restores_stderr(self, mock_state):
+    def test_cleanup_handler_restores_stderr(self):
         """Test cleanup handler restores original stderr stream.
         
-        Given: Modified sys.stderr and saved original stderr
+        Given: Modified sys.stderr and saved restore function
         When: _cleanup_handler is called
-        Then: sys.stderr is restored to its original value
+        Then: The restore function is called
         """
-        original = sys.stderr
-        mock_file = MagicMock()
+        # Setup mock restore function
+        mock_restore = MagicMock()
         
-        mock_state.als_client = None
-        mock_state.ui = None
-        mock_state.logger = None
-        mock_state.original_stderr = original
+        # Set global cleanup variable
+        cli._cleanup_restore_stderr = mock_restore
         
-        # Temporarily change stderr
-        sys.stderr = mock_file
+        # Call cleanup
+        cli._cleanup_handler()
         
-        try:
-            cli._cleanup_handler()
-            # Stderr should be restored
-            assert sys.stderr == original
-        finally:
-            # Ensure we restore it for other tests
-            sys.stderr = original
+        # Verify restore was called
+        mock_restore.assert_called_once()
+        
+        # Cleanup
+        cli._cleanup_restore_stderr = None

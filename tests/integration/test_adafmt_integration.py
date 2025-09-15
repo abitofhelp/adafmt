@@ -21,6 +21,7 @@ Note:
 """
 import asyncio
 import os
+import sys
 import tempfile
 from pathlib import Path
 import pytest
@@ -28,6 +29,21 @@ import shutil
 import subprocess
 
 from adafmt.cli import run_formatter
+
+
+async def run_formatter_with_defaults(**kwargs):
+    """Helper to run formatter with default pattern parameters."""
+    defaults = {
+        'patterns_path': None,
+        'no_patterns': True,  # Disable patterns for basic tests
+        'patterns_timeout_ms': 100,
+        'patterns_max_bytes': 1_000_000,
+        'using_default_log': False,
+        'using_default_stderr': False,
+        'using_default_patterns': False
+    }
+    defaults.update(kwargs)
+    return await run_formatter(**defaults)
 
 
 @pytest.mark.integration
@@ -100,7 +116,7 @@ Put_Line("Hello, World!");
 end Hello;""")
         
         # Run formatter
-        result = await run_formatter(
+        result = await run_formatter_with_defaults(
             project_path=temp_project / "test_project.gpr",
             include_paths=[src_dir],
             exclude_paths=[],
@@ -158,7 +174,7 @@ begin
     Put_Line("Error")
 end Bad;""")
         
-        result = await run_formatter(
+        result = await run_formatter_with_defaults(
             project_path=temp_project / "test_project.gpr",
             include_paths=[src_dir],
             exclude_paths=[],
@@ -211,7 +227,7 @@ end File{i};""")
         
         # Run with extremely short timeout to trigger timeouts
         with pytest.raises(RuntimeError, match="Too many consecutive timeouts"):
-            await run_formatter(
+            await run_formatter_with_defaults(
                 project_path=temp_project / "test_project.gpr",
                 include_paths=[src_dir],
                 exclude_paths=[],
@@ -247,7 +263,7 @@ end File{i};""")
         - Appropriate success status is returned
         - No unnecessary processing occurs
         """
-        result = await run_formatter(
+        result = await run_formatter_with_defaults(
             project_path=temp_project / "test_project.gpr",
             include_paths=[temp_project / "src"],
             exclude_paths=[],
@@ -361,7 +377,7 @@ class TestCLIIntegration:
         - Help output is properly formatted
         """
         result = subprocess.run(
-            ["python", "-m", "adafmt", "--help"],
+            [sys.executable, "-m", "adafmt", "--help"],
             capture_output=True,
             text=True
         )
@@ -384,7 +400,7 @@ class TestCLIIntegration:
         - Version information is properly formatted
         """
         result = subprocess.run(
-            ["python", "-m", "adafmt", "--version"],
+            [sys.executable, "-m", "adafmt", "--version"],
             capture_output=True,
             text=True
         )

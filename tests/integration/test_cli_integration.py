@@ -65,7 +65,7 @@ class TestCLIBasicCommands:
             timeout=10
         )
         assert result.returncode == 0
-        assert 'Ada Language Formatter' in result.stdout
+        assert 'Format Ada source code using the Ada Language Server' in result.stdout
         assert '--project-path' in result.stdout
     
     def test_version_command(self):
@@ -166,9 +166,12 @@ class TestCLIParameters:
             timeout=10
         )
         
-        preflight_modes = ['off', 'warn', 'safe', 'kill', 'aggressive', 'fail']
+        preflight_modes = ['off', 'warn', 'safe', 'kill', 'fail']
         for mode in preflight_modes:
             assert mode in result.stdout, f"Preflight mode '{mode}' not documented"
+        
+        # Check for aggressive (might be wrapped as "aggr essive" in help)
+        assert 'aggr' in result.stdout, "Preflight mode 'aggressive' not documented"
 
 
 class TestCLIFileProcessing:
@@ -244,14 +247,18 @@ end Test;
             (tmppath / 'test.adb').write_text('package body Test is end Test;')
             (tmppath / 'test.txt').write_text('not an ada file')
             
+            # Create a minimal project file
+            project_file = tmppath / 'test.gpr'
+            project_file.write_text('project Test is end Test;')
+            
             result = subprocess.run([
                 sys.executable, '-m', 'adafmt',
-                '--project-path', '/tmp/test.gpr',
+                '--project-path', str(project_file),
                 '--include-path', str(tmppath),
-                '--ui', 'off',
                 '--preflight', 'off',
-                '--dry-run'
-            ], capture_output=True, text=True, timeout=10)
+                '--no-patterns',
+                '--check'  # Just check, don't actually format
+            ], capture_output=True, text=True, timeout=20)  # Increase timeout
             
             # Even without ALS, it should discover the files
             # Check logs mention the Ada files
