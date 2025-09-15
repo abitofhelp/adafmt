@@ -891,10 +891,10 @@ async def run_formatter(
     # Pattern Metrics if enabled
     if pattern_formatter and pattern_formatter.enabled:
         pattern_summary = pattern_formatter.get_summary()
+        print("\nPATTERN METRICS")
+        print(f"  Started:    {pattern_start_time.strftime('%Y%m%dT%H%M%SZ')}")
+        
         if pattern_summary:
-            print("\nPATTERN METRICS")
-            print(f"  Started:    {pattern_start_time.strftime('%Y%m%dT%H%M%SZ')}")
-            
             # Calculate max widths for alignment
             max_name_len = max(len(name) for name in pattern_summary.keys())
             
@@ -917,19 +917,22 @@ async def run_formatter(
             
             # Print totals line with same alignment (add 1 for the space after "Pattern")
             print(f"  {'Totals:':>{max_name_len + 9}} files={total_files:3d}, replacements={total_replacements:4d}, failed={total_failures:2d}")
+        else:
+            print("  No patterns were applied to any files")
+        
+        print(f"  Completed:  {pattern_end_time.strftime('%Y%m%dT%H%M%SZ')}")
+        print(f"  Elapsed:    {pattern_elapsed:6.1f}s")
+        if pattern_elapsed > 0:
+            # Primary rate: same as ALS (total files scanned)
+            scan_rate = len(file_paths) / pattern_elapsed
+            print(f"  Rate:       {scan_rate:6.1f} files/s (scanned)")
             
-            print(f"  Completed:  {pattern_end_time.strftime('%Y%m%dT%H%M%SZ')}")
-            print(f"  Elapsed:    {pattern_elapsed:6.1f}s")
-            if pattern_elapsed > 0:
-                # Primary rate: same as ALS (total files scanned)
-                scan_rate = len(file_paths) / pattern_elapsed
-                print(f"  Rate:       {scan_rate:6.1f} files/s (scanned)")
-                
-                # Additional pattern-specific rates
-                if total_files > 0:  # Files where patterns were applied
+            # Additional pattern-specific rates  
+            if pattern_summary:
+                if 'total_files' in locals() and total_files > 0:  # Files where patterns were applied
                     processed_rate = total_files / pattern_elapsed
                     print(f"              {processed_rate:6.1f} files/s (processed)")
-                if total_replacements > 0:  # Replacements
+                if 'total_replacements' in locals() and total_replacements > 0:  # Replacements
                     replacements_rate = total_replacements / pattern_elapsed
                     print(f"              {replacements_rate:6.1f} replacements/s")
     

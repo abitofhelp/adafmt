@@ -457,10 +457,10 @@ class PatternFormatter:
             patterns that were actually used.
         """
         summary = {}
-        for name in self.rules:
-            if self.files_touched.get(name.name, 0) > 0:
-                summary[name.name] = {
-                    'files_touched': self.files_touched[name.name],
-                    'replacements': self.replacements[name.name]
+        for rule in self.rules:
+            if self.files_touched.get(rule.name, 0) > 0:
+                summary[rule.name] = {
+                    'files_touched': self.files_touched[rule.name],
+                    'replacements': self.replacements[rule.name]
                 }
         return summary
