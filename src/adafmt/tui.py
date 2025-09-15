@@ -181,6 +181,31 @@ class BaseUI:
     def wait_for_key(self) -> None:
         """Wait for user to press a key before continuing."""
         self._wait_for_key = True
+    
+    # ----- messages -----
+    def show_info(self, msg: str) -> None:
+        """Display an informational message.
+        
+        Args:
+            msg: Information message to display
+        """
+        self.log_line(f"[info] {msg}")
+    
+    def show_warning(self, msg: str) -> None:
+        """Display a warning message.
+        
+        Args:
+            msg: Warning message to display
+        """
+        self.log_line(f"[warn] {msg}")
+    
+    def show_error(self, msg: str) -> None:
+        """Display an error message.
+        
+        Args:
+            msg: Error message to display
+        """
+        self.log_line(f"[error] {msg}")
 
 
 class PlainUI(BaseUI):
