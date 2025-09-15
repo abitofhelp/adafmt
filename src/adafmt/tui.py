@@ -65,6 +65,7 @@ class UIState:
     footer_stats: str = ""
     footer_timing: str = ""
     footer_jsonl_log: str = ""
+    footer_pattern_log: str = ""
     footer_als_log: str = ""
     footer_stderr_log: str = ""
     failed_count: int = 0
@@ -120,7 +121,8 @@ class BaseUI:
         self.state.footer_left, self.state.footer_right = left, right
     
     def update_footer_stats(self, total: int, changed: int, unchanged: int, failed: int, 
-                           elapsed: float, rate: float, jsonl_log: str, als_log: str, stderr_log: str = "") -> None:
+                           elapsed: float, rate: float, jsonl_log: str, als_log: str, 
+                           stderr_log: str = "", pattern_log: str = "") -> None:
         """Update the multi-line footer statistics.
         
         Args:
@@ -133,6 +135,7 @@ class BaseUI:
             jsonl_log: Path to JSONL log file
             als_log: Path to ALS log file
             stderr_log: Path to stderr log file
+            pattern_log: Path to pattern log file
         """
         # Calculate percentages
         done = changed + unchanged + failed
@@ -149,6 +152,7 @@ class BaseUI:
         # This ensures the bar position never moves
         self.state.footer_timing = f"Elapsed: {elapsed_str}s | Rate: {rate:.1f} files/s"
         self.state.footer_jsonl_log = f"Log:     {jsonl_log}"
+        self.state.footer_pattern_log = f"Pat Log: {pattern_log}" if pattern_log else ""
         self.state.footer_als_log = f"ALS Log: {als_log}"
         self.state.footer_stderr_log = f"Stderr:  ./{stderr_log}" if stderr_log and not stderr_log.startswith("./") else f"Stderr:  {stderr_log}"
         self.state.failed_count = failed
@@ -540,13 +544,17 @@ class BasicCursesUI(BaseUI):
                     if self.state.footer_jsonl_log:
                         stdscr.addstr(footer_y + 3, 0, self.state.footer_jsonl_log[: w - 1], curses.color_pair(2) | curses.A_BOLD)
                     
-                    # Line 4: Stderr
-                    if self.state.footer_stderr_log:
-                        stdscr.addstr(footer_y + 4, 0, self.state.footer_stderr_log[: w - 1], curses.color_pair(2) | curses.A_BOLD)
+                    # Line 4: Pattern Log
+                    if self.state.footer_pattern_log:
+                        stdscr.addstr(footer_y + 4, 0, self.state.footer_pattern_log[: w - 1], curses.color_pair(2) | curses.A_BOLD)
                     
-                    # Line 5: ALS Log
+                    # Line 5: Stderr
+                    if self.state.footer_stderr_log:
+                        stdscr.addstr(footer_y + 5, 0, self.state.footer_stderr_log[: w - 1], curses.color_pair(2) | curses.A_BOLD)
+                    
+                    # Line 6: ALS Log
                     if self.state.footer_als_log:
-                        stdscr.addstr(footer_y + 5, 0, self.state.footer_als_log[: w - 1], curses.color_pair(2) | curses.A_BOLD)
+                        stdscr.addstr(footer_y + 6, 0, self.state.footer_als_log[: w - 1], curses.color_pair(2) | curses.A_BOLD)
 
                 # Draw popup if waiting for key
                 if self._wait_for_key and not popup_win:

@@ -32,6 +32,7 @@ from typing_extensions import Annotated
 from .als_client import ALSClient, ALSProtocolError, build_als_command
 from .file_discovery import collect_files
 from .logging_jsonl import JsonlLogger
+from .pattern_formatter import PatternFormatter, PatternLogger
 from .tui import make_ui
 from .utils import preflight, run_hook
 
@@ -47,6 +48,7 @@ except Exception:
 _cleanup_client: Optional[ALSClient] = None
 _cleanup_ui = None
 _cleanup_logger: Optional[JsonlLogger] = None
+_cleanup_pattern_logger: Optional[JsonlLogger] = None
 _cleanup_restore_stderr = None
 
 def _cleanup_handler(signum=None, frame=None):
@@ -76,6 +78,10 @@ def _cleanup_handler(signum=None, frame=None):
         if _cleanup_logger:
             with contextlib.suppress(Exception):
                 _cleanup_logger.close()
+        
+        if _cleanup_pattern_logger:
+            with contextlib.suppress(Exception):
+                _cleanup_pattern_logger.close()
                 
         if _cleanup_restore_stderr:
             with contextlib.suppress(Exception):
@@ -183,8 +189,13 @@ async def run_formatter(
     stderr_path: Optional[Path],
     files: List[str],
     max_consecutive_timeouts: int,
+    patterns_path: Optional[Path],
+    no_patterns: bool,
+    patterns_timeout_ms: int,
+    patterns_max_bytes: int,
     using_default_log: bool = False,
-    using_default_stderr: bool = False) -> int:
+    using_default_stderr: bool = False,
+    using_default_patterns: bool = False) -> int:
     """Run the main formatting logic asynchronously."""
     run_start_time = time.time()
     
@@ -269,6 +280,14 @@ async def run_formatter(
     logger.start_fresh()  # Create empty file, ensuring it exists
     global _cleanup_logger
     _cleanup_logger = logger
+    
+    # pattern logger - create pattern log file
+    timestamp = log_path.name.split('_')[1]  # Extract timestamp from main log filename
+    pattern_log_path = log_path.parent / f"adafmt_{timestamp}_patterns.log"
+    pattern_logger = JsonlLogger(pattern_log_path)
+    pattern_logger.start_fresh()
+    global _cleanup_pattern_logger
+    _cleanup_pattern_logger = pattern_logger
 
     # Hooks
     if pre_hook:
@@ -334,6 +353,37 @@ async def run_formatter(
         ui.log_line(f"[discovery] Found {len(file_paths)} Ada files to format")
     else:
         print(f"[discovery] Found {len(file_paths)} Ada files to format")
+    
+    # Load pattern formatter
+    pattern_formatter = None
+    if not no_patterns:
+        if patterns_path is None:
+            patterns_path = Path("./adafmt_patterns.json")
+        
+        if ui:
+            ui.log_line(f"[patterns] Loading patterns from: {patterns_path}")
+        
+        pattern_formatter = PatternFormatter.load_from_json(
+            patterns_path,
+            logger=PatternLogger(pattern_logger),
+            ui=ui
+        )
+        
+        if ui:
+            ui.log_line(f"[patterns] Loaded {pattern_formatter.loaded_count} patterns")
+    else:
+        if ui:
+            ui.log_line("[patterns] Pattern processing disabled (--no-patterns)")
+    
+    # Log pattern run_start event
+    pattern_logger.write({
+        'ev': 'run_start',
+        'patterns_path': str(patterns_path) if patterns_path else None,
+        'patterns_loaded': pattern_formatter.loaded_count if pattern_formatter else 0,
+        'mode': 'WRITE' if write else 'DRY',
+        'timeout_ms': patterns_timeout_ms,
+        'max_bytes': patterns_max_bytes
+    })
     
     # Exit early if no files found
     if not file_paths:
@@ -401,6 +451,8 @@ async def run_formatter(
         status = "ok"
         note = ""
         attempts = 0
+        edits = None
+        pattern_result = None
         
         while attempts < max_attempts:
             try:
@@ -417,6 +469,31 @@ async def run_formatter(
                     from .edits import apply_text_edits, unified_diff
                     from .utils import atomic_write
                     formatted_content = apply_text_edits(original_content, edits)
+                    
+                    # Apply patterns if enabled and ALS succeeded
+                    pattern_result = None
+                    if pattern_formatter and pattern_formatter.enabled:
+                        # Check file size limit
+                        file_size = len(formatted_content.encode('utf-8'))
+                        if file_size > patterns_max_bytes:
+                            # Skip patterns for large files
+                            pattern_logger.write({
+                                'ev': 'file_skipped_large',
+                                'path': str(path),
+                                'size_bytes': file_size,
+                                'max_bytes': patterns_max_bytes
+                            })
+                            if ui:
+                                ui.log_line(f"[patterns] Skipping {path} - file too large ({file_size} bytes)")
+                        else:
+                            # Apply patterns
+                            formatted_content, pattern_result = pattern_formatter.apply(
+                                path,
+                                formatted_content,
+                                timeout_ms=patterns_timeout_ms,
+                                logger=PatternLogger(pattern_logger),
+                                ui=ui
+                            )
                     
                     if write:
                         # Write to file
@@ -645,9 +722,42 @@ async def run_formatter(
                 with contextlib.suppress(Exception):
                     await client.restart()
 
+        # Log file event to pattern log
+        pattern_logger.write({
+            'ev': 'file',
+            'path': str(path),
+            'als_ok': status != "failed",
+            'als_edits': len(edits) if edits else 0,
+            'patterns_applied': pattern_result.applied_names if pattern_result else [],
+            'replacements': pattern_result.replacements_sum if pattern_result else 0
+        })
+        
         done += 1
         prefix = f"[{idx:>4}/{total}]"
+        
+        # Build pattern info for status line
+        pattern_info = ""
+        if pattern_formatter and pattern_formatter.enabled:
+            patterns_loaded = pattern_formatter.loaded_count
+            if pattern_result:
+                patterns_applied = len(pattern_result.applied_names)
+                replacements = pattern_result.replacements_sum
+                pattern_info = f" | Patterns: patterns={patterns_loaded} applied={patterns_applied} (+{replacements})"
+            else:
+                pattern_info = f" | Patterns: patterns={patterns_loaded} applied=0 (+0)"
+        else:
+            pattern_info = " | Patterns: patterns=0 applied=0 (+0)"
+        
+        # Add mode info
+        mode_info = f" | mode={'WRITE' if write else 'DRY'}"
+        
         line = f"{prefix} [{status:<7}] {path}"
+        if edits:
+            line += f" | ALS: ✓ edits={len(edits)}"
+        else:
+            line += f" | ALS: ✓ edits=0"
+        line += pattern_info + mode_info
+        
         if status == "failed":
             line += f"  (details in the stderr log)"
         elif note:
@@ -668,7 +778,8 @@ async def run_formatter(
                 rate=rate,
                 jsonl_log=f"./{log_path} (default location)" if using_default_log else str(log_path) if log_path else "Not configured",
                 als_log=client.als_log_path or "~/.als/ada_ls_log.*.log (default location)",
-                stderr_log=f"./{stderr_path} (default location)" if using_default_stderr else str(stderr_path) if stderr_path else "Not configured"
+                stderr_log=f"./{stderr_path} (default location)" if using_default_stderr else str(stderr_path) if stderr_path else "Not configured",
+                pattern_log=f"./{pattern_log_path} (default location)" if using_default_patterns else str(pattern_log_path)
             )
         else:
             # Color [failed ] in bright red if present and we're in a terminal
@@ -707,7 +818,8 @@ async def run_formatter(
             rate=rate,
             jsonl_log=f"./{log_path} (default location)" if using_default_log else str(log_path) if log_path else "Not configured",
             als_log=client.als_log_path or "~/.als/ada_ls_log.*.log (default location)",
-            stderr_log=f"./{stderr_path} (default location)" if using_default_stderr else str(stderr_path) if stderr_path else "Not configured"
+            stderr_log=f"./{stderr_path} (default location)" if using_default_stderr else str(stderr_path) if stderr_path else "Not configured",
+            pattern_log=f"./{pattern_log_path} (default location)" if using_default_patterns else str(pattern_log_path)
         )
         
         # Only show warnings if there were false positives
@@ -723,6 +835,14 @@ async def run_formatter(
         ui.wait_for_key()
         
         ui.close()
+    
+    # Print pattern metrics if any patterns were used
+    if pattern_formatter and pattern_formatter.enabled:
+        pattern_summary = pattern_formatter.get_summary()
+        if pattern_summary:
+            print("\nExtra Metrics:")
+            for name, metrics in sorted(pattern_summary.items()):
+                print(f"  Pattern '{name}': files={metrics['files_touched']}, replacements={metrics['replacements']}")
 
     # Print log paths to stdout after UI closes so they're copyable
     if ui and (log_path or client.als_log_path or stderr_path):
@@ -732,6 +852,10 @@ async def run_formatter(
             print(f"  Log:     {log_display}")
         else:
             print(f"  Log:     Not configured")
+        
+        # Pattern Log
+        pattern_log_display = f"./{pattern_log_path} (default location)" if using_default_patterns else str(pattern_log_path)
+        print(f"  Pat Log: {pattern_log_display}")
         
         # Stderr
         if stderr_path:
@@ -744,6 +868,15 @@ async def run_formatter(
         als_log_display = client.als_log_path or "~/.als/ada_ls_log.*.log (default location)"
         print(f"  ALS Log: {als_log_display}")
 
+    # Log pattern run_end event
+    pattern_logger.write({
+        'ev': 'run_end',
+        'files_total': len(file_paths),
+        'files_als_ok': len(file_paths) - failed,
+        'patterns_loaded': pattern_formatter.loaded_count if pattern_formatter else 0,
+        'patterns_summary': pattern_formatter.get_summary() if pattern_formatter else {}
+    })
+    
     # Shutdown ALS after UI updates
     with contextlib.suppress(Exception):
         await client.shutdown()
@@ -782,7 +915,10 @@ def format_command(
     stderr_path: Annotated[Optional[Path], typer.Option("--stderr-path", help="Override stderr capture location (default: ./adafmt_<timestamp>_stderr.log)")] = None,
     ui: Annotated[UIMode, typer.Option("--ui", help="UI mode")] = UIMode.auto,
     warmup_seconds: Annotated[int, typer.Option("--warmup-seconds", help="Time to let ALS warm up in seconds")] = 10,
-
+    patterns_path: Annotated[Optional[Path], typer.Option("--patterns-path", help="Path to patterns JSON file (default: ./adafmt_patterns.json)")] = None,
+    no_patterns: Annotated[bool, typer.Option("--no-patterns", help="Disable pattern processing")] = False,
+    patterns_timeout_ms: Annotated[int, typer.Option("--patterns-timeout-ms", help="Timeout per pattern in milliseconds")] = 50,
+    patterns_max_bytes: Annotated[int, typer.Option("--patterns-max-bytes", help="Skip patterns for files larger than this (bytes)")] = 10485760,
     max_consecutive_timeouts: Annotated[int, typer.Option("--max-consecutive-timeouts", help="Abort after this many timeouts in a row (0 = no limit)")] = 5,
     write: Annotated[bool, typer.Option("--write", help="Apply changes to files")] = False,
     files: Annotated[Optional[List[str]], typer.Argument(help="Specific Ada files to format")] = None,
@@ -842,8 +978,13 @@ def format_command(
         stderr_path=stderr_path,
         files=files or [],
         max_consecutive_timeouts=max_consecutive_timeouts,
+        patterns_path=patterns_path,
+        no_patterns=no_patterns,
+        patterns_timeout_ms=patterns_timeout_ms,
+        patterns_max_bytes=patterns_max_bytes,
         using_default_log=using_default_log,
-        using_default_stderr=using_default_stderr))
+        using_default_stderr=using_default_stderr,
+        using_default_patterns=True))
     
     raise typer.Exit(exit_code)
 
