@@ -255,6 +255,7 @@ async def run_formatter(
     patterns_timeout_ms: int,
     patterns_max_bytes: int,
     validate_patterns: bool = False,
+    no_als: bool = False,
     using_default_log: bool = False,
     using_default_stderr: bool = False,
     using_default_patterns: bool = False) -> int:
@@ -369,39 +370,48 @@ async def run_formatter(
             return int(pf_result)
 
 
-    # Initialize Ada Language Server client with configuration
-    client = ALSClient(
-        project_file=proj, 
-        stderr_file_path=stderr_path,
-        init_timeout=init_timeout,  # Fix: Pass init_timeout
-        logger=ui.log_line if ui else print
-    )
-    await client.start()
-    global _cleanup_client
-    _cleanup_client = client
-    
-    # Add warmup delay after start
-    if warmup_seconds > 0:
+    # Initialize Ada Language Server client with configuration (unless --no-als)
+    client = None
+    if not no_als:
+        client = ALSClient(
+            project_file=proj, 
+            stderr_file_path=stderr_path,
+            init_timeout=init_timeout,  # Fix: Pass init_timeout
+            logger=ui.log_line if ui else print
+        )
+        await client.start()
+        global _cleanup_client
+        _cleanup_client = client
+        
+        # Add warmup delay after start
+        if warmup_seconds > 0:
+            if ui:
+                ui.log_line(f"[als] Warming up for {warmup_seconds} seconds...")
+            else:
+                print(f"[als] Warming up for {warmup_seconds} seconds...")
+            await asyncio.sleep(warmup_seconds)
+    else:
         if ui:
-            ui.log_line(f"[als] Warming up for {warmup_seconds} seconds...")
+            ui.log_line("[als] ALS formatting disabled (--no-als)")
         else:
-            print(f"[als] Warming up for {warmup_seconds} seconds...")
-        await asyncio.sleep(warmup_seconds)
+            print("[als] ALS formatting disabled (--no-als)")
     
     # Echo launch context for debugging
-    launch_msg = f"[als] cwd={client._launch_cwd} cmd={client._launch_cmd}"
-    if ui:
-        ui.log_line(launch_msg)
-    else:
-        print(launch_msg)
+    if client:
+        launch_msg = f"[als] cwd={client._launch_cwd} cmd={client._launch_cmd}"
+        if ui:
+            ui.log_line(launch_msg)
+        else:
+            print(launch_msg)
     
     # Display log paths early so users know where to find them
-    if ui:
-        ui.log_line(f"[als] ALS log: {client.als_log_path or '~/.als/ada_ls_log.*.log (default location)'}")
-        ui.log_line(f"[als] Stderr log: {client._stderr_log_path}")
-    else:
-        print(f"[als] ALS log: {client.als_log_path or '~/.als/ada_ls_log.*.log (default location)'}")
-        print(f"[als] Stderr log: {client._stderr_log_path}")
+    if client:
+        if ui:
+            ui.log_line(f"[als] ALS log: {client.als_log_path or '~/.als/ada_ls_log.*.log (default location)'}")
+            ui.log_line(f"[als] Stderr log: {client._stderr_log_path}")
+        else:
+            print(f"[als] ALS log: {client.als_log_path or '~/.als/ada_ls_log.*.log (default location)'}")
+            print(f"[als] Stderr log: {client._stderr_log_path}")
     
     # Log discovered files
     if ui:
@@ -423,7 +433,8 @@ async def run_formatter(
                 ui.close()
             else:
                 print(f"[error] Patterns file not found: {patterns_path}")
-            await client.shutdown()
+            if client:
+                    await client.shutdown()
             return 2
         
         # For default path, it's OK if it doesn't exist
@@ -482,7 +493,8 @@ async def run_formatter(
                 ui.close()
             else:
                 print("[error] No patterns loaded for validation")
-            await client.shutdown()
+            if client:
+                await client.shutdown()
             return 1
         
         if ui:
@@ -583,7 +595,8 @@ async def run_formatter(
                 'files_with_errors': len(validation_errors)
             })
             
-            await client.shutdown()
+            if client:
+                await client.shutdown()
             return 1
         else:
             if ui:
@@ -598,7 +611,8 @@ async def run_formatter(
                 'files_with_errors': 0
             })
             
-            await client.shutdown()
+            if client:
+                await client.shutdown()
             return 0
     
     # Exit early if no files found
@@ -608,7 +622,8 @@ async def run_formatter(
             ui.close()
         else:
             print("[warning] No Ada files found in the specified paths")
-        await client.shutdown()
+        if client:
+                await client.shutdown()
         return 0
     
     # Log that we're starting formatting
@@ -624,6 +639,10 @@ async def run_formatter(
     
     async def format_once(path: Path) -> Optional[List[dict]]:
         """Format a single Ada file using ALS."""
+        # If ALS is disabled, return None (no edits)
+        if not client:
+            return None
+            
         # Open
         await client._notify("textDocument/didOpen", {
             "textDocument": {
@@ -673,6 +692,57 @@ async def run_formatter(
         while attempts < max_attempts:
             try:
                 edits = await format_once(path)
+                
+                # If no edits from ALS but patterns are enabled, we still need to process
+                if not edits and pattern_formatter and pattern_formatter.enabled:
+                    try:
+                        original_content = path.read_text(encoding="utf-8", errors="ignore")
+                    except Exception as e:
+                        raise TypeError(f"Failed to read file {path}: {e}") from e
+                    
+                    # Check file size limit
+                    file_size = len(original_content.encode('utf-8'))
+                    if file_size > patterns_max_bytes:
+                        # Skip patterns for large files
+                        pattern_logger.write({
+                            'ev': 'file_skipped_large',
+                            'path': str(path),
+                            'size_bytes': file_size,
+                            'max_bytes': patterns_max_bytes
+                        })
+                        if ui:
+                            ui.log_line(f"[patterns] Skipping {path} - file too large ({file_size} bytes)")
+                    else:
+                        # Apply patterns to original content
+                        formatted_content, pattern_result = pattern_formatter.apply(
+                            path,
+                            original_content,
+                            timeout_ms=patterns_timeout_ms,
+                            logger=PatternLogger(pattern_logger),
+                            ui=ui
+                        )
+                        
+                        # Check if patterns made changes
+                        if formatted_content != original_content:
+                            status = "changed"
+                            changed += 1
+                            
+                            from .edits import unified_diff
+                            from .utils import atomic_write
+                            
+                            if write:
+                                # Write to file
+                                atomic_write(str(path), formatted_content)
+                            elif diff:
+                                # Show diff in dry-run mode
+                                diff_output = unified_diff(
+                                    original_content,
+                                    formatted_content,
+                                    str(path)
+                                )
+                                if diff_output and not ui:
+                                    print(diff_output)
+                
                 if edits:
                     status = "changed"
                     changed += 1
@@ -964,7 +1034,10 @@ async def run_formatter(
                 pattern_info = f" | Patterns: applied={patterns_applied} ({replacements})"
         
         line = f"{prefix} [{status:^7}] {path}"
-        if edits:
+        if no_als:
+            # In patterns-only mode, don't show ALS status
+            pass
+        elif edits:
             line += f" | ALS: ✓ edits={len(edits)}"
         else:
             line += " | ALS: ✓ edits=0"
@@ -989,7 +1062,7 @@ async def run_formatter(
                 elapsed=elapsed,
                 rate=rate,
                 jsonl_log=f"./{log_path} (default location)" if using_default_log else str(log_path) if log_path else "Not configured",
-                als_log=client.als_log_path or "~/.als/ada_ls_log.*.log (default location)",
+                als_log=((client.als_log_path if client else None) or "~/.als/ada_ls_log.*.log (default location)") if not no_als else "N/A (ALS disabled)",
                 stderr_log=f"./{stderr_path} (default location)" if using_default_stderr else str(stderr_path) if stderr_path else "Not configured",
                 pattern_log=f"./{pattern_log_path} (default location)" if using_default_patterns else str(pattern_log_path)
             )
@@ -1036,7 +1109,7 @@ async def run_formatter(
             elapsed=elapsed_seconds,
             rate=rate,
             jsonl_log=f"./{log_path} (default location)" if using_default_log else str(log_path) if log_path else "Not configured",
-            als_log=client.als_log_path or "~/.als/ada_ls_log.*.log (default location)",
+            als_log=((client.als_log_path if client else None) or "~/.als/ada_ls_log.*.log (default location)") if not no_als else "N/A (ALS disabled)",
             stderr_log=f"./{stderr_path} (default location)" if using_default_stderr else str(stderr_path) if stderr_path else "Not configured",
             pattern_log=f"./{pattern_log_path} (default location)" if using_default_patterns else str(pattern_log_path)
         )
@@ -1190,7 +1263,7 @@ async def run_formatter(
         print(f"  {line}")
 
     # Print log paths to stdout after UI closes so they're copyable
-    if ui and (log_path or client.als_log_path or stderr_path):
+    if ui and (log_path or (client and client.als_log_path) or stderr_path):
         print("\nLOG FILES")
         
         # Build log files table
@@ -1215,8 +1288,9 @@ async def run_formatter(
             log_files.append(["Stderr", "Not configured"])
         
         # ALS Log
-        als_log_display = client.als_log_path or "~/.als/ada_ls_log.*.log (default location)"
-        log_files.append(["ALS Log", als_log_display])
+        if not no_als:
+            als_log_display = (client.als_log_path if client else None) or "~/.als/ada_ls_log.*.log (default location)"
+            log_files.append(["ALS Log", als_log_display])
         
         # Print table with consistent formatting
         table_str = tabulate(log_files, tablefmt="plain")
@@ -1235,7 +1309,8 @@ async def run_formatter(
     
     # Shutdown ALS after UI updates
     with contextlib.suppress(Exception):
-        await client.shutdown()
+        if client:
+                await client.shutdown()
 
     # Close logger to ensure all data is written
     if logger:
@@ -1481,6 +1556,7 @@ def format_command(
         patterns_timeout_ms=patterns_timeout_ms,
         patterns_max_bytes=patterns_max_bytes,
         validate_patterns=validate_patterns,
+        no_als=no_als,
         using_default_log=using_default_log,
         using_default_stderr=using_default_stderr,
         using_default_patterns=True))
