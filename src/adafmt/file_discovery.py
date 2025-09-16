@@ -94,12 +94,9 @@ def collect_files(include_paths: Iterable[Path], exclude_paths: Iterable[Path]) 
             files.add(p)
         elif p.is_dir() and not should_skip(p):
             # Directory traversal with exclusion checking
-            # Use rglob to recursively find all files, following symlinks
+            # Use rglob to recursively find all files
             try:
                 for f in p.rglob("*"):
-                    # Skip symlinks to avoid infinite loops
-                    if f.is_symlink():
-                        continue
                     if f.is_file() and f.suffix.lower() in ADA_EXTS and not should_skip(f):
                         files.add(f)
             except (OSError, PermissionError):

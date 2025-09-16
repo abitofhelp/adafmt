@@ -988,10 +988,58 @@ class CursesUI:
 
 ### 8.1 Input Validation
 
+#### Path Validation
 - All paths validated as absolute
+- Paths checked for illegal characters:
+  - Unicode characters outside BMP (U+10000+)
+  - ISO control characters
+  - Whitespace characters
+  - Characters not matching: [A-Za-z0-9?&=._:/-]
+  - Directory traversal sequences (..)
 - No shell command injection
 - Safe temp file creation
 - Proper quote handling
+
+#### Command-Line Flag Validation Matrix
+
+The CLI validates flag combinations to prevent conflicting or nonsensical operations:
+
+| Flag Combination | Validation Rule | Error Message | Exit Code |
+|------------------|----------------|---------------|-----------|
+| `--no-als` + `--no-patterns` | Mutually exclusive | "Cannot use both --no-patterns and --no-als (nothing to do)" | 2 |
+| `--validate-patterns` + `--no-als` | Validation requires ALS | "Cannot use --validate-patterns with --no-als (validation requires ALS)" | 2 |
+| `--validate-patterns` + `--no-patterns` | No patterns to validate | "Cannot use --validate-patterns with --no-patterns (no patterns to validate)" | 2 |
+| `--write` + `--check` | Conflicting output modes | "Cannot use both --write and --check modes" | 2 |
+| No paths + No files | Input required | "No files or directories to process. You must provide --include-path or specific files." | 2 |
+
+#### Validation Implementation
+
+```python
+def validate_cli_args(args):
+    """Validate command-line arguments for conflicts"""
+    # Flag combination checks
+    if args.no_als and args.no_patterns:
+        raise ValueError("Cannot use both --no-patterns and --no-als")
+    
+    if args.validate_patterns and args.no_als:
+        raise ValueError("Cannot use --validate-patterns with --no-als")
+    
+    # Path validation
+    for path in args.include_paths + args.exclude_paths:
+        error = validate_path(path)
+        if error:
+            raise ValueError(f"Invalid path: {error}")
+    
+    # Input requirement check
+    if not args.include_paths and not args.files:
+        raise ValueError("No input files or directories specified")
+```
+
+This validation ensures:
+1. Users cannot specify contradictory options
+2. All paths are safe and well-formed
+3. The tool has sufficient input to operate
+4. Clear error messages guide users to correct usage
 
 ### 8.2 Process Isolation
 

@@ -284,11 +284,41 @@ The system operates as a client to the Ada Language Server, communicating via th
 - FR-9.3: SHALL validate all path arguments as absolute
 - FR-9.4: SHALL provide sensible defaults for all optional parameters
 - FR-9.5: SHALL support --version and --help flags
+- FR-9.6: SHALL validate path arguments for illegal characters including:
+  - Unicode characters outside Basic Multilingual Plane (U+10000 and above)
+  - ISO control characters
+  - Whitespace characters
+  - Characters not matching pattern: [A-Za-z0-9?&=._:/-]
+  - Directory traversal sequences (..)
+- FR-9.7: SHALL exit with error code 2 when paths contain illegal characters
+- FR-9.8: SHALL validate command-line flag combinations and reject invalid combinations per the following matrix:
+
+#### Command-Line Validation Matrix
+
+| Flag/Condition 1 | Flag/Condition 2 | Valid? | Error Message | Exit Code |
+|------------------|------------------|--------|---------------|-----------|
+| `--no-als` | `--no-patterns` | ❌ | "Cannot use both --no-patterns and --no-als (nothing to do)" | 2 |
+| `--validate-patterns` | `--no-als` | ❌ | "Cannot use --validate-patterns with --no-als (validation requires ALS)" | 2 |
+| `--validate-patterns` | `--no-patterns` | ❌ | "Cannot use --validate-patterns with --no-patterns (no patterns to validate)" | 2 |
+| `--write` | `--check` | ❌ | "Cannot use both --write and --check modes" | 2 |
+| No `--include-path` | No positional files | ❌ | "No files or directories to process. You must provide --include-path or specific files." | 2 |
+| Empty `--include-path` | No positional files | ❌ | "No files or directories to process. You must provide --include-path or specific files." | 2 |
+| Path with whitespace | - | ❌ | "Path contains whitespace character '...' at position X" | 2 |
+| Path with control chars | - | ❌ | "Path contains control character '...' at position X" | 2 |
+| Path with illegal chars | - | ❌ | "Path contains illegal character '...' at position X" | 2 |
+| Path with Unicode supplementary | - | ❌ | "Path contains Unicode supplementary character at position X" | 2 |
+| Path with `..` traversal | - | ❌ | "Path contains directory traversal sequence (..)" | 2 |
+| `--no-als` | - | ✅ | (Patterns-only mode) | - |
+| `--no-patterns` | - | ✅ | (ALS-only mode) | - |
+| `--validate-patterns` | - | ✅ | (Validate patterns against ALS) | - |
 
 **Acceptance Criteria:**
 - CLI arguments override environment variables
 - Invalid configuration is caught early
 - Help text is comprehensive
+- All invalid flag combinations produce appropriate error messages
+- Path validation rejects dangerous or problematic paths
+- Exit codes are consistent for all validation failures
 
 ### 2.10 UI Footer Display (FR-10)
 

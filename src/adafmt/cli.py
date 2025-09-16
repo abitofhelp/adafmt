@@ -157,6 +157,12 @@ app = typer.Typer(
     pretty_exceptions_enable=False,
 )
 
+@app.callback(invoke_without_command=False)
+def main_callback():
+    """Print header for all commands."""
+    print(f"Ada Formatter  {APP_VERSION}")
+    print("=" * 80)
+
 
 def _read_license_text() -> str:
     """Read the LICENSE file from package data or filesystem."""
@@ -256,7 +262,7 @@ async def run_formatter(
     run_start_time = time.time()
     
     proj = project_path
-    includes = include_paths if include_paths else [proj.parent]
+    includes = include_paths  # No fallback - already validated in format_command
     excludes = exclude_paths
     
     # UI
@@ -408,24 +414,54 @@ async def run_formatter(
     if not no_patterns:
         if patterns_path is None:
             patterns_path = Path("./adafmt_patterns.json")
+            using_default_patterns = True
         
-        if ui:
-            ui.log_line(f"[patterns] Loading patterns from: {patterns_path}")
+        # Check if patterns file exists when explicitly provided
+        if not using_default_patterns and not patterns_path.exists():
+            if ui:
+                ui.log_line(f"[error] Patterns file not found: {patterns_path}")
+                ui.close()
+            else:
+                print(f"[error] Patterns file not found: {patterns_path}")
+            await client.shutdown()
+            return 2
         
-        try:
-            pattern_formatter = PatternFormatter.load_from_json(
-                patterns_path,
-                logger=PatternLogger(pattern_logger),
-                ui=ui
-            )
-        except Exception:
-            raise
-        
-        if ui:
-            ui.log_line(f"[patterns] Loaded {pattern_formatter.loaded_count} patterns")
+        # For default path, it's OK if it doesn't exist
+        if patterns_path.exists():
+            if ui:
+                ui.log_line(f"[patterns] Loading patterns from: {patterns_path}")
+            
+            try:
+                pattern_formatter = PatternFormatter.load_from_json(
+                    patterns_path,
+                    logger=PatternLogger(pattern_logger),
+                    ui=ui
+                )
+                
+                # Check if patterns file is empty (no patterns loaded)
+                if pattern_formatter.loaded_count == 0:
+                    if ui:
+                        ui.log_line("[patterns] Warning: Pattern file is empty, only ALS formatting will be performed")
+                    else:
+                        print("[patterns] Warning: Pattern file is empty, only ALS formatting will be performed")
+                    pattern_formatter = None  # Same as --no-patterns
+                else:
+                    if ui:
+                        ui.log_line(f"[patterns] Loaded {pattern_formatter.loaded_count} patterns")
+                        
+            except Exception:
+                raise
+        else:
+            # Default patterns file doesn't exist - that's OK, continue without patterns
+            if ui:
+                ui.log_line("[patterns] No patterns file found, only ALS formatting will be performed")
+            else:
+                print("[patterns] No patterns file found, only ALS formatting will be performed")
     else:
         if ui:
             ui.log_line("[patterns] Pattern processing disabled (--no-patterns)")
+        else:
+            print("[patterns] Pattern processing disabled (--no-patterns)")
     
     # Log pattern run_start event
     pattern_logger.write({
@@ -1252,7 +1288,8 @@ def format_command(
     no_patterns: Annotated[bool, typer.Option("--no-patterns", help="Disable pattern processing")] = False,
     patterns_timeout_ms: Annotated[int, typer.Option("--patterns-timeout-ms", help="Timeout per pattern in milliseconds")] = 50,
     patterns_max_bytes: Annotated[int, typer.Option("--patterns-max-bytes", help="Skip patterns for files larger than this (bytes)")] = 10485760,
-    validate_patterns: Annotated[bool, typer.Option("--validate-patterns", help="Validate that patterns don't break ALS formatting")] = False,
+    validate_patterns: Annotated[bool, typer.Option("--validate-patterns", help="Validate that applied patterns are acceptable to ALS")] = False,
+    no_als: Annotated[bool, typer.Option("--no-als", help="Disable ALS formatting (patterns only)")] = False,
     max_consecutive_timeouts: Annotated[int, typer.Option("--max-consecutive-timeouts", help="Abort after this many timeouts in a row (0 = no limit)")] = 5,
     write: Annotated[bool, typer.Option("--write", help="Apply changes to files")] = False,
     files: Annotated[Optional[List[str]], typer.Argument(help="Specific Ada files to format")] = None,
@@ -1264,10 +1301,126 @@ def format_command(
         adafmt --project-path project.gpr --write --check
         adafmt --project-path project.gpr --ui plain --log-path debug.jsonl
     """
-    # Convert paths to absolute
+    # Import path validator
+    from .path_validator import validate_path
+    
+    # Validate project path
+    validation_error = validate_path(str(project_path))
+    if validation_error:
+        typer.echo(f"Error: Invalid project path - {validation_error}", err=True)
+        raise typer.Exit(2)
+    
+    # Convert project path to absolute
     project_path = Path(_abs(str(project_path)))
-    include_paths = [Path(_abs(str(p))) for p in (include_path or [])]
-    exclude_paths = [Path(_abs(str(p))) for p in (exclude_path or [])]
+    if not project_path.exists():
+        typer.echo(f"Error: Project file not found: {project_path}", err=True)
+        raise typer.Exit(2)
+    if not project_path.is_file():
+        typer.echo(f"Error: Project path is not a file: {project_path}", err=True)
+        raise typer.Exit(2)
+    if not os.access(project_path, os.R_OK):
+        typer.echo(f"Error: Project file is not readable: {project_path}", err=True)
+        raise typer.Exit(2)
+    
+    # Validate: Must have include paths or specific files
+    if not include_path and not files:
+        typer.echo("Error: No files or directories to process. You must provide --include-path or specific files.", err=True)
+        typer.echo("Use 'adafmt format --help' for usage information.", err=True)
+        raise typer.Exit(2)
+    
+    # Validate conflicting options
+    if no_patterns and no_als:
+        typer.echo("Error: Cannot use both --no-patterns and --no-als (nothing to do)", err=True)
+        raise typer.Exit(2)
+    
+    if validate_patterns and no_als:
+        typer.echo("Error: Cannot use --validate-patterns with --no-als (validation requires ALS)", err=True)
+        raise typer.Exit(2)
+        
+    if validate_patterns and no_patterns:
+        typer.echo("Error: Cannot use --validate-patterns with --no-patterns (no patterns to validate)", err=True)
+        raise typer.Exit(2)
+    
+    # Validate include paths
+    include_paths = []
+    if include_path:
+        for p in include_path:
+            validation_error = validate_path(str(p))
+            if validation_error:
+                typer.echo(f"Error: Invalid include path '{p}' - {validation_error}", err=True)
+                raise typer.Exit(2)
+            abs_path = Path(_abs(str(p)))
+            if not abs_path.exists():
+                typer.echo(f"Error: Include path not found: {abs_path}", err=True)
+                raise typer.Exit(2)
+            if not os.access(abs_path, os.R_OK):
+                typer.echo(f"Error: Include path is not readable: {abs_path}", err=True)
+                raise typer.Exit(2)
+            include_paths.append(abs_path)
+    
+    # Validate exclude paths
+    exclude_paths = []
+    if exclude_path:
+        for p in exclude_path:
+            validation_error = validate_path(str(p))
+            if validation_error:
+                typer.echo(f"Error: Invalid exclude path '{p}' - {validation_error}", err=True)
+                raise typer.Exit(2)
+            abs_path = Path(_abs(str(p)))
+            if not abs_path.exists():
+                typer.echo(f"Error: Exclude path not found: {abs_path}", err=True)
+                raise typer.Exit(2)
+            exclude_paths.append(abs_path)
+    
+    # Validate patterns path if provided
+    if patterns_path:
+        validation_error = validate_path(str(patterns_path))
+        if validation_error:
+            typer.echo(f"Error: Invalid patterns path '{patterns_path}' - {validation_error}", err=True)
+            raise typer.Exit(2)
+        patterns_path = Path(_abs(str(patterns_path)))
+        # Will check existence later in run_formatter
+    
+    # Validate file arguments if provided
+    validated_files = []
+    if files:
+        for f in files:
+            validation_error = validate_path(f)
+            if validation_error:
+                typer.echo(f"Error: Invalid file path '{f}' - {validation_error}", err=True)
+                raise typer.Exit(2)
+            # Convert to absolute path and check existence
+            abs_file = Path(_abs(f))
+            if not abs_file.exists():
+                typer.echo(f"Error: File not found: {abs_file}", err=True)
+                raise typer.Exit(2)
+            if not abs_file.is_file():
+                typer.echo(f"Error: Path is not a file: {abs_file}", err=True)
+                raise typer.Exit(2)
+            # Check if it's an Ada file
+            if not _is_ada_file(abs_file):
+                typer.echo(f"Error: Not an Ada file (must have .ads, .adb, or .ada extension): {abs_file}", err=True)
+                raise typer.Exit(2)
+            # Check if readable
+            if not os.access(abs_file, os.R_OK):
+                typer.echo(f"Error: File is not readable: {abs_file}", err=True)
+                raise typer.Exit(2)
+            validated_files.append(f)
+        files = validated_files
+    
+    # Validate log path if provided
+    if log_path:
+        validation_error = validate_path(str(log_path))
+        if validation_error:
+            typer.echo(f"Error: Invalid log path '{log_path}' - {validation_error}", err=True)
+            raise typer.Exit(2)
+    
+    # Validate stderr path if provided
+    if stderr_path:
+        validation_error = validate_path(str(stderr_path))
+        if validation_error:
+            typer.echo(f"Error: Invalid stderr path '{stderr_path}' - {validation_error}", err=True)
+            raise typer.Exit(2)
     
     # Generate default filenames with timestamp if not provided (ISO 8601 format)
     from datetime import timezone
