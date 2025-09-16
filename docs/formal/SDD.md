@@ -989,8 +989,8 @@ class CursesUI:
 ### 8.1 Input Validation
 
 #### Path Validation
-- All paths validated as absolute
-- Paths checked for illegal characters:
+- Relative paths are resolved to absolute paths using current working directory
+- Resolved paths are validated for illegal characters:
   - Unicode characters outside BMP (U+10000+)
   - ISO control characters
   - Whitespace characters

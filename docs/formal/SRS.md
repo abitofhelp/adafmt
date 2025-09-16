@@ -64,7 +64,7 @@ The system operates as a client to the Ada Language Server, communicating via th
 - FR-1.3: SHALL recognize files with extensions: `.ads`, `.adb`, `.ada`
 - FR-1.4: SHALL support explicit file paths as positional arguments
 - FR-1.5: SHALL process explicitly named files even if they're in excluded directories
-- FR-1.6: SHALL require all path arguments to be absolute paths
+- FR-1.6: SHALL accept both absolute and relative paths (relative paths resolved to current directory)
 
 **Acceptance Criteria:**
 - Given a directory structure, the system correctly identifies all Ada files
@@ -281,7 +281,7 @@ The system operates as a client to the Ada Language Server, communicating via th
   - ADAFMT_PROJECT_FILE_PATH
   - ADAFMT_LOG_FILE_PATH
   - ADAFMT_UI_MODE
-- FR-9.3: SHALL validate all path arguments as absolute
+- FR-9.3: SHALL resolve relative paths to absolute paths before validation
 - FR-9.4: SHALL provide sensible defaults for all optional parameters
 - FR-9.5: SHALL support --version and --help flags
 - FR-9.6: SHALL validate path arguments for illegal characters including:

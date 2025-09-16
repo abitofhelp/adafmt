@@ -1304,14 +1304,13 @@ def format_command(
     # Import path validator
     from .path_validator import validate_path
     
-    # Validate project path
-    validation_error = validate_path(str(project_path))
+    # Convert project path to absolute and validate
+    abs_project_path = _abs(str(project_path))
+    validation_error = validate_path(abs_project_path)
     if validation_error:
-        typer.echo(f"Error: Invalid project path - {validation_error}", err=True)
+        typer.echo(f"Error: Invalid project path '{project_path}' (resolved to '{abs_project_path}') - {validation_error}", err=True)
         raise typer.Exit(2)
-    
-    # Convert project path to absolute
-    project_path = Path(_abs(str(project_path)))
+    project_path = Path(abs_project_path)
     if not project_path.exists():
         typer.echo(f"Error: Project file not found: {project_path}", err=True)
         raise typer.Exit(2)
@@ -1345,11 +1344,13 @@ def format_command(
     include_paths = []
     if include_path:
         for p in include_path:
-            validation_error = validate_path(str(p))
+            # First resolve to absolute path
+            abs_path_str = _abs(str(p))
+            validation_error = validate_path(abs_path_str)
             if validation_error:
-                typer.echo(f"Error: Invalid include path '{p}' - {validation_error}", err=True)
+                typer.echo(f"Error: Invalid include path '{p}' (resolved to '{abs_path_str}') - {validation_error}", err=True)
                 raise typer.Exit(2)
-            abs_path = Path(_abs(str(p)))
+            abs_path = Path(abs_path_str)
             if not abs_path.exists():
                 typer.echo(f"Error: Include path not found: {abs_path}", err=True)
                 raise typer.Exit(2)
@@ -1362,11 +1363,13 @@ def format_command(
     exclude_paths = []
     if exclude_path:
         for p in exclude_path:
-            validation_error = validate_path(str(p))
+            # First resolve to absolute path
+            abs_path_str = _abs(str(p))
+            validation_error = validate_path(abs_path_str)
             if validation_error:
-                typer.echo(f"Error: Invalid exclude path '{p}' - {validation_error}", err=True)
+                typer.echo(f"Error: Invalid exclude path '{p}' (resolved to '{abs_path_str}') - {validation_error}", err=True)
                 raise typer.Exit(2)
-            abs_path = Path(_abs(str(p)))
+            abs_path = Path(abs_path_str)
             if not abs_path.exists():
                 typer.echo(f"Error: Exclude path not found: {abs_path}", err=True)
                 raise typer.Exit(2)
@@ -1374,23 +1377,27 @@ def format_command(
     
     # Validate patterns path if provided
     if patterns_path:
-        validation_error = validate_path(str(patterns_path))
+        # First resolve to absolute path
+        abs_patterns_path = _abs(str(patterns_path))
+        validation_error = validate_path(abs_patterns_path)
         if validation_error:
-            typer.echo(f"Error: Invalid patterns path '{patterns_path}' - {validation_error}", err=True)
+            typer.echo(f"Error: Invalid patterns path '{patterns_path}' (resolved to '{abs_patterns_path}') - {validation_error}", err=True)
             raise typer.Exit(2)
-        patterns_path = Path(_abs(str(patterns_path)))
+        patterns_path = Path(abs_patterns_path)
         # Will check existence later in run_formatter
     
     # Validate file arguments if provided
     validated_files = []
     if files:
         for f in files:
-            validation_error = validate_path(f)
+            # First resolve to absolute path
+            abs_file_str = _abs(f)
+            validation_error = validate_path(abs_file_str)
             if validation_error:
-                typer.echo(f"Error: Invalid file path '{f}' - {validation_error}", err=True)
+                typer.echo(f"Error: Invalid file path '{f}' (resolved to '{abs_file_str}') - {validation_error}", err=True)
                 raise typer.Exit(2)
-            # Convert to absolute path and check existence
-            abs_file = Path(_abs(f))
+            # Check existence
+            abs_file = Path(abs_file_str)
             if not abs_file.exists():
                 typer.echo(f"Error: File not found: {abs_file}", err=True)
                 raise typer.Exit(2)
@@ -1410,16 +1417,20 @@ def format_command(
     
     # Validate log path if provided
     if log_path:
-        validation_error = validate_path(str(log_path))
+        # First resolve to absolute path
+        abs_log_path = _abs(str(log_path))
+        validation_error = validate_path(abs_log_path)
         if validation_error:
-            typer.echo(f"Error: Invalid log path '{log_path}' - {validation_error}", err=True)
+            typer.echo(f"Error: Invalid log path '{log_path}' (resolved to '{abs_log_path}') - {validation_error}", err=True)
             raise typer.Exit(2)
     
     # Validate stderr path if provided
     if stderr_path:
-        validation_error = validate_path(str(stderr_path))
+        # First resolve to absolute path
+        abs_stderr_path = _abs(str(stderr_path))
+        validation_error = validate_path(abs_stderr_path)
         if validation_error:
-            typer.echo(f"Error: Invalid stderr path '{stderr_path}' - {validation_error}", err=True)
+            typer.echo(f"Error: Invalid stderr path '{stderr_path}' (resolved to '{abs_stderr_path}') - {validation_error}", err=True)
             raise typer.Exit(2)
     
     # Generate default filenames with timestamp if not provided (ISO 8601 format)

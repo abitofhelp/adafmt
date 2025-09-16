@@ -157,14 +157,14 @@ Some command-line options cannot be used together. The table below shows invalid
 
 All paths provided to adafmt must meet strict requirements for security and compatibility:
 
-### 1. Must Be Absolute Paths
-```bash
-# ✅ Good
---include-path /home/user/project/src
+### 1. Path Resolution
+Both absolute and relative paths are accepted. Relative paths are resolved based on the current working directory.
 
-# ❌ Bad - relative path
---include-path ./src
---include-path ../project/src
+```bash
+# ✅ Both styles work
+--include-path /home/user/project/src    # Absolute path
+--include-path ./src                      # Relative path (resolved to current directory)
+--include-path ../project/src             # Relative path (resolved from current directory)
 ```
 
 ### 2. Cannot Contain Whitespace
