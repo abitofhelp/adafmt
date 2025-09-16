@@ -1,6 +1,6 @@
 # adafmt — Ada Language Formatter
 
-**Version:** 1.0.0  
+**Version:** 0.0.0  
 **License:** MIT  
 **Copyright:** © 2025 Michael Gardner, A Bit of Help, Inc.
 
@@ -37,7 +37,7 @@ Download the appropriate package from the [latest release](https://github.com/ab
 **Python Wheel (All Platforms)**
 ```bash
 # Download the wheel file, then:
-pip install adafmt-1.0.0-py3-none-any.whl
+pip install adafmt-0.0.0-py3-none-any.whl
 ```
 
 **Python Zipapp (Portable, No Installation)**
@@ -369,7 +369,7 @@ adafmt/
 │   └── test_integration.py # Integration tests with ALS
 ├── docs/                # Comprehensive documentation
 │   ├── api/            # API reference documentation
-│   ├── developer/      # Developer guides and resources  
+│   ├── guides/          # User and developer guides  
 │   ├── formal/         # Requirements and design documents
 │   ├── reference/      # Technical references and deep-dives
 │   └── user/           # User guides and troubleshooting
@@ -391,7 +391,7 @@ adafmt/
 
 ## Contributing
 
-We welcome contributions! Please see our [Developer Documentation](docs/developer/index.md) for:
+We welcome contributions! Please see our [Developer Documentation](docs/guides/index.md) for:
 
 - Setting up a development environment
 - Code style guidelines
@@ -408,9 +408,9 @@ We welcome contributions! Please see our [Developer Documentation](docs/develope
 - **[Timeout Configuration](docs/user/timeout-guide.md)** - ALS timeout tuning and optimization
 
 ### For Developers  
-- **[Developer Documentation](docs/developer/index.md)** - Complete development guide
+- **[Developer Documentation](docs/guides/index.md)** - Complete development guide
 - **[API Reference](docs/api/index.md)** - Technical API documentation
-- **[Testing Guide](docs/developer/testing.md)** - Comprehensive testing documentation
+- **[Testing Guide](docs/guides/testing-guide.md)** - Comprehensive testing documentation
 
 ### Technical References
 - **[Software Requirements Specification](docs/formal/SRS.md)** - Formal requirements

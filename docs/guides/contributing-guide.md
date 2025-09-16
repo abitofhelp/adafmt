@@ -1,6 +1,6 @@
 # Contributing to adafmt
 
-**Document Version:** 1.0.0  
+**Document Version:** 0.0.0  
 **Date:** January 2025  
 **Authors:** Michael Gardner, A Bit of Help, Inc.  
 **Status:** Released
@@ -266,8 +266,8 @@ If you need assistance with contributions:
 
 - **Issues**: [GitHub Issues](https://github.com/abitofhelp/adafmt/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/abitofhelp/adafmt/discussions)
-- **Testing Guide**: [testing.md](testing.md)
-- **Debugging Guide**: [debugging.md](debugging.md)
+- **Testing Guide**: [testing.md](testing-guide.md)
+- **Debugging Guide**: [troubleshooting-guide.md](troubleshooting-guide.md)
 
 ---
 

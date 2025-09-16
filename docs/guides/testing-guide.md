@@ -1,6 +1,6 @@
 # Testing Guidelines for adafmt
 
-**Document Version:** 1.0.0  
+**Document Version:** 0.0.0  
 **Date:** January 2025  
 **Authors:** Michael Gardner, A Bit of Help, Inc.  
 **Status:** Released
@@ -353,9 +353,9 @@ The project runs tests in GitHub Actions across multiple Python versions. See th
 ## Related Documentation
 
 - [Test Suite Documentation](../../tests/README.md) - Complete testing reference
-- [Contributing Guide](contributing.md) - Development workflow and standards
-- [Debugging Guide](debugging.md) - Troubleshooting and development tools
-- [Developer Overview](overview.md) - Complete developer resource index
+- [Contributing Guide](contributing-guide.md) - Development workflow and standards
+- [Troubleshooting Guide](troubleshooting-guide.md) - Troubleshooting and development tools
+- [Developer Overview](index.md) - Complete developer resource index
 
 ---
 

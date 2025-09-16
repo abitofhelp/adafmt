@@ -80,7 +80,7 @@ class TestAdditionalCoverage:
         )
         
         assert formatter.loaded_count == 0
-        mock_ui.show_info.assert_called_once_with("No valid patterns loaded")
+        mock_ui.log_line.assert_called_with("[info] No valid patterns loaded")
         
     def test_load_from_json_duplicate_with_ui(self, tmp_path):
         """Test duplicate pattern handling with UI."""
@@ -111,7 +111,7 @@ class TestAdditionalCoverage:
         )
         
         assert formatter.loaded_count == 1
-        mock_ui.show_warning.assert_called_with("Duplicate pattern name: duplicate-01")
+        mock_ui.log_line.assert_called_with("[warning] Duplicate pattern name: duplicate-01")
         
     def test_apply_with_logger(self, tmp_path):
         """Test pattern application with logging."""

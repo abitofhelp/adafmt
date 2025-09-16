@@ -41,4 +41,4 @@ try:
     __version__ = version("adafmt")
 except Exception:
     # Fallback for development/editable installs
-    __version__ = "1.0.0"
+    __version__ = "0.0.0"

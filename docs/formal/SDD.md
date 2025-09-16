@@ -1,7 +1,7 @@
 # Software Design Document (SDD)
 # adafmt - Ada Language Formatter
 
-**Document Version:** 1.0.0  
+**Document Version:** 0.0.0  
 **Date:** January 2025  
 **Authors:** Michael Gardner, A Bit of Help, Inc.  
 **Status:** Released
@@ -46,14 +46,23 @@ This document covers:
 │  (tui.py)    │             │(als_client.py)│  │(file_disc.py)│
 └──────────────┘             └──────┬───────┘  └──────────────┘
                                      │
-                            ┌────────┴────────┐
-                            │                 │
-                            ▼                 ▼
-                    ┌──────────────┐  ┌──────────────┐
-                    │    Edits     │  │   Logger     │
-                    │   Engine     │  │   (JSONL)    │
-                    │ (edits.py)   │  │(logging.py)  │
-                    └──────────────┘  └──────────────┘
+                            ┌────────┴────────────┐
+                            │                     │
+                            ▼                     ▼
+                    ┌──────────────┐      ┌──────────────┐
+                    │    Edits     │      │   Pattern    │
+                    │   Engine     │─────▶│  Formatter   │
+                    │ (edits.py)   │      │(pattern_fmt) │
+                    └──────────────┘      └──────────────┘
+                            │                     │
+                            └──────┬──────────────┘
+                                   │
+                                   ▼
+                           ┌──────────────┐
+                           │   Logger     │
+                           │   (JSONL)    │
+                           │(logging.py)  │
+                           └──────────────┘
 ```
 
 ### 2.2 Component Overview
@@ -65,6 +74,7 @@ This document covers:
 | ALS Client | LSP communication, process management | ALSClient class |
 | File Discovery | Ada source file location | discover_files() |
 | Edits Engine | TextEdit application, diff generation | apply_text_edits() |
+| Pattern Formatter | Post-ALS pattern-based formatting | PatternFormatter class |
 | Logger | Structured logging | JsonlLogger class |
 | Utils | Path validation, atomic writes | Various utilities |
 
@@ -192,6 +202,7 @@ def make_ui(mode: str = "auto") -> Optional[BaseUI]:
 Files: 100(100%) | ✓ Changed: 50( 50%) | ✓ Unchanged: 45( 45%) | ✗ Failed: 5(  5%)
 Elapsed:  123.4s | Rate: 0.8 files/s
 Log:     ./adafmt_20250115_100000_log.jsonl (default location)
+Pat Log: ./adafmt_20250115_100000_patterns.log (default location)
 Stderr:  ./adafmt_20250115_100000_stderr.log (default location)
 ALS Log: ~/.als/ada_ls_log.*.log (default location)
 ```
@@ -202,6 +213,126 @@ ALS Log: ~/.als/ada_ls_log.*.log (default location)
 - Thread-based rendering for curses modes
 - Fixed-width formatting for stable UI
 - Environment variable support (ADAFMT_UI_FORCE, ADAFMT_UI_DEBUG)
+
+#### 3.3.1 Comprehensive Output Format Implementation
+
+**Purpose**: Implements FR-12 standardized output formatting for all UI modes
+
+**Output Structure Implementation**:
+```python
+class OutputFormatter:
+    """Handles standardized output formatting across UI modes"""
+    
+    def format_final_summary(self, 
+                           als_metrics: ALSMetrics,
+                           pattern_metrics: PatternMetrics, 
+                           run_summary: RunSummary,
+                           log_paths: LogPaths) -> str:
+        """Generate standardized output sections"""
+        sections = [
+            self._format_als_metrics(als_metrics),
+            self._format_pattern_metrics(pattern_metrics),
+            self._format_run_summary(run_summary),
+            self._format_log_files(log_paths)
+        ]
+        delimiter = "=" * 80
+        return f"{delimiter}\n" + f"\n{delimiter}\n".join(sections) + f"\n{delimiter}"
+```
+
+**DateTime Format Implementation**:
+- Uses `datetime.strftime('%Y%m%dT%H%M%SZ')` for ISO 8601 UTC timestamps
+- Elapsed time formatting: `f"{seconds:.1f}s"` for one decimal place
+- Consistent timezone handling through UTC conversion before formatting
+- Timestamp generation at run start shared across all log files
+
+**Column Alignment Implementation**:
+```python
+def _format_metrics_table(self, metrics: List[Tuple]) -> str:
+    """Fixed-width column formatting with alignment"""
+    # Calculate maximum width for each column
+    widths = [max(len(str(row[i])) for row in metrics) for i in range(len(metrics[0]))]
+    
+    # Apply minimum widths and alignment rules
+    format_str = " ".join(f"{{:{width}}}" for width in widths)
+    
+    # Right-align numeric columns, left-align text columns
+    aligned_format = self._apply_column_alignment(format_str, metrics)
+    
+    return "\n".join(aligned_format.format(*row) for row in metrics)
+```
+
+**Cross-Platform Display Implementation**:
+- UTF-8 encoding with ASCII fallbacks for special characters
+- Terminal width detection using `os.get_terminal_size()` with 80-column minimum
+- Windows-specific handling for color codes and character encoding
+- Platform-specific path display normalization
+
+**Color Formatting Implementation**:
+```python
+class ColorFormatter:
+    """Handles color and visual formatting with fallbacks"""
+    
+    COLORS = {
+        'success': '\033[32m',  # Green
+        'warning': '\033[33m',  # Yellow  
+        'error': '\033[31m',    # Red
+        'header': '\033[1m',    # Bold
+        'reset': '\033[0m'      # Reset
+    }
+    
+    def colorize(self, text: str, color: str) -> str:
+        """Apply color with NO_COLOR environment variable support"""
+        if os.environ.get('NO_COLOR') or not self._supports_color():
+            return text
+        return f"{self.COLORS[color]}{text}{self.COLORS['reset']}"
+```
+
+**Error Handling Integration**:
+- Partial output display when individual sections fail
+- Graceful degradation for missing metrics data
+- Error indicators integrated into normal output structure
+- Consistent formatting maintained during error conditions
+
+**Format Validation Implementation**:
+- Input validation for all metrics data before formatting
+- Numeric range checking (percentages 0-100, non-negative counts)
+- Timestamp validation and timezone consistency
+- Output format verification against FR-12 requirements
+
+#### 3.3.2 UI Mode Format Integration
+
+**Pretty Mode Enhancement**:
+- Renders comprehensive output with color highlighting
+- Progress indicators during processing with live metric updates
+- Interactive elements for large output sections
+- Full color scheme implementation per FR-12.9
+
+**Plain Mode Enhancement**:
+- Simplified rendering without colors or special characters
+- Optimized for log file capture and CI/CD environments
+- ASCII-only character set for maximum compatibility
+- Structured output suitable for parsing by external tools
+
+**JSON Mode Implementation**:
+```python
+def format_json_output(self, data: Dict) -> str:
+    """Structured JSON output for programmatic consumption"""
+    json_events = [
+        {"type": "als_metrics", "timestamp": self._now_iso(), "data": data.als_metrics},
+        {"type": "pattern_metrics", "timestamp": self._now_iso(), "data": data.pattern_metrics},
+        {"type": "run_summary", "timestamp": self._now_iso(), "data": data.run_summary},
+        {"type": "log_files", "timestamp": self._now_iso(), "data": data.log_paths}
+    ]
+    return "\n".join(json.dumps(event, ensure_ascii=False) for event in json_events)
+```
+
+**Design Rationale**:
+- **Separation of Concerns**: Formatting logic separated from UI mode logic
+- **Testability**: Each format component independently testable
+- **Extensibility**: New output formats can be added without modifying UI modes
+- **Performance**: Pre-calculated formatting reduces real-time computation
+- **Consistency**: Shared formatting ensures identical output across modes
+- **Maintainability**: Single source of truth for format specifications
 
 ### 3.4 File Discovery Component (file_discovery.py)
 
@@ -303,6 +434,22 @@ Action: Fix syntax errors in the file and retry
 - **Real-time Display**: Errors appear on terminal immediately as they occur for better user feedback
 - **Human-readable Format**: Stderr uses structured text format optimized for human reading vs JSONL for machine parsing
 
+**Pattern Log Format**:
+```json
+{"ev": "run_start", "ts": "2025-09-15T14:30:22", "patterns_path": "./adafmt_patterns.json", "patterns_loaded": 5, "mode": "dry", "timeout_ms": 50, "max_bytes": 10485760}
+{"ev": "file", "ts": "2025-09-15T14:30:23", "path": "/src/main.adb", "als_ok": true, "als_edits": 3, "patterns_applied": ["comment-norm", "operator-add"], "replacements": 5}
+{"ev": "pattern", "ts": "2025-09-15T14:30:23", "path": "/src/main.adb", "name": "comment-norm", "title": "Normalize comment spacing", "category": "comment", "replacements": 3}
+{"ev": "pattern_timeout", "ts": "2025-09-15T14:30:24", "path": "/src/utils.adb", "name": "complex-rule", "title": "Complex pattern", "category": "hygiene", "timeout_ms": 50}
+{"ev": "run_end", "ts": "2025-09-15T14:30:30", "files_total": 10, "files_als_ok": 9, "patterns_loaded": 5, "patterns_summary": {"comment-norm": {"files_touched": 8, "replacements": 24}}}
+```
+
+**Pattern Log Design**:
+- Separate JSONL file for pattern activity: `adafmt_<timestamp>_patterns.log`
+- Shares same timestamp as main log and stderr log for correlation
+- Events: `run_start`, `file`, `pattern`, `pattern_error`, `pattern_timeout`, `file_skipped_large`, `validation_check`, `run_end`
+- Pattern events include name, title, and category for analysis
+- Summary includes only patterns with `files_touched > 0`
+
 ### 3.7 Utils Component (utils.py)
 
 **Purpose**: Common utilities
@@ -342,6 +489,91 @@ The `_cleanup_handler()` ensures graceful shutdown:
 3. Atomic rename to target
 4. Handles cross-platform differences
 
+### 3.8 Pattern Formatter Component (pattern_formatter.py)
+
+**Purpose**: Post-ALS pattern-based formatting to enforce additional style rules
+
+**Architecture**:
+```
+ALS Formatted Buffer
+        │
+        ▼
+┌──────────────────┐
+│Pattern Formatter │
+│  - Load patterns │
+│  - Apply rules   │
+│  - Track metrics │
+└────────┬─────────┘
+         │
+         ├──→ UI Status Update
+         ├──→ Pattern Log (JSONL)
+         └──→ Final Buffer
+```
+
+**Key Classes**:
+```python
+class PatternFormatter:
+    """Manages pattern-based post-processing"""
+    
+    def __init__(self, rules: Tuple[CompiledRule, ...], enabled: bool):
+        self.rules = rules
+        self.enabled = enabled
+        self.files_touched: Dict[str, int] = {}
+        self.replacements: Dict[str, int] = {}
+    
+    @classmethod
+    def load_from_json(cls, path: Path, logger, ui) -> PatternFormatter:
+        """Load and compile patterns from JSON file"""
+    
+    def apply(self, path: Path, text: str, logger, ui) -> Tuple[str, FileApplyResult]:
+        """Apply patterns to text with timeout protection"""
+
+class CompiledRule:
+    """Compiled pattern rule"""
+    name: str  # 12-char identifier
+    title: str  # Human-readable description
+    category: str  # comment|operator|delimiter|declaration|attribute|hygiene
+    find: Pattern  # Compiled regex
+    replace: str  # Replacement text
+```
+
+**Pattern Loading**:
+1. Load JSON file at startup (default: `./adafmt_patterns.json`)
+2. Validate schema:
+   - `name`: exactly 12 chars, `^[a-z0-9_-]{12}$`
+   - `title`: 1-80 characters
+   - `category`: predefined set
+   - `find`/`replace`: required strings
+3. Compile regex patterns with flags
+4. Close file immediately (even on exception)
+5. Sort by name for deterministic order
+
+**Pattern Application**:
+1. Skip if ALS failed (only process syntactically valid code)
+2. Check file size limit (default 10MB)
+3. Apply patterns sequentially with timeout (default 50ms)
+4. Count replacements per pattern
+5. Update UI status line
+6. Log to pattern log
+
+**Safety Features**:
+- **Regex timeout**: Prevent ReDoS attacks via regex module timeout
+- **File size limit**: Skip large files to prevent memory issues
+- **Error isolation**: Pattern errors don't break formatting pipeline
+- **Validation mode**: Optional ALS re-check of pattern output
+
+**Pattern Validation Mode** (`--validate-patterns`):
+```
+Pattern Output → ALS Format Check → Report Conflicts
+```
+
+**Design Decisions**:
+- Immutable pattern set after loading
+- Per-pattern timeout enforcement
+- Deterministic application order
+- Separate pattern log for debugging
+- Integration with existing UI/logging
+
 ## 4. Data Flow
 
 ### 4.1 File Processing Flow
@@ -360,6 +592,10 @@ Receive Edits          │
     │                  │
     ▼                  │
 Apply Edits ───────────┤
+    │                  │
+    ▼                  │
+Pattern Formatter      │
+(if enabled)           │
     │                  │
     ▼                  ▼
 Show Diff          Original
@@ -489,6 +725,72 @@ Determine Error Type
 - Formatting partially complete code during development
 - Working with files that have unresolved dependencies
 - Faster formatting without full semantic analysis
+
+### 4.6 Pattern Processing Flow
+
+```
+ALS Success?
+    │
+    ├──No──▶ Skip Patterns
+    │
+   Yes
+    │
+    ▼
+File Size Check
+    │
+    ├──>10MB──▶ Log file_skipped_large
+    │
+   ≤10MB
+    │
+    ▼
+For Each Pattern (sorted by name):
+    │
+    ▼
+Apply with Timeout
+    │
+    ├──Timeout──▶ Log pattern_timeout
+    │             Continue to next
+    │
+    ├──Error────▶ Log pattern_error
+    │             Continue to next
+    │
+   Success
+    │
+    ▼
+Count Replacements
+    │
+    ▼
+Next Pattern
+    │
+    ▼
+Update UI Status
+    │
+    ▼
+Write Pattern Log
+```
+
+### 4.7 Pattern Validation Flow (`--validate-patterns`)
+
+```
+Pattern Output
+    │
+    ▼
+Send to ALS for Format Check
+    │
+    ▼
+ALS Would Make Changes?
+    │
+    ├──Yes──▶ Log validation_check
+    │         │
+    │         ├──warn mode──▶ Continue
+    │         │
+    │         └──strict mode──▶ Track for exit code
+    │
+   No
+    │
+    ▼
+Pattern Valid
+```
 
 ## 5. Interface Specifications
 
@@ -642,6 +944,24 @@ class CursesUI:
 - **CONNECTION_ERROR**: Network/pipe specific errors for retry guidance
 - **UNEXPECTED_ERROR**: Catch-all with log file reference for investigation
 
+### 6.7 Pattern Formatter Design
+
+**Decision**: Post-ALS pattern application as a separate stage
+
+**Rationale**:
+- Clear separation of concerns (ALS handles syntax, patterns handle style)
+- Only process syntactically valid code (safer and more predictable)
+- Patterns can be disabled without affecting core formatting
+- Easier to test and debug patterns in isolation
+- Allows gradual adoption of style rules
+
+**Safety Decisions**:
+- **Regex timeouts**: Prevent ReDoS attacks and hanging
+- **File size limits**: Avoid memory exhaustion on large files
+- **Error isolation**: Pattern errors don't break the formatter
+- **Immutable patterns**: Load once, never modify during run
+- **Deterministic order**: Sort by name for reproducible results
+
 ## 7. Performance Considerations
 
 ### 7.1 Optimizations
@@ -653,6 +973,8 @@ class CursesUI:
 5. **Minimal Allocations**: Reuse buffers where possible
 6. **Efficient Log File I/O**: Keep log files open for the session duration, avoiding repeated open/close operations
 7. **Immediate Flush**: Flush after each write for crash safety without sacrificing performance
+8. **Pattern Compilation**: Compile patterns once at startup, not per file
+9. **Pattern Timeouts**: 50ms default prevents hanging on complex patterns
 
 ### 7.2 Bottlenecks
 
@@ -660,6 +982,7 @@ class CursesUI:
 2. **Large Files**: Consider chunking in future
 3. **Network Filesystems**: Atomic writes may be slow
 4. **Terminal Output**: UI modes for different needs
+5. **Pattern Complexity**: Mitigated by timeouts and file size limits
 
 ## 8. Security Considerations
 
@@ -684,6 +1007,14 @@ class CursesUI:
 - Permission preservation
 - No execute bits changed
 
+### 8.4 Pattern Security
+
+- **ReDoS Protection**: Regex timeout enforcement prevents attacks
+- **Trusted Input**: Pattern files must be from trusted sources
+- **Memory Limits**: File size caps prevent exhaustion
+- **Error Isolation**: Malformed patterns can't crash formatter
+- **No Code Execution**: Patterns are data, not executable code
+
 ## 9. Testing Strategy
 
 ### 9.1 Unit Tests
@@ -692,6 +1023,9 @@ class CursesUI:
 - Mock-based (ALS client)
 - UI mode selection logic
 - Path validation
+- Pattern loading and validation
+- Pattern timeout enforcement
+- Pattern application logic
 
 ### 9.2 Integration Tests
 
@@ -699,6 +1033,9 @@ class CursesUI:
 - File system operations
 - End-to-end formatting
 - Error scenarios
+- Pattern formatter with ALS
+- Pattern validation mode
+- Large file handling
 
 ### 9.3 System Tests
 
@@ -706,6 +1043,8 @@ class CursesUI:
 - Performance benchmarks
 - Stress testing (many files)
 - UI mode verification
+- Pattern performance impact
+- ReDoS prevention verification
 
 ## 10. Future Enhancements
 
@@ -747,4 +1086,4 @@ async def watch_mode(paths: List[str]):
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
-| 1.0.0 | 2024-12-01 | M. Gardner | Initial version |
+| 0.0.0 | January 2025 | M. Gardner | Initial version |

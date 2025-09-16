@@ -1,6 +1,6 @@
 # Getting Started with adafmt
 
-**Version:** 1.0.0  
+**Version:** 0.0.0
 **Last Updated:** January 2025
 
 This guide provides step-by-step instructions for getting started with adafmt, including installation, first usage, and common workflow examples with real command combinations.
@@ -8,7 +8,7 @@ This guide provides step-by-step instructions for getting started with adafmt, i
 ## Quick Start Checklist
 
 - ✅ **Install adafmt** - See [Installation](#installation)
-- ✅ **Install Ada Language Server** - See [Prerequisites](#prerequisites)  
+- ✅ **Install Ada Language Server** - See [Prerequisites](#prerequisites)
 - ✅ **Have a GNAT project file** - Required for formatting
 - ✅ **Test basic command** - See [First Steps](#first-steps)
 
@@ -23,8 +23,8 @@ adafmt --version  # Verify installation
 ### Option 2: Install from GitHub Releases
 ```bash
 # Download and install wheel
-wget https://github.com/abitofhelp/adafmt/releases/latest/download/adafmt-1.0.0-py3-none-any.whl
-pip install adafmt-1.0.0-py3-none-any.whl
+wget https://github.com/abitofhelp/adafmt/releases/latest/download/adafmt-0.0.0-py3-none-any.whl
+pip install adafmt-0.0.0-py3-none-any.whl
 ```
 
 ### Option 3: Development Installation
@@ -32,8 +32,14 @@ pip install adafmt-1.0.0-py3-none-any.whl
 git clone https://github.com/abitofhelp/adafmt.git
 cd adafmt
 python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Upgrade pip and install build tools
+pip install --upgrade pip setuptools wheel
+
+# Install package in editable mode with dev dependencies
+make dev
+# Or manually: pip install -e ".[dev]"
 ```
 
 ## Prerequisites
@@ -99,7 +105,7 @@ adafmt --project-path project.gpr --include-path src/ --write
 # Preview changes
 adafmt --project-path project.gpr --include-path src/
 
-# Apply changes  
+# Apply changes
 adafmt --project-path project.gpr --include-path src/ --write
 
 # Show diff of changes
@@ -242,7 +248,7 @@ adafmt --project-path project.gpr \
 ### Standard Ada Project
 ```
 my_project/
-├── project.gpr           # GNAT project file  
+├── project.gpr           # GNAT project file
 ├── src/                  # Source directory
 │   ├── main.adb
 │   ├── package.ads
@@ -264,7 +270,7 @@ complex_project/
 │   ├── lib.gpr
 │   └── src/
 │       ├── utils.ads
-│       └── utils.adb  
+│       └── utils.adb
 ├── app/                  # Application directory
 │   └── src/
 │       └── main.adb
@@ -439,14 +445,158 @@ adafmt --project-path project.gpr --include-path src/
 adafmt --project-path project.gpr --include-path src/ --preflight kill
 ```
 
+## Development Setup
+
+This section is for developers who want to contribute to adafmt or understand its internals.
+
+### Development Prerequisites
+
+Before getting started with development, ensure you have:
+- Python 3.11 or higher
+- Git for version control
+- Ada Language Server (for integration testing)
+- Basic understanding of:
+  - Python asyncio
+  - Language Server Protocol (LSP)
+  - Command-line tool development
+  - Testing with pytest
+
+### Repository Structure
+
+```
+adafmt/
+├── src/
+│   └── adafmt/              # Main package
+│       ├── __init__.py      # Package metadata and version
+│       ├── __main__.py      # Module entry point
+│       ├── cli.py           # CLI entry point (Typer-based)
+│       ├── als_client.py    # ALS communication
+│       ├── tui.py           # Terminal UI components
+│       ├── file_discovery.py # File finding and filtering
+│       ├── edits.py         # Text editing operations
+│       ├── logging_jsonl.py # Structured logging
+│       └── utils.py         # Utility functions
+├── tests/                   # Comprehensive test suite
+│   ├── conftest.py         # Shared pytest fixtures
+│   ├── unit/               # Fast, isolated unit tests
+│   │   ├── test_als_client.py
+│   │   ├── test_cli.py
+│   │   ├── test_edits.py
+│   │   ├── test_file_discovery.py
+│   │   └── test_logging_jsonl.py
+│   ├── integration/        # End-to-end integration tests
+│   │   ├── test_adafmt_integration.py
+│   │   └── test_cli_integration.py
+│   └── test_utils.py       # Utility function tests
+├── tools/                  # Development and debugging tools
+│   ├── README.md          # Tools documentation
+│   ├── als_rpc_probe.py   # High-level ALS debugging
+│   ├── als_rpc_probe_stdio.py # Low-level LSP debugging
+│   └── harness_mocked.py  # Mock testing harness
+├── docs/                   # Documentation
+│   ├── guides/            # User and developer guides (you are here!)
+│   ├── api/               # API documentation
+│   └── formal/            # Requirements and design documents
+├── Makefile               # Development shortcuts
+├── pyproject.toml         # Project configuration (PEP 518)
+└── README.md             # Project overview
+```
+
+### Development Environment Setup
+
+1. **Clone and setup** (if not done already):
+   ```bash
+   git clone https://github.com/abitofhelp/adafmt.git
+   cd adafmt
+   python3 -m venv .venv
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+   ```
+
+2. **Install in development mode**:
+   ```bash
+   # Install package in editable mode with dev dependencies
+   make dev
+   
+   # Or manually:
+   pip install -e ".[dev]"
+   ```
+
+3. **Verify installation**:
+   ```bash
+   # Test basic functionality
+   adafmt --version
+   
+   # Run basic checks
+   make check
+   
+   # Run the full test suite
+   make test-all
+   ```
+
+### Development Commands
+
+```bash
+# Development setup
+make dev          # Install with dev dependencies
+make install      # Basic installation
+
+# Code quality
+make lint         # Run ruff linting
+make format       # Format with black
+make typecheck    # Run mypy type checking
+
+# Testing
+make test         # Unit tests only (fast)
+make test-all     # All tests including integration
+make coverage     # Test coverage report
+
+# Ada formatting (requires project.gpr)
+make ada-format   # Dry-run format
+make ada-write    # Format and write files
+make ada-check    # Check if formatting needed
+
+# Distribution
+make build        # Build packages
+make dist-all     # All distribution formats
+```
+
+### Development Tools
+
+The `tools/` directory contains specialized debugging utilities:
+
+- **`als_rpc_probe.py`**: High-level ALS testing tool
+  ```bash
+  python tools/als_rpc_probe.py --project-path project.gpr --verbose
+  ```
+
+- **`als_rpc_probe_stdio.py`**: Low-level LSP protocol debugging
+  ```bash
+  python tools/als_rpc_probe_stdio.py --project-path project.gpr --file test.ads
+  ```
+
+- **`harness_mocked.py`**: Test without ALS dependency
+  ```bash
+  python tools/harness_mocked.py --test-scenario basic
+  ```
+
+### Next Steps for Developers
+
+Once you have your development environment set up:
+
+1. **Read the [Contributing Guide](contributing-guide.md)** - Learn about the development workflow, coding standards, and pull request process
+2. **Review the [Testing Guide](testing-guide.md)** - Understand how to write and run tests effectively
+3. **Check the [Troubleshooting Guide](troubleshooting-guide.md)** - Learn about debugging tools and issue resolution
+4. **Explore the API Documentation** - Understand the codebase architecture and components
+
 ## Next Steps
 
 Once you're comfortable with basic usage:
 
-1. **Learn Advanced Configuration**: [Configuration Reference](configuration.md)
-2. **Troubleshoot Issues**: [Troubleshooting Guide](troubleshooting.md)
+1. **Learn Advanced Configuration**: [Configuration Guide](configuration-guide.md)
+2. **Troubleshoot Issues**: [Troubleshooting Guide](troubleshooting-guide.md)
 3. **Optimize Performance**: [Timeout Configuration](timeout-guide.md)
-4. **Integrate with Tools**: Check project-specific integration examples
+4. **Use Pattern Formatting**: [Pattern Guide](patterns-guide.md)
+5. **Contribute to Development**: See [Development Setup](#development-setup) above
 
 ## Getting Help
 
@@ -455,7 +605,7 @@ If you encounter issues:
 1. **Check Prerequisites**: Ensure ALS is installed and accessible
 2. **Verify Project File**: Ensure your `.gpr` file is valid
 3. **Enable Logging**: Use `--log-path debug.jsonl` for detailed information
-4. **Check Documentation**: [Troubleshooting Guide](troubleshooting.md)
+4. **Check Documentation**: [Troubleshooting Guide](troubleshooting-guide.md)
 5. **Create Issue**: [GitHub Issues](https://github.com/abitofhelp/adafmt/issues) with logs and examples
 
 ---

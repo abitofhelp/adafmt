@@ -1,7 +1,7 @@
 # Software Requirements Specification (SRS)
 # adafmt - Ada Language Formatter
 
-**Document Version:** 1.0.0  
+**Document Version:** 0.0.0  
 **Date:** January 2025  
 **Authors:** Michael Gardner, A Bit of Help, Inc.  
 **Status:** Released
@@ -321,6 +321,187 @@ The system operates as a client to the Ada Language Server, communicating via th
 - All separators maintain consistent appearance
 - TTY shows concise error messages while stderr log contains full details
 
+### 2.11 Pattern Formatter (FR-11)
+
+**Description:** The system shall support post-ALS pattern-based formatting to enforce additional style rules beyond what ALS provides.
+
+**Requirements:**
+
+#### Pattern Discovery and Loading
+- FR-11.1: SHALL load patterns from `./adafmt_patterns.json` by default
+- FR-11.2: SHALL allow override via `--patterns-path <FILE>` option
+- FR-11.3: SHALL support disabling patterns with `--no-patterns` flag
+- FR-11.4: SHALL load pattern file once at startup and close file handle immediately
+- FR-11.5: SHALL validate each pattern against required schema (name, title, category, find, replace)
+- FR-11.6: SHALL skip invalid patterns with warnings but continue processing valid ones
+- FR-11.7: SHALL compile regex patterns at load time and skip patterns with invalid regex
+- FR-11.8: SHALL disable pattern formatter if no valid patterns are loaded
+
+#### Pattern Schema
+- FR-11.9: Pattern `name` SHALL be exactly 12 characters matching `^[a-z0-9_-]{12}$`
+- FR-11.10: Pattern `name` SHALL be unique within the pattern file
+- FR-11.11: Pattern `title` SHALL be 1-80 characters describing the pattern
+- FR-11.12: Pattern `category` SHALL be one of: comment, hygiene, operator, delimiter, declaration, attribute
+- FR-11.13: Pattern `find` SHALL be a valid regular expression
+- FR-11.14: Pattern `replace` SHALL be a replacement string (may be empty for deletions)
+- FR-11.15: Pattern `flags` SHALL optionally specify MULTILINE, IGNORECASE, or DOTALL
+- FR-11.16: Pattern `timeout` SHALL optionally specify timeout in seconds (default 1.0)
+
+#### Pattern Application
+- FR-11.17: SHALL only apply patterns to files that ALS formatted successfully
+- FR-11.18: SHALL skip patterns for files where ALS failed
+- FR-11.19: SHALL apply patterns sequentially in alphabetical order by name
+- FR-11.20: SHALL count replacements per pattern per file
+- FR-11.21: SHALL respect dry-run vs write mode (no file changes without --write)
+- FR-11.22: SHALL enforce timeout protection on each pattern application (default 50ms)
+- FR-11.23: SHALL skip patterns for files larger than configured limit (default 10MB)
+- FR-11.24: SHALL continue processing after pattern timeout or error
+
+#### Pattern Validation Mode
+- FR-11.25: SHALL support `--validate-patterns` flag to verify patterns don't conflict with ALS
+- FR-11.26: SHALL apply patterns then run result through ALS to check for changes
+- FR-11.27: SHALL report files where ALS would modify pattern output
+- FR-11.28: SHALL exit with non-zero code if validation finds conflicts
+
+#### Pattern UI Integration
+- FR-11.29: SHALL display pattern activity in per-file status lines
+- FR-11.30: SHALL show "Patterns: applied=N (R replacements)" when patterns made changes
+- FR-11.31: SHALL add "Pat Log" line to UI footer showing pattern log path
+- FR-11.32: SHALL display pattern summary in end-of-run metrics
+
+#### Pattern Logging
+- FR-11.33: SHALL create dedicated `adafmt_<timestamp>_patterns.log` JSONL file
+- FR-11.34: SHALL log pattern events: run_start, file, pattern_applied, pattern_timeout, pattern_error, run_end
+- FR-11.35: SHALL include pattern name, title, and category in relevant log events
+- FR-11.36: SHALL track per-pattern metrics (files_touched, total_replacements)
+
+**Acceptance Criteria:**
+- Patterns load correctly from JSON file
+- Invalid patterns are skipped without breaking the formatter
+- Patterns apply in deterministic order
+- Pattern timeouts don't crash the formatter
+- Large files skip pattern processing
+- Pattern validation correctly identifies ALS conflicts
+- UI shows pattern activity and metrics
+- Pattern log contains complete activity trace
+
+### 2.12 User Interface Output Format (FR-12)
+
+**Description**: The system SHALL provide standardized output formatting to ensure consistent, readable, and parseable results across all user interface modes and environments.
+
+**Requirements:**
+
+#### FR-12.1 Comprehensive Output Structure
+- FR-12.1.1: SHALL display output in four distinct sections when processing completes:
+  - ALS METRICS section with formatting statistics from Ada Language Server
+  - PATTERN METRICS section with custom pattern application results  
+  - ADAFMT RUN section with overall execution summary
+  - LOG FILES section with paths to all generated log files
+- FR-12.1.2: SHALL separate each section with a standardized delimiter (80 equals signs)
+- FR-12.1.3: SHALL display sections in the specified order: ALS, PATTERN, RUN, LOG FILES
+
+#### FR-12.2 DateTime Format Standards
+- FR-12.2.1: SHALL use ISO 8601 UTC format for all timestamps: `YYYYMMDDTHHMMSSZ`
+- FR-12.2.2: SHALL display elapsed time in seconds with one decimal place: `XXX.Xs`
+- FR-12.2.3: SHALL use consistent timestamp format across all log file names and content
+- FR-12.2.4: SHALL include timezone indicator (Z for UTC) in all timestamp displays
+
+#### FR-12.3 Numeric Formatting Standards
+- FR-12.3.1: SHALL display file counts as integers without decimal places
+- FR-12.3.2: SHALL display percentages as integers without decimal places followed by `%`
+- FR-12.3.3: SHALL display processing rates with one decimal place followed by units
+- FR-12.3.4: SHALL right-align all numeric values within their display columns
+- FR-12.3.5: SHALL use fixed-width formatting to prevent display jumping during updates
+
+#### FR-12.4 ALS Metrics Display Format
+- FR-12.4.1: SHALL display the following fields in fixed-width columns:
+  - Files: total count and 100% reference
+  - Changed: count and percentage of total files  
+  - Unchanged: count and percentage of total files
+  - Failed: count and percentage of total files
+  - Started: ISO 8601 timestamp
+  - Completed: ISO 8601 timestamp
+  - Elapsed: time in seconds with one decimal
+  - Rate: files per second with one decimal
+- FR-12.4.2: SHALL ensure percentages sum to approximately 100% (allowing for rounding)
+- FR-12.4.3: SHALL align field labels and values in consistent columns
+
+#### FR-12.5 Pattern Metrics Display Format  
+- FR-12.5.1: SHALL display pattern metrics in tabular format with headers:
+  - Pattern: pattern name (left-aligned)
+  - Applied: number of files where pattern was applied (right-aligned)
+  - Replaced: total number of text replacements made (right-aligned)
+  - Failed: number of pattern failures (right-aligned)
+- FR-12.5.2: SHALL include a totals row with dashes separator line
+- FR-12.5.3: SHALL display pattern timing metrics:
+  - Started: ISO 8601 timestamp
+  - Completed: ISO 8601 timestamp  
+  - Elapsed: time in seconds with one decimal
+  - Rate (scanned): files scanned per second with one decimal
+  - Rate (applied): pattern applications per second with one decimal
+  - Rate (replacements): text replacements per second with one decimal
+- FR-12.5.4: SHALL handle empty pattern results gracefully (show zeros, not errors)
+
+#### FR-12.6 Run Summary Display Format
+- FR-12.6.1: SHALL display overall run summary with:
+  - Started: ISO 8601 timestamp of adafmt execution start
+  - Completed: ISO 8601 timestamp of adafmt execution end
+  - Total Elapsed: end-to-end time including all processing phases
+- FR-12.6.2: SHALL ensure total elapsed time is greater than or equal to individual phase times
+
+#### FR-12.7 Log Files Display Format
+- FR-12.7.1: SHALL display log file paths in consistent format:
+  - Description: human-readable log type description (left-aligned)
+  - Path: full path to log file (left-aligned)
+  - Location indicator: `(default location)` or `(custom location)`
+- FR-12.7.2: SHALL show all four log file types:
+  - Main Log: JSONL structured log file
+  - Pattern Log: human-readable pattern activity log
+  - Stderr: ALS error output capture
+  - ALS Log: Ada Language Server internal logs
+- FR-12.7.3: SHALL use consistent timestamp in all log file names from the same run
+
+#### FR-12.8 Column Alignment and Spacing
+- FR-12.8.1: SHALL use consistent column alignment within each section
+- FR-12.8.2: SHALL separate columns with at least two spaces
+- FR-12.8.3: SHALL align field labels and numeric values for readability
+- FR-12.8.4: SHALL handle varying field width requirements gracefully
+
+#### FR-12.9 Color and Visual Formatting
+- FR-12.9.1: SHALL use consistent color scheme when terminal supports colors:
+  - Section headers: bold/bright formatting
+  - Success indicators: green color
+  - Warning indicators: yellow color  
+  - Error indicators: red color
+  - Normal text: default terminal color
+- FR-12.9.2: SHALL provide ASCII fallbacks when colors are unavailable
+- FR-12.9.3: SHALL respect NO_COLOR environment variable
+- FR-12.9.4: SHALL maintain readability in monochrome displays
+
+#### FR-12.10 Cross-Platform Compatibility
+- FR-12.10.1: SHALL display correctly on Unix-like systems (Linux, macOS, BSD)
+- FR-12.10.2: SHALL display correctly on Windows command prompt and PowerShell
+- FR-12.10.3: SHALL handle different terminal widths gracefully (minimum 80 columns)
+- FR-12.10.4: SHALL use UTF-8 encoding for all text output
+
+#### FR-12.11 Error Display Integration
+- FR-12.11.1: SHALL maintain consistent formatting when errors occur during processing
+- FR-12.11.2: SHALL show partial results when some phases complete successfully
+- FR-12.11.3: SHALL indicate missing or failed sections clearly
+- FR-12.11.4: SHALL preserve output structure even when individual components fail
+
+**Acceptance Criteria:**
+- Output displays consistently across all supported platforms
+- Numeric formatting remains stable during processing updates  
+- DateTime stamps follow ISO 8601 UTC standard
+- Column alignment remains consistent regardless of value lengths
+- Color formatting works correctly with various terminal configurations
+- All four output sections appear in correct order with proper formatting
+- Log file paths display correctly with location indicators
+- Pattern metrics table maintains alignment with varying pattern counts
+- Error conditions don't break overall output structure
+- Output remains readable in 80-column terminal windows
+
 ## 3. Non-Functional Requirements
 
 ### 3.1 Performance (NFR-1)
@@ -333,12 +514,16 @@ The system operates as a client to the Ada Language Server, communicating via th
 - NFR-1.5: SHALL process files in parallel where possible
 - NFR-1.6: SHALL minimize file I/O operations by keeping log files open for the session duration
 - NFR-1.7: SHALL maintain data integrity through immediate flushing without compromising performance
+- NFR-1.8: SHALL apply patterns without materially increasing ALS formatting time
+- NFR-1.9: SHALL enforce pattern timeout of 50ms per pattern application
+- NFR-1.10: SHALL handle up to 50 patterns without performance degradation
 
 **Measurement:**
 - Time formatting a large Ada project
 - Monitor resource usage during operation
 - Measure I/O operations and file handle usage
 - Verify log data persistence after crashes
+- Measure pattern application overhead compared to ALS-only formatting
 
 ### 3.2 Reliability (NFR-2)
 
@@ -387,10 +572,15 @@ The system operates as a client to the Ada Language Server, communicating via th
 - NFR-5.3: SHALL handle untrusted Ada source safely
 - NFR-5.4: SHALL not expose sensitive information in logs
 - NFR-5.5: SHALL use secure temp file creation
+- NFR-5.6: SHALL enforce regex timeout protection to prevent ReDoS attacks
+- NFR-5.7: SHALL treat pattern files as trusted input (must be validated by users)
+- NFR-5.8: SHALL limit pattern file size to prevent memory exhaustion
 
 **Measurement:**
 - Security testing with malicious inputs
 - Code review for security issues
+- Pattern timeout enforcement verification
+- Memory usage testing with large pattern files
 
 ### 3.6 Maintainability (NFR-6)
 
@@ -482,6 +672,13 @@ Lock directories are considered stale if:
 - `--log-path PATH`: JSONL log file location (default: ./adafmt_<timestamp>_log.jsonl)
 - `--stderr-path PATH`: Stderr capture location (default: ./adafmt_<timestamp>_stderr.log)
 
+**Pattern Formatting:**
+- `--patterns-path PATH`: Pattern file location (default: ./adafmt_patterns.json)
+- `--no-patterns`: Disable pattern processing entirely
+- `--patterns-timeout-ms MS`: Timeout per pattern in milliseconds (default: 50)
+- `--patterns-max-bytes BYTES`: Skip patterns for files larger than this (default: 10485760)
+- `--validate-patterns`: Validate patterns don't break ALS formatting
+
 ## 6. Assumptions
 
 - Ada Language Server is installed and accessible
@@ -543,4 +740,4 @@ The project will be considered successful when:
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
-| 1.0.0 | 2024-12-01 | M. Gardner | Initial version |
+| 0.0.0 | January 2025 | M. Gardner | Initial version |

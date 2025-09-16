@@ -85,8 +85,14 @@ class TestRemainingCoverage:
         
         assert formatter.loaded_count == 0
         # Check UI warning was shown
-        mock_ui.show_warning.assert_called()
-        assert "invalid regex" in mock_ui.show_warning.call_args[0][0].lower()
+        mock_ui.log_line.assert_called()
+        # Find the warning call
+        warning_call = None
+        for call in mock_ui.log_line.call_args_list:
+            if "[warning]" in call[0][0] and "invalid regex" in call[0][0].lower():
+                warning_call = call
+                break
+        assert warning_call is not None, "Expected warning about invalid regex"
         
     # Timeout testing moved to integration tests - see test_pattern_timeout_integration.py
     # Testing actual timeout behavior requires real regex patterns that timeout,

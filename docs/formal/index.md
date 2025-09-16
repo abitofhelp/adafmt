@@ -5,8 +5,8 @@ This section contains the official project specifications, requirements, and des
 ## 📋 Formal Documents
 
 ### [📋 Software Requirements Specification (SRS)](SRS.md)
-**Purpose**: Defines the functional and non-functional requirements for adafmt  
-**Audience**: Project managers, stakeholders, compliance auditors, developers  
+**Purpose**: Defines the functional and non-functional requirements for adafmt
+**Audience**: Project managers, stakeholders, compliance auditors, developers
 **Contents**:
 - Functional requirements (FR-1 through FR-10)
 - Non-functional requirements (performance, reliability, usability)
@@ -16,13 +16,13 @@ This section contains the official project specifications, requirements, and des
 
 **Key Sections**:
 - **Section 3**: Functional Requirements - Core formatting capabilities
-- **Section 4**: Non-functional Requirements - Performance and reliability standards  
+- **Section 4**: Non-functional Requirements - Performance and reliability standards
 - **Section 5**: System Constraints - Technical limitations and dependencies
 - **Appendix A**: Requirements Traceability Matrix
 
 ### [🏗️ Software Design Document (SDD)](SDD.md)
-**Purpose**: Documents the architectural design and technical implementation decisions  
-**Audience**: Software architects, senior developers, technical reviewers  
+**Purpose**: Documents the architectural design and technical implementation decisions
+**Audience**: Software architects, senior developers, technical reviewers
 **Contents**:
 - System architecture overview
 - Component design and interfaces
@@ -39,14 +39,24 @@ This section contains the official project specifications, requirements, and des
 - **Section 6**: Security Design - Security considerations and implementations
 
 ### [🏛️ Architecture Overview](architecture.md) *(Coming Soon)*
-**Purpose**: High-level system architecture for stakeholders and new developers  
-**Audience**: Technical managers, new team members, integration partners  
+**Purpose**: High-level system architecture for stakeholders and new developers
+**Audience**: Technical managers, new team members, integration partners
 **Contents**:
 - System context and boundaries
 - Major components and their interactions
 - Technology choices and rationale
 - Integration points and external dependencies
 - Deployment architecture
+
+### [🎨 Pattern Formatter Specifications](../patterns/srs_patterns_v3.md)
+**Purpose**: Formal requirements and design for the pattern formatter subsystem
+**Audience**: Developers, architects, pattern authors
+**Contents**:
+- Pattern formatter requirements (SRS)
+- Pattern design specifications (SDD)
+- Pattern file format and validation rules
+- Performance and safety requirements
+- Integration with main formatting pipeline
 
 ## 📊 Document Relationships
 
@@ -63,7 +73,7 @@ SRS (Requirements) ←→ SDD (Design) ←→ Architecture (Overview)
 
 ### **Document Hierarchy**
 1. **SRS**: Defines WHAT the system must do
-2. **SDD**: Defines HOW the system accomplishes requirements  
+2. **SDD**: Defines HOW the system accomplishes requirements
 3. **Architecture**: Explains WHY design decisions were made
 
 ## 🎯 Usage by Role
@@ -97,8 +107,8 @@ SRS (Requirements) ←→ SDD (Design) ←→ Architecture (Overview)
 
 | Document | Version | Date | Major Changes |
 |----------|---------|------|---------------|
-| SRS | 1.0.0 | Jan 2025 | Initial requirements specification |
-| SDD | 1.0.0 | Jan 2025 | Initial design document |
+| SRS | 0.0.0 | Jan 2025 | Initial requirements specification |
+| SDD | 0.0.0 | Jan 2025 | Initial design document |
 
 ## 🔄 Document Maintenance
 
@@ -124,11 +134,12 @@ These formal documents are maintained according to project standards:
 
 ### **Implementation Documentation**
 - **[API Reference](../api/index.md)**: Technical implementation details
-- **[Developer Guide](../developer/index.md)**: Development practices and standards
+- **[Developer Guide](../guides/index.md)**: Development practices and standards
 
-### **User Documentation** 
-- **[User Guides](../user/index.md)**: End-user focused documentation
-- **[Troubleshooting](../user/troubleshooting.md)**: Operational problem resolution
+### **User Documentation**
+- **[Getting Started](../guides/getting-started-guide.md)**: Usage guide and examples
+- **[Troubleshooting](../guides/troubleshooting-guide.md)**: Operational problem resolution
+- **[Configuration Reference](../guides/configuration-guide.md)**: Complete configuration options
 
 ### **Technical Reference**
 - **[Technical Reference](../reference/index.md)**: Deep technical details and protocols

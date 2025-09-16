@@ -43,7 +43,7 @@ try:
     APP_VERSION = version("adafmt")
 except Exception:
     # Fallback for development/editable installs
-    APP_VERSION = "1.0.0"
+    APP_VERSION = "0.0.0"
 
 # Global cleanup state
 _cleanup_client: Optional[ALSClient] = None
@@ -218,6 +218,7 @@ async def run_formatter(
     no_patterns: bool,
     patterns_timeout_ms: int,
     patterns_max_bytes: int,
+    validate_patterns: bool = False,
     using_default_log: bool = False,
     using_default_stderr: bool = False,
     using_default_patterns: bool = False) -> int:
@@ -280,7 +281,12 @@ async def run_formatter(
         else:
             print("[discovery] File discovery completed")
     if ui:
-        mode = "WRITE MODE" if write else "DRY RUN"
+        if validate_patterns:
+            mode = "VALIDATE PATTERNS"
+        elif write:
+            mode = "WRITE MODE"
+        else:
+            mode = "DRY RUN"
         ui.set_header("Ada Formatter", version=APP_VERSION, mode=mode)
 
     # logger - always create a logger (log_path is always set now)
@@ -396,10 +402,138 @@ async def run_formatter(
         'ev': 'run_start',
         'patterns_path': str(patterns_path) if patterns_path else None,
         'patterns_loaded': pattern_formatter.loaded_count if pattern_formatter else 0,
-        'mode': 'WRITE' if write else 'DRY',
+        'mode': 'VALIDATE' if validate_patterns else ('WRITE' if write else 'DRY'),
         'timeout_ms': patterns_timeout_ms,
-        'max_bytes': patterns_max_bytes
+        'max_bytes': patterns_max_bytes,
+        'validate_patterns': validate_patterns
     })
+    
+    # Validation mode - verify patterns don't break ALS formatting
+    if validate_patterns:
+        if not pattern_formatter or not pattern_formatter.enabled:
+            if ui:
+                ui.log_line("[error] No patterns loaded for validation")
+                ui.close()
+            else:
+                print("[error] No patterns loaded for validation")
+            await client.shutdown()
+            return 1
+        
+        if ui:
+            ui.log_line("[validate] Starting pattern validation...")
+        else:
+            print("[validate] Starting pattern validation...")
+        
+        validation_errors = []
+        
+        for idx, path in enumerate(file_paths, 1):
+            try:
+                # Read original content
+                original_content = path.read_text(encoding="utf-8", errors="ignore")
+                
+                # Apply patterns
+                pattern_content, pattern_result = pattern_formatter.apply(
+                    path,
+                    original_content,
+                    timeout_ms=patterns_timeout_ms,
+                    logger=PatternLogger(pattern_logger),
+                    ui=ui
+                )
+                
+                # Skip if no patterns were applied
+                if not pattern_result or len(pattern_result.applied_names) == 0:
+                    continue
+                
+                # Run pattern result through ALS
+                await client._notify("textDocument/didOpen", {
+                    "textDocument": {
+                        "uri": path.as_uri(),
+                        "languageId": "ada",
+                        "version": 1,
+                        "text": pattern_content,
+                    }
+                })
+                
+                try:
+                    edits = await client.request_with_timeout({
+                        "method": "textDocument/formatting",
+                        "params": {
+                            "textDocument": {"uri": path.as_uri()},
+                            "options": {"tabSize": 3, "insertSpaces": True},
+                        }
+                    }, timeout=format_timeout)
+                    
+                    if edits:
+                        # ALS wants to make changes to pattern output
+                        validation_errors.append({
+                            'path': str(path),
+                            'patterns_applied': pattern_result.applied_names,
+                            'als_edits': len(edits),
+                            'message': f"Patterns break ALS formatting (ALS wants {len(edits)} edits)"
+                        })
+                        
+                        if ui:
+                            ui.log_line(f"[{idx:>4}/{len(file_paths)}] [ERROR] {path} - patterns conflict with ALS")
+                        else:
+                            print(f"[{idx:>4}/{len(file_paths)}] [ERROR] {path} - patterns conflict with ALS")
+                    else:
+                        if ui:
+                            ui.log_line(f"[{idx:>4}/{len(file_paths)}] [  OK  ] {path}")
+                        else:
+                            print(f"[{idx:>4}/{len(file_paths)}] [  OK  ] {path}")
+                    
+                finally:
+                    await client._notify("textDocument/didClose", {
+                        "textDocument": {"uri": path.as_uri()}
+                    })
+                    
+            except Exception as e:
+                validation_errors.append({
+                    'path': str(path),
+                    'error': str(e),
+                    'message': f"Validation error: {e}"
+                })
+                if ui:
+                    ui.log_line(f"[{idx:>4}/{len(file_paths)}] [ERROR] {path} - {e}")
+                else:
+                    print(f"[{idx:>4}/{len(file_paths)}] [ERROR] {path} - {e}")
+        
+        # Report validation results
+        if validation_errors:
+            if ui:
+                ui.log_line(f"\n[validate] Found {len(validation_errors)} pattern conflicts:")
+                for err in validation_errors:
+                    ui.log_line(f"  - {err['path']}: {err['message']}")
+            else:
+                print(f"\n[validate] Found {len(validation_errors)} pattern conflicts:")
+                for err in validation_errors:
+                    print(f"  - {err['path']}: {err['message']}")
+            
+            # Log validation results
+            pattern_logger.write({
+                'ev': 'validation_complete',
+                'errors': validation_errors,
+                'total_files': len(file_paths),
+                'files_with_errors': len(validation_errors)
+            })
+            
+            await client.shutdown()
+            return 1
+        else:
+            if ui:
+                ui.log_line(f"\n[validate] All patterns validated successfully ({len(file_paths)} files)")
+            else:
+                print(f"\n[validate] All patterns validated successfully ({len(file_paths)} files)")
+            
+            pattern_logger.write({
+                'ev': 'validation_complete',
+                'errors': [],
+                'total_files': len(file_paths),
+                'files_with_errors': 0
+            })
+            
+            await client.shutdown()
+            return 0
     
     # Exit early if no files found
     if not file_paths:
@@ -1077,6 +1211,7 @@ def format_command(
     no_patterns: Annotated[bool, typer.Option("--no-patterns", help="Disable pattern processing")] = False,
     patterns_timeout_ms: Annotated[int, typer.Option("--patterns-timeout-ms", help="Timeout per pattern in milliseconds")] = 50,
     patterns_max_bytes: Annotated[int, typer.Option("--patterns-max-bytes", help="Skip patterns for files larger than this (bytes)")] = 10485760,
+    validate_patterns: Annotated[bool, typer.Option("--validate-patterns", help="Validate that patterns don't break ALS formatting")] = False,
     max_consecutive_timeouts: Annotated[int, typer.Option("--max-consecutive-timeouts", help="Abort after this many timeouts in a row (0 = no limit)")] = 5,
     write: Annotated[bool, typer.Option("--write", help="Apply changes to files")] = False,
     files: Annotated[Optional[List[str]], typer.Argument(help="Specific Ada files to format")] = None,
@@ -1140,6 +1275,7 @@ def format_command(
         no_patterns=no_patterns,
         patterns_timeout_ms=patterns_timeout_ms,
         patterns_max_bytes=patterns_max_bytes,
+        validate_patterns=validate_patterns,
         using_default_log=using_default_log,
         using_default_stderr=using_default_stderr,
         using_default_patterns=True))

@@ -263,7 +263,7 @@ class PatternFormatter:
                         'error': 'Invalid name format (must be 12 chars, [a-z0-9_-])'
                     })
                 if ui:
-                    ui.show_warning(f"Pattern '{name}' has invalid name format")
+                    ui.log_line(f"[warning] Pattern '{name}' has invalid name format")
                 continue
             
             if name in seen_names:
@@ -274,7 +274,7 @@ class PatternFormatter:
                         'error': 'Duplicate pattern name'
                     })
                 if ui:
-                    ui.show_warning(f"Duplicate pattern name: {name}")
+                    ui.log_line(f"[warning] Duplicate pattern name: {name}")
                 continue
             
             seen_names.add(name)
@@ -316,7 +316,7 @@ class PatternFormatter:
                         'error': f'Regex compile error: {e}'
                     })
                 if ui:
-                    ui.show_warning(f"Pattern '{name}' has invalid regex: {e}")
+                    ui.log_line(f"[warning] Pattern '{name}' has invalid regex: {e}")
                 continue
             except ValueError as e:
                 # From CompiledRule validation
@@ -338,7 +338,7 @@ class PatternFormatter:
         
         if ui:
             if formatter.loaded_count == 0:
-                ui.show_info("No valid patterns loaded")
+                ui.log_line("[info] No valid patterns loaded")
         
         return formatter
     
