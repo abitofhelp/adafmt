@@ -1,7 +1,7 @@
 # adafmt — Ada Language Formatter
 
 **Version:** 0.0.0  
-**License:** MIT  
+**License:** BSD-3-Clause  
 **Copyright:** © 2025 Michael Gardner, A Bit of Help, Inc.
 
 `adafmt` is an opinionated Ada 2022 formatter that leverages the Ada Language Server (ALS) to provide consistent, modern formatting while maintaining compatibility with earlier Ada versions. Built with extensibility in mind, it supports custom pattern formatting functions that allow teams to enforce project-specific style rules beyond what GNATFORMAT provides. It delivers a robust, production-ready solution for maintaining consistent code style across Ada projects of any size.
@@ -419,9 +419,10 @@ We welcome contributions! Please see our [Developer Documentation](docs/guides/i
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+**BSD-3-Clause** — see [LICENSE](./LICENSE) for the full text.
 
-Copyright © 2025 Michael Gardner, A Bit of Help, Inc.
+© 2025 Michael Gardner, A Bit of Help, Inc.  
+SPDX-License-Identifier: BSD-3-Clause
 
 ## Acknowledgments
 

@@ -606,7 +606,7 @@ The system operates as a client to the Ada Language Server, communicating via th
 
 ### 4.2 Business Constraints
 
-- **License:** Must be MIT licensed for broad adoption
+- **License:** Must be BSD-3-Clause licensed for broad adoption
 - **Backwards Compatibility:** Should work with older ALS versions
 - **Resource Usage:** Must work on modest developer machines
 

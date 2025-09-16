@@ -79,6 +79,9 @@ adafmt --version
 
 # View help
 adafmt --help
+
+# View license (BSD-3-Clause)
+adafmt license
 ```
 
 ### 2. Preview Formatting (Dry Run)

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # =============================================================================
 # adafmt - Ada Language Formatter
+# SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2025 Michael Gardner, A Bit of Help, Inc.
-# Licensed under the MIT License. See LICENSE file in the project root.
+# See LICENSE file in the project root.
 # =============================================================================
 
 """Entry point for adafmt when run as a module (python -m adafmt)."""

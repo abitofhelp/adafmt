@@ -1,3 +1,10 @@
+# =============================================================================
+# adafmt - Ada Language Formatter
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2025 Michael Gardner, A Bit of Help, Inc.
+# See LICENSE file in the project root.
+# =============================================================================
+
 """Integration tests for pattern formatter functionality.
 
 These tests verify the pattern formatter behavior with real files,

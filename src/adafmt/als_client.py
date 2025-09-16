@@ -1,7 +1,8 @@
 # =============================================================================
 # adafmt - Ada Language Formatter
+# SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2025 Michael Gardner, A Bit of Help, Inc.
-# Licensed under the MIT License. See LICENSE file in the project root.
+# See LICENSE file in the project root.
 # =============================================================================
 
 """Ada Language Server (ALS) client implementation.
@@ -33,10 +34,8 @@ import datetime as dt
 import json
 import os
 import shlex
-import sys
 import time
 from dataclasses import dataclass, field
-from enum import Enum
 from pathlib import Path
 from shutil import which
 from typing import Any, Dict, Optional, Tuple

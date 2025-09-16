@@ -1,3 +1,10 @@
+# =============================================================================
+# adafmt - Ada Language Formatter
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2025 Michael Gardner, A Bit of Help, Inc.
+# See LICENSE file in the project root.
+# =============================================================================
+
 """Integration tests for --validate-patterns flag."""
 
 import json
@@ -53,7 +60,7 @@ end Test;
         
         # Run validation
         result = subprocess.run(
-            ["adafmt", "--project-path", str(temp_project / "test.gpr"),
+            ["adafmt", "format", "--project-path", str(temp_project / "test.gpr"),
              "--validate-patterns", "--patterns-path", str(patterns_file)],
             capture_output=True,
             text=True,
@@ -91,7 +98,7 @@ end Test;
         
         # Run validation
         result = subprocess.run(
-            ["adafmt", "--project-path", str(temp_project / "test.gpr"),
+            ["adafmt", "format", "--project-path", str(temp_project / "test.gpr"),
              "--validate-patterns", "--patterns-path", str(patterns_file)],
             capture_output=True,
             text=True,
@@ -106,7 +113,7 @@ end Test;
         """Test validation with --no-patterns flag."""
         # Run validation with no patterns
         result = subprocess.run(
-            ["adafmt", "--project-path", str(temp_project / "test.gpr"),
+            ["adafmt", "format", "--project-path", str(temp_project / "test.gpr"),
              "--validate-patterns", "--no-patterns"],
             capture_output=True,
             text=True,
@@ -125,7 +132,7 @@ end Test;
         
         # Run validation
         result = subprocess.run(
-            ["adafmt", "--project-path", str(temp_project / "test.gpr"),
+            ["adafmt", "format", "--project-path", str(temp_project / "test.gpr"),
              "--validate-patterns", "--patterns-path", str(patterns_file)],
             capture_output=True,
             text=True,
@@ -177,7 +184,7 @@ end Test2;
         
         # Run validation
         result = subprocess.run(
-            ["adafmt", "--project-path", str(temp_project / "test.gpr"),
+            ["adafmt", "format", "--project-path", str(temp_project / "test.gpr"),
              "--validate-patterns", "--patterns-path", str(patterns_file)],
             capture_output=True,
             text=True,

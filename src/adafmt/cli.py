@@ -1,7 +1,8 @@
 # =============================================================================
 # adafmt - Ada Language Formatter
+# SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2025 Michael Gardner, A Bit of Help, Inc.
-# Licensed under the MIT License. See LICENSE file in the project root.
+# See LICENSE file in the project root.
 # =============================================================================
 
 """Command-line interface for adafmt using Typer.
@@ -14,23 +15,29 @@ modes, Alire integration, and comprehensive error handling with retry logic.
 from __future__ import annotations
 
 import asyncio
+import atexit
 import contextlib
 import io
 import os
 import signal
 import sys
 import time
-import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional
 from enum import Enum
+
+# Python 3.9+: importlib.resources.files
+try:
+    from importlib.resources import files as pkg_files
+except ImportError:
+    pkg_files = None
 
 import typer
 from typing_extensions import Annotated
 from tabulate import tabulate
 
-from .als_client import ALSClient, ALSProtocolError, build_als_command
+from .als_client import ALSClient, ALSProtocolError
 from .file_discovery import collect_files
 from .logging_jsonl import JsonlLogger
 from .pattern_formatter import PatternFormatter, PatternLogger
@@ -85,12 +92,12 @@ def _cleanup_handler(signum=None, frame=None):
                     loop.create_task(_cleanup_client.shutdown())
                 else:
                     asyncio.run(_cleanup_client.shutdown())
-            except:
+            except Exception:
                 # Force kill the process if graceful shutdown fails
                 if hasattr(_cleanup_client, '_proc') and _cleanup_client._proc:
                     try:
                         _cleanup_client._proc.terminate()
-                    except:
+                    except Exception:
                         pass
         
         if _cleanup_ui:
@@ -120,7 +127,6 @@ signal.signal(signal.SIGINT, _cleanup_handler)
 signal.signal(signal.SIGTERM, _cleanup_handler)
 
 # Also register atexit for normal exit
-import atexit
 atexit.register(_cleanup_handler)
 
 # Define enums for choice fields
@@ -150,6 +156,30 @@ app = typer.Typer(
     context_settings={"help_option_names": ["-h", "--help"]},
     pretty_exceptions_enable=False,
 )
+
+
+def _read_license_text() -> str:
+    """Read the LICENSE file from package data or filesystem."""
+    # 1) Prefer a bundled copy inside the package: adafmt/LICENSE
+    if pkg_files:
+        try:
+            return pkg_files("adafmt").joinpath("LICENSE").read_text(encoding="utf-8")
+        except Exception:
+            pass
+
+    # 2) Fallbacks for dev runs from a source checkout
+    here = Path(__file__).resolve()
+    for candidate in (
+        here.parent / "LICENSE",
+        here.parent.parent / "LICENSE",
+        here.parent.parent.parent / "LICENSE",  # src/adafmt -> src -> repo root
+        Path.cwd() / "LICENSE",
+    ):
+        if candidate.exists():
+            return candidate.read_text(encoding="utf-8")
+
+    raise FileNotFoundError("LICENSE not found. Bundle it as package data or run from repo root.")
+
 
 def _version_callback(value: bool):
     """Show version and exit."""
@@ -388,7 +418,7 @@ async def run_formatter(
                 logger=PatternLogger(pattern_logger),
                 ui=ui
             )
-        except Exception as e:
+        except Exception:
             raise
         
         if ui:
@@ -660,7 +690,7 @@ async def run_formatter(
                 consecutive_timeouts = 0
                 break  # Success, exit retry loop
             
-            except asyncio.TimeoutError as e:
+            except asyncio.TimeoutError:
                 attempts += 1
                 consecutive_timeouts += 1
                 if attempts >= max_attempts:
@@ -901,11 +931,11 @@ async def run_formatter(
         if edits:
             line += f" | ALS: ✓ edits={len(edits)}"
         else:
-            line += f" | ALS: ✓ edits=0"
+            line += " | ALS: ✓ edits=0"
         line += pattern_info
         
         if status == "failed":
-            line += f"  (details in the stderr log)"
+            line += "  (details in the stderr log)"
         elif note:
             line += f"  ({note})"
         if ui:
@@ -1186,7 +1216,18 @@ async def run_formatter(
     return 0
 
 
-@app.command()
+@app.command("license", help="Show the project's license text (BSD-3-Clause).")
+def license_command():
+    """Show the BSD-3-Clause license text."""
+    try:
+        license_text = _read_license_text()
+        typer.echo(license_text, color=False)
+    except FileNotFoundError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@app.command(name="format")
 def format_command(
     project_path: Annotated[Path, typer.Option("--project-path", help="Path to your GNAT project file (.gpr)")],
     version: Annotated[Optional[bool], typer.Option("--version", "-v", callback=_version_callback, help="Show version and exit")] = None,
@@ -1203,8 +1244,8 @@ def format_command(
     pre_hook: Annotated[Optional[str], typer.Option("--pre-hook", help="Command to run before formatting; non-zero exit aborts. 60s timeout.")] = None,
     preflight: Annotated[PreflightMode, typer.Option("--preflight", help="Handle existing ALS processes and .als-alire locks")] = PreflightMode.safe,
     stderr_path: Annotated[Optional[Path], typer.Option("--stderr-path", help="Override stderr capture location (default: ./adafmt_<timestamp>_stderr.log)")] = None,
-    # FIXME: UI option temporarily disabled - always uses plain UI for better scrollback
-    # We are considering removal of the graphical UI entirely
+    # UI option disabled - always uses plain UI for better scrollback
+    # The graphical UI has been removed in favor of plain text output
     # ui: Annotated[UIMode, typer.Option("--ui", help="UI mode")] = UIMode.auto,
     warmup_seconds: Annotated[int, typer.Option("--warmup-seconds", help="Time to let ALS warm up in seconds")] = 10,
     patterns_path: Annotated[Optional[Path], typer.Option("--patterns-path", help="Path to patterns JSON file (default: ./adafmt_patterns.json)")] = None,

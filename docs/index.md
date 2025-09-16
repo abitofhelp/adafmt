@@ -28,31 +28,23 @@ Resources for adafmt contributors and integrators:
 
 *Perfect for: Contributors, maintainers, integration developers*
 
-### 🔧 [API Reference](api/index.md)
+### 🔧 [API Reference](guides/api/index.md)
 Complete technical reference for all modules:
-- **[ALS Client](api/als_client.md)** - Ada Language Server communication
-- **[CLI Module](api/cli.md)** - Command-line interface
-- **[Text Editing](api/edits.md)** - Text transformation operations
-- **[File Discovery](api/file_discovery.md)** - File finding and filtering
-- **[JSONL Logging](api/logging_jsonl.md)** - Structured logging
-- **[Terminal UI](api/tui.md)** - User interface components
+- **[ALS Client](guides/api/als_client.md)** - Ada Language Server communication
+- **[CLI Module](guides/api/cli.md)** - Command-line interface
+- **[Text Editing](guides/api/edits.md)** - Text transformation operations
+- **[File Discovery](guides/api/file_discovery.md)** - File finding and filtering
+- **[JSONL Logging](guides/api/logging_jsonl.md)** - Structured logging
+- **[Terminal UI](guides/api/tui.md)** - User interface components
 
 *Perfect for: Developers, API consumers, advanced users*
 
-### 📋 [Formal Documentation](formal/index.md)
+### 📋 [Formal Documentation](guides/formal/index.md)
 Official project specifications and design documents:
-- **[Software Requirements Specification (SRS)](formal/SRS.md)** - Formal requirements
-- **[Software Design Document (SDD)](formal/SDD.md)** - Architecture and design decisions
-- **[Architecture Overview](formal/architecture.md)** - High-level system design
+- **[Software Requirements Specification (SRS)](guides/formal/SRS.md)** - Formal requirements
+- **[Software Design Document (SDD)](guides/formal/SDD.md)** - Architecture and design decisions
 
 *Perfect for: Project managers, architects, compliance auditors*
-
-### 📖 [Technical Reference](reference/index.md)
-Deep technical references and implementation details:
-- **[Traces Configuration](guides/configuration-guide.md#4-als-traces-configuration)** - ALS tracing configuration
-- **[LSP Protocol Details](reference/lsp-protocol.md)** - Language Server Protocol specifics
-
-*Perfect for: Advanced developers, troubleshooting complex issues*
 
 ### 🎨 [Pattern Documentation](guides/patterns-guide.md)
 Complete documentation for the pattern formatter system:
@@ -79,7 +71,7 @@ Complete documentation for the pattern formatter system:
 
 ## 🔗 External Resources
 
-- **[GitHub Repository](https://github.com/abitofhelp/adafmt)** - Source code and issues
+- **[GitHub Repository](https://github.com/abitofhelp/adafmt.git)** - Source code and issues
 - **[Ada Language Server](https://github.com/AdaCore/ada_language_server)** - Backend formatting engine
 - **[Language Server Protocol](https://microsoft.github.io/language-server-protocol/)** - Protocol specification
 

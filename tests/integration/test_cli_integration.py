@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+
+# =============================================================================
+# adafmt - Ada Language Formatter
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2025 Michael Gardner, A Bit of Help, Inc.
+# See LICENSE file in the project root.
+# =============================================================================
+
 """Integration tests for adafmt command-line interface functionality.
 
 This module contains comprehensive integration tests that verify the command-line
@@ -55,7 +63,7 @@ class TestCLIBasicCommands:
         This test verifies that:
         - Help command executes successfully (return code 0)
         - Application name "Ada Language Formatter" is displayed
-        - Key parameters like --project-path are documented
+        - Available commands are shown
         - Command completes within reasonable timeout
         """
         result = subprocess.run(
@@ -65,14 +73,15 @@ class TestCLIBasicCommands:
             timeout=10
         )
         assert result.returncode == 0
-        assert 'Format Ada source code using the Ada Language Server' in result.stdout
-        assert '--project-path' in result.stdout
+        assert 'Ada Language Formatter' in result.stdout
+        assert 'format' in result.stdout
+        assert 'license' in result.stdout
     
     def test_version_command(self):
         """Test that the version command displays proper version information.
         
         Given: The adafmt CLI is available for execution
-        When: The --version flag is passed to the command
+        When: The --version flag is passed to the format
         Then: Version information is displayed in the expected format
         
         This test verifies that:
@@ -82,7 +91,7 @@ class TestCLIBasicCommands:
         - Command completes within reasonable timeout
         """
         result = subprocess.run(
-            [sys.executable, '-m', 'adafmt', '--version'],
+            [sys.executable, '-m', 'adafmt', 'format', '--version'],
             capture_output=True,
             text=True,
             timeout=10
@@ -107,7 +116,7 @@ class TestCLIParameters:
         """Test that all expected CLI parameters are documented in help output.
         
         Given: The adafmt CLI help system
-        When: Help information is requested
+        When: Help information is requested for the format
         Then: All expected parameters are documented and visible to users
         
         This test verifies that:
@@ -118,7 +127,7 @@ class TestCLIParameters:
         - File handling parameters like --log-path are included
         """
         result = subprocess.run(
-            [sys.executable, '-m', 'adafmt', '--help'],
+            [sys.executable, '-m', 'adafmt', 'format', '--help'],
             capture_output=True,
             text=True,
             timeout=10
@@ -133,7 +142,6 @@ class TestCLIParameters:
             '--write',
             '--check',
             '--diff',
-            '--ui',
             '--preflight',
             '--init-timeout',
             '--warmup-seconds',
@@ -150,7 +158,7 @@ class TestCLIParameters:
         """Test that all preflight mode options are properly documented.
         
         Given: The adafmt CLI with preflight mode support
-        When: Help information is requested
+        When: Help information is requested for the format
         Then: All available preflight modes are documented for user reference
         
         This test verifies that:
@@ -160,7 +168,7 @@ class TestCLIParameters:
         - No preflight modes are missing from help output
         """
         result = subprocess.run(
-            [sys.executable, '-m', 'adafmt', '--help'],
+            [sys.executable, '-m', 'adafmt', 'format', '--help'],
             capture_output=True,
             text=True,
             timeout=10
@@ -212,7 +220,7 @@ end Test;
         
         try:
             result = subprocess.run([
-                sys.executable, '-m', 'adafmt',
+                sys.executable, '-m', 'adafmt', 'format',
                 '--project-path', '/tmp/test.gpr',
                 '--ui', 'off',
                 '--preflight', 'off',
@@ -252,7 +260,7 @@ end Test;
             project_file.write_text('project Test is end Test;')
             
             result = subprocess.run([
-                sys.executable, '-m', 'adafmt',
+                sys.executable, '-m', 'adafmt', 'format',
                 '--project-path', str(project_file),
                 '--include-path', str(tmppath),
                 '--preflight', 'off',

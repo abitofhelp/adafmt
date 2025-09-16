@@ -1,3 +1,10 @@
+# =============================================================================
+# adafmt - Ada Language Formatter
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2025 Michael Gardner, A Bit of Help, Inc.
+# See LICENSE file in the project root.
+# =============================================================================
+
 """Integration tests for adafmt with the Ada Language Server.
 
 This module contains comprehensive integration tests that verify the complete adafmt
@@ -398,7 +405,7 @@ class TestCLIIntegration:
         This test verifies that:
         - Help command returns success status
         - Application name and description are shown
-        - Key command-line parameters are documented
+        - Available commands are documented
         - Help output is properly formatted
         """
         result = subprocess.run(
@@ -408,14 +415,15 @@ class TestCLIIntegration:
         )
         
         assert result.returncode == 0
-        assert ("Ada Language Formatter" in result.stdout or "Format Ada source code" in result.stdout)
-        assert "--project-path" in result.stdout
+        assert "Ada Language Formatter" in result.stdout
+        assert "format" in result.stdout
+        assert "license" in result.stdout
     
     def test_cli_version(self):
         """Test that CLI displays version information correctly.
         
         Given: The adafmt CLI is available
-        When: The --version flag is used
+        When: The --version flag is used with format
         Then: Version information is displayed in the expected format
         
         This test verifies that:
@@ -425,7 +433,7 @@ class TestCLIIntegration:
         - Version information is properly formatted
         """
         result = subprocess.run(
-            [sys.executable, "-m", "adafmt", "--version"],
+            [sys.executable, "-m", "adafmt", "format", "--version"],
             capture_output=True,
             text=True
         )

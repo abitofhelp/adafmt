@@ -1,7 +1,8 @@
 # =============================================================================
 # adafmt - Ada Language Formatter
+# SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2025 Michael Gardner, A Bit of Help, Inc.
-# Licensed under the MIT License. See LICENSE file in the project root.
+# See LICENSE file in the project root.
 # =============================================================================
 
 """Utility functions for adafmt.
@@ -22,7 +23,6 @@ import signal
 import sys
 import tempfile
 import shutil
-import contextlib
 import subprocess
 import time
 from dataclasses import dataclass
@@ -416,7 +416,7 @@ def preflight(
         return 0
 
     # Kill processes
-    killed = kill_als_processes(
+    kill_als_processes(
         mode="aggressive" if mp == "aggressive" else "safe",
         stale_minutes=als_stale_minutes,
         logger=logger,

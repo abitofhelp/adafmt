@@ -1,7 +1,8 @@
 # =============================================================================
 # adafmt - Ada Language Formatter
+# SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2025 Michael Gardner, A Bit of Help, Inc.
-# Licensed under the MIT License. See LICENSE file in the project root.
+# See LICENSE file in the project root.
 # =============================================================================
 
 """File discovery module for finding Ada source files.
@@ -101,7 +102,7 @@ def collect_files(include_paths: Iterable[Path], exclude_paths: Iterable[Path]) 
                         continue
                     if f.is_file() and f.suffix.lower() in ADA_EXTS and not should_skip(f):
                         files.add(f)
-            except (OSError, PermissionError) as e:
+            except (OSError, PermissionError):
                 # Handle permission errors or other OS errors gracefully
                 # Just skip this directory if we can't access it
                 pass

@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+# =============================================================================
+# adafmt - Ada Language Formatter
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2025 Michael Gardner, A Bit of Help, Inc.
+# See LICENSE file in the project root.
+# =============================================================================
+
 """Kill Ada Language Server processes and clean up stale locks.
 
 This script performs aggressive cleanup of ALS processes and lock files,

@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+# =============================================================================
+# adafmt - Ada Language Formatter
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2025 Michael Gardner, A Bit of Help, Inc.
+# See LICENSE file in the project root.
+# =============================================================================
+
 """
 Mocked harness: runs adafmt pipeline without ALS by simulating edits.
 Useful for quick sanity checks and CI smoke tests.
