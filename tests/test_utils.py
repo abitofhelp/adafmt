@@ -206,7 +206,8 @@ class TestListAlsPids:
         assert pids == [12345, 67890]
         mock_check_output.assert_called_once_with(
             ["pgrep", "-f", "ada_language_server"], 
-            text=True
+            text=True,
+            timeout=5
         )
     
     @patch('subprocess.check_output')

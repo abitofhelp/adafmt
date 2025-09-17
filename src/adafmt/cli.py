@@ -369,7 +369,7 @@ async def run_formatter(
 
     # Hooks
     if pre_hook:
-        ok = run_hook(pre_hook, "pre", logger=(ui.log_line if ui else print), dry_run=False)
+        ok = run_hook(pre_hook, "pre", logger=(ui.log_line if ui else print), timeout=hook_timeout, dry_run=False)
         if not ok:
             if ui:
                 ui.log_line("[error] pre-hook failed; aborting.")
@@ -1323,16 +1323,24 @@ async def run_formatter(
         # Build log files table
         log_files = []
         
-        # Main Log
+        # Adafmt Log
         if log_path:
             log_display = f"./{log_path} (default location)" if using_default_log else str(log_path)
-            log_files.append(["Main Log", log_display])
+            log_files.append(["Adafmt", log_display])
         else:
-            log_files.append(["Main Log", "Not configured"])
+            log_files.append(["Adafmt", "Not configured"])
         
-        # Pattern Log
+        # ALS Log
+        if not no_als:
+            als_log_display = (client.als_log_path if client else None) or "~/.als/ada_ls_log.*.log (default location)"
+            log_files.append(["ALS", als_log_display])
+        
+        # Patterns Log
         pattern_log_display = f"./{pattern_log_path} (default location)" if using_default_patterns else str(pattern_log_path)
-        log_files.append(["Pattern Log", pattern_log_display])
+        log_files.append(["Patterns", pattern_log_display])
+        
+        # Performance Log (metrics)
+        log_files.append(["Performance", "~/.adafmt/metrics.jsonl (default location)"])
         
         # Stderr
         if stderr_path:
@@ -1340,11 +1348,6 @@ async def run_formatter(
             log_files.append(["Stderr", stderr_display])
         else:
             log_files.append(["Stderr", "Not configured"])
-        
-        # ALS Log
-        if not no_als:
-            als_log_display = (client.als_log_path if client else None) or "~/.als/ada_ls_log.*.log (default location)"
-            log_files.append(["ALS Log", als_log_display])
         
         # Print table with consistent formatting
         table_str = tabulate(log_files, tablefmt="plain")
@@ -1372,7 +1375,7 @@ async def run_formatter(
 
     # Post-hook (do not fail the overall run if it fails)
     if post_hook:
-        run_hook(post_hook, "post", logger=(ui.log_line if ui else print) if ui else print, dry_run=False)
+        run_hook(post_hook, "post", logger=(ui.log_line if ui else print) if ui else print, timeout=hook_timeout, dry_run=False)
 
     if check and total_changed:
         _restore_stderr()
@@ -1405,8 +1408,9 @@ def format_command(
     init_timeout: Annotated[int, typer.Option("--init-timeout", help="Timeout for ALS initialization in seconds")] = 180,
     log_path: Annotated[Optional[Path], typer.Option("--log-path", help="Override JSONL log location (default: ./adafmt_<timestamp>_log.jsonl)")] = None,
     max_attempts: Annotated[int, typer.Option("--max-attempts", help="Retry attempts for transient errors")] = 2,
-    post_hook: Annotated[Optional[str], typer.Option("--post-hook", help="Command to run after formatting; non-zero exit is logged. 60s timeout.")] = None,
-    pre_hook: Annotated[Optional[str], typer.Option("--pre-hook", help="Command to run before formatting; non-zero exit aborts. 60s timeout.")] = None,
+    post_hook: Annotated[Optional[str], typer.Option("--post-hook", help="Command to run after formatting; non-zero exit is logged.")] = None,
+    pre_hook: Annotated[Optional[str], typer.Option("--pre-hook", help="Command to run before formatting; non-zero exit aborts.")] = None,
+    hook_timeout: Annotated[int, typer.Option("--hook-timeout", help="Timeout for hook commands in seconds")] = 5,
     preflight: Annotated[PreflightMode, typer.Option("--preflight", help="Handle existing ALS processes and .als-alire locks")] = PreflightMode.safe,
     stderr_path: Annotated[Optional[Path], typer.Option("--stderr-path", help="Override stderr capture location (default: ./adafmt_<timestamp>_stderr.log)")] = None,
     # UI option disabled - always uses plain UI for better scrollback

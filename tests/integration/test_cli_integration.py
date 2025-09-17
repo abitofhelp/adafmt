@@ -174,9 +174,14 @@ class TestCLIParameters:
             timeout=10
         )
         
-        preflight_modes = ['off', 'warn', 'safe', 'kill', 'fail']
-        for mode in preflight_modes:
-            assert mode in result.stdout, f"Preflight mode '{mode}' not documented"
+        # Check for each preflight mode - some might be wrapped or combined
+        assert 'off' in result.stdout, "Preflight mode 'off' not documented"
+        assert 'warn' in result.stdout, "Preflight mode 'warn' not documented"
+        assert 'safe' in result.stdout, "Preflight mode 'safe' not documented"
+        assert 'fail' in result.stdout, "Preflight mode 'fail' not documented"
+        
+        # Check for kill modes (might appear as "kill|kill+clean")
+        assert 'kill' in result.stdout, "Preflight mode 'kill' not documented"
         
         # Check for aggressive (might be wrapped as "aggr essive" in help)
         assert 'aggr' in result.stdout, "Preflight mode 'aggressive' not documented"

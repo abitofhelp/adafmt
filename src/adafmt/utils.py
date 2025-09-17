@@ -105,7 +105,7 @@ def list_als_pids() -> List[int]:
     """
     # macOS/Unix: use pgrep
     try:
-        out = subprocess.check_output(["pgrep", "-f", "ada_language_server"], text=True)
+        out = subprocess.check_output(["pgrep", "-f", "ada_language_server"], text=True, timeout=5)
         return [int(x) for x in out.split()] if out.strip() else []
     except Exception:
         return []
@@ -170,7 +170,7 @@ def _als_processes(only_user: bool = True) -> List[ProcessInfo]:
         # Fallback: use platform tools
         if sys.platform == "win32":
             try:
-                out = subprocess.check_output(["tasklist", "/FI", "IMAGENAME eq ada_language_server.exe"], text=True, stderr=subprocess.DEVNULL)
+                out = subprocess.check_output(["tasklist", "/FI", "IMAGENAME eq ada_language_server.exe"], text=True, stderr=subprocess.DEVNULL, timeout=5)
                 for line in out.splitlines():
                     if "ada_language_server" in line.lower():
                         parts = [p for p in line.split() if p]
@@ -200,7 +200,7 @@ def _als_processes(only_user: bool = True) -> List[ProcessInfo]:
             
             for ps_cmd in ps_commands:
                 try:
-                    out = subprocess.check_output(ps_cmd, text=True, stderr=subprocess.DEVNULL)
+                    out = subprocess.check_output(ps_cmd, text=True, stderr=subprocess.DEVNULL, timeout=5)
                     for line in out.splitlines()[1:]:
                         if "ada_language_server" in line and "grep" not in line:
                             try:
@@ -256,7 +256,7 @@ def kill_als_processes(mode: str = "safe", stale_minutes: int = 30, logger=None,
             if not dry_run:
                 try:
                     if sys.platform == "win32":
-                        subprocess.run(["taskkill", "/F", "/PID", str(proc.pid)], check=False)
+                        subprocess.run(["taskkill", "/F", "/PID", str(proc.pid)], check=False, timeout=5)
                     else:
                         os.kill(proc.pid, signal.SIGTERM)
                         time.sleep(0.3)
@@ -303,7 +303,7 @@ def _pid_alive(pid: int) -> bool:
             return psutil.pid_exists(pid)
         else:
             if sys.platform == "win32":
-                out = subprocess.check_output(["tasklist", "/FI", f"PID eq {pid}"], text=True, stderr=subprocess.DEVNULL)
+                out = subprocess.check_output(["tasklist", "/FI", f"PID eq {pid}"], text=True, stderr=subprocess.DEVNULL, timeout=5)
                 return str(pid) in out
             else:
                 os.kill(pid, 0)
@@ -358,12 +358,24 @@ def clean_stale_locks(search_paths: List[Path], ttl_minutes: int = 10, logger=No
 def run_hook(hook_cmd: Optional[str], phase: str, logger=None, timeout: int=60, dry_run: bool=False) -> bool:
     if not hook_cmd:
         return True
+    
+    # Parse command safely without shell
+    import shlex
+    try:
+        cmd_list = shlex.split(hook_cmd)
+    except ValueError as e:
+        if logger:
+            logger(f"[{phase}-hook] Invalid command format: {e}")
+        return False
+    
     if logger:
-        logger(f"[{phase}-hook] {hook_cmd}" + (" [dry-run]" if dry_run else ""))
+        # Log the command as parsed list for transparency
+        logger(f"[{phase}-hook] {' '.join(cmd_list)}" + (" [dry-run]" if dry_run else ""))
     if dry_run:
         return True
     try:
-        result = subprocess.run(hook_cmd, shell=True, capture_output=True, text=True, timeout=timeout)
+        # Execute without shell for security
+        result = subprocess.run(cmd_list, capture_output=True, text=True, timeout=timeout, check=False)
         if result.stdout and logger:
             for line in result.stdout.strip().splitlines():
                 logger(f"[{phase}-hook] {line}")

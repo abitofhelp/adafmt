@@ -59,10 +59,11 @@ ADAFMT RUN
   Total Elapsed  25.7s
 
 LOG FILES
-  Main Log     ./adafmt_20250916T013452Z_log.jsonl (default location)
-  Pattern Log  ./adafmt_20250916T013452Z_patterns.log (default location)
+  Adafmt       ./adafmt_20250916T013452Z_log.jsonl (default location)
+  ALS          ~/.als/ada_ls_log.*.log (default location)
+  Patterns     ./adafmt_20250916T013452Z_patterns.log (default location)
+  Performance  ~/.adafmt/metrics.jsonl (default location)
   Stderr       ./adafmt_20250916T013452Z_stderr.log (default location)
-  ALS Log      ~/.als/ada_ls_log.*.log (default location)
 ================================================================================
 ```
 
@@ -176,18 +177,20 @@ This section shows where detailed logs were written:
 
 ```
 LOG FILES
-  Main Log     ./adafmt_20250916T013452Z_log.jsonl (default location)
-  Pattern Log  ./adafmt_20250916T013452Z_patterns.log (default location)
+  Adafmt       ./adafmt_20250916T013452Z_log.jsonl (default location)
+  ALS          ~/.als/ada_ls_log.*.log (default location)
+  Patterns     ./adafmt_20250916T013452Z_patterns.log (default location)
+  Performance  ~/.adafmt/metrics.jsonl (default location)
   Stderr       ./adafmt_20250916T013452Z_stderr.log (default location)
-  ALS Log      ~/.als/ada_ls_log.*.log (default location)
 ```
 
 #### Log File Types
 
-- **Main Log**: Structured JSON Lines log with detailed per-file results
-- **Pattern Log**: Human-readable log of pattern processing activity
+- **Adafmt**: Structured JSON Lines log with detailed per-file results
+- **ALS**: Ada Language Server's internal debug logs
+- **Patterns**: Human-readable log of pattern processing activity
+- **Performance**: Cumulative metrics log for performance profiling (when enabled)
 - **Stderr**: ALS error output and diagnostic information
-- **ALS Log**: Ada Language Server's internal debug logs
 
 #### Log File Locations
 
@@ -217,10 +220,11 @@ ADFMT RUN
   Total Elapsed  23.1s
 
 LOG FILES
-  Main Log     ./adafmt_20250916T013452Z_log.jsonl (default location)
-  Pattern Log  ./adafmt_20250916T013452Z_patterns.log (default location)
+  Adafmt       ./adafmt_20250916T013452Z_log.jsonl (default location)
+  ALS          ~/.als/ada_ls_log.*.log (default location)
+  Patterns     ./adafmt_20250916T013452Z_patterns.log (default location)
+  Performance  ~/.adafmt/metrics.jsonl (default location)
   Stderr       ./adafmt_20250916T013452Z_stderr.log (default location)
-  ALS Log      ~/.als/ada_ls_log.*.log (default location)
 ================================================================================
 ```
 
@@ -262,8 +266,9 @@ ADFMT RUN
   Total Elapsed  4.1s
 
 LOG FILES
-  Main Log     ./adafmt_20250916T013452Z_log.jsonl (default location)
-  Pattern Log  ./adafmt_20250916T013452Z_patterns.log (default location)
+  Adafmt       ./adafmt_20250916T013452Z_log.jsonl (default location)
+  Patterns     ./adafmt_20250916T013452Z_patterns.log (default location)
+  Performance  ~/.adafmt/metrics.jsonl (default location)
   Stderr       ./adafmt_20250916T013452Z_stderr.log (default location)
 ================================================================================
 ```
