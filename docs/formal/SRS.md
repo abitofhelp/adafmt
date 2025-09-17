@@ -154,25 +154,26 @@ The system operates as a client to the Ada Language Server, communicating via th
 - Check mode returns correct exit codes
 - Diffs accurately show changes
 
-### 2.6 User Interface Modes (FR-6)
+### 2.6 User Interface (FR-6)
 
-**Description:** The system shall provide multiple UI modes for different environments.
+**Description:** The system shall provide a plain text TTY user interface.
 
 **Requirements:**
-- FR-6.1: SHALL support "pretty" mode using curses for rich terminal UI
-- FR-6.2: SHALL support "basic" mode with simple text progress
-- FR-6.3: SHALL support "plain" mode with minimal output for scripts
-- FR-6.4: SHALL support "off" mode showing only diffs and errors
-- FR-6.5: SHALL automatically fall back from curses to basic when:
-  - Terminal doesn't support curses
-  - Output is redirected (not a TTY)
-  - Curses initialization fails
-- FR-6.6: SHALL respect NO_COLOR environment variable
+- FR-6.1: SHALL use plain text output with TTY color support
+- FR-6.2: SHALL show clear progress indicators during processing
+- FR-6.3: SHALL use color-coded status indicators (changed, unchanged, failed)
+- FR-6.4: SHALL respect NO_COLOR environment variable
+- FR-6.5: SHALL display comprehensive metrics at completion
+- FR-6.6: SHALL show unified diffs when --diff is enabled
+- FR-6.7: SHALL adapt to terminal capabilities automatically
+- FR-6.8: SHALL provide clear output for both interactive and CI use
+- FR-6.9: SHALL ensure output is suitable for scrollback history
 
 **Acceptance Criteria:**
-- Each UI mode displays appropriate information
-- Fallback occurs gracefully without errors
+- Output is clear and readable in all terminal types
+- Colors enhance readability without being required
 - CI environments get appropriate output
+- Progress and results are easily understood
 
 ### 2.7 Logging and Diagnostics (FR-7)
 
@@ -663,8 +664,8 @@ adafmt --project-path /path/to/project.gpr [options]
 - `--check`: Exit with code 1 if files need formatting
 - `--diff/--no-diff`: Show unified diffs (default: --diff)
 
-**UI Options:**
-- `--ui {off,auto,pretty,basic,plain}`: UI mode (default: auto)
+**Output Options:**
+- Output uses plain text TTY format with automatic color support
 
 **ALS Control:**
 - `--no-startup-health-check`: Skip ALS readiness probe

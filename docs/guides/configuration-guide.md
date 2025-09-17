@@ -107,30 +107,13 @@ adafmt --project-path project.gpr --diff
 
 ### User Interface
 
-#### `--ui`
-**Format**: `--ui MODE`
-**Options**: `auto`, `pretty`, `plain`, `json`, `quiet`
-**Default**: `auto`
+adafmt uses a plain text TTY UI that provides clear output with:
+- Color-coded file status indicators
+- Progress tracking during processing
+- Detailed metrics summary
+- Unified diffs for changes (controlled by `--diff`/`--no-diff`)
 
-| Mode | Description | Use Case |
-|------|-------------|----------|
-| `auto` | Automatically select UI based on terminal | General use |
-| `pretty` | Rich UI with progress bars and colors | Interactive terminals |
-| `plain` | Simple text output | Basic terminals, logs |
-| `json` | JSON Lines output | Scripting, integration |
-| `quiet` | Minimal output | Automated scripts |
-
-**Examples**:
-```bash
-# Interactive use
-adafmt --project-path project.gpr --ui pretty
-
-# CI/CD use
-adafmt --project-path project.gpr --ui plain
-
-# Scripting use
-adafmt --project-path project.gpr --ui json
-```
+The UI automatically adapts to terminal capabilities and respects standard color environment variables like `NO_COLOR`.
 
 ### Timeout Configuration
 

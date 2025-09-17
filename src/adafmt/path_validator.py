@@ -41,6 +41,7 @@ def validate_path(input_path: str) -> Optional[str]:
     """Validate a file/directory path for illegal characters.
     
     Checks for:
+    - URL-encoded sequences (e.g., %20, %2F)
     - Unicode characters outside the Basic Multilingual Plane
     - ISO control characters 
     - Whitespace characters
@@ -54,6 +55,13 @@ def validate_path(input_path: str) -> Optional[str]:
     """
     if not input_path:
         return "Path cannot be empty"
+    
+    # Check for URL-encoded sequences
+    if '%' in input_path:
+        # Pattern to match URL encoding: %XX where XX are hexadecimal digits
+        url_encoded_pattern = re.compile(r'%[0-9A-Fa-f]{2}')
+        if url_encoded_pattern.search(input_path):
+            return "Path appears to be URL-encoded. Please provide the decoded path instead"
     
     # Pattern for allowed characters
     allowed_pattern = re.compile(r'^[A-Za-z0-9?&=._:/-]+$')

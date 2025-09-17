@@ -70,7 +70,7 @@ This document covers:
 | Component | Responsibility | Key Interfaces |
 |-----------|---------------|----------------|
 | CLI | Command parsing, orchestration | ArgParser, main() |
-| TUI Manager | UI mode selection and display | CursesUI factory |
+| TUI Manager | TTY output and display | Plain text UI |
 | ALS Client | LSP communication, process management | ALSClient class |
 | File Discovery | Ada source file location | discover_files() |
 | Edits Engine | TextEdit application, diff generation | apply_text_edits() |
@@ -84,7 +84,7 @@ This document covers:
 2. **Async-First**: Core processing uses Python asyncio for non-blocking I/O
 3. **Fail-Safe**: Errors in one file don't stop processing of others
 4. **Observable**: Comprehensive logging for debugging and monitoring
-5. **Pluggable**: UI modes can be extended without changing core logic
+5. **Clear Output**: Plain text output suitable for all terminals
 
 ## 3. Component Design
 
@@ -216,12 +216,12 @@ ALS Log: ~/.als/ada_ls_log.*.log (default location)
 
 #### 3.3.1 Comprehensive Output Format Implementation
 
-**Purpose**: Implements FR-12 standardized output formatting for all UI modes
+**Purpose**: Implements FR-12 standardized output formatting for TTY output
 
 **Output Structure Implementation**:
 ```python
 class OutputFormatter:
-    """Handles standardized output formatting across UI modes"""
+    """Handles standardized output formatting across TTY output"""
     
     def format_final_summary(self, 
                            als_metrics: ALSMetrics,
@@ -327,9 +327,9 @@ def format_json_output(self, data: Dict) -> str:
 ```
 
 **Design Rationale**:
-- **Separation of Concerns**: Formatting logic separated from UI mode logic
+- **Separation of Concerns**: Formatting logic separated from output mode logic
 - **Testability**: Each format component independently testable
-- **Extensibility**: New output formats can be added without modifying UI modes
+- **Extensibility**: New output formats can be added without modifying TTY output
 - **Performance**: Pre-calculated formatting reduces real-time computation
 - **Consistency**: Shared formatting ensures identical output across modes
 - **Maintainability**: Single source of truth for format specifications
@@ -808,7 +808,7 @@ Optional:
   --write                     Apply changes (default: dry-run)
   --check                     Exit 1 if changes needed
   --diff/--no-diff           Show unified diffs (default: on)
-  --ui-mode MODE             UI mode: pretty|basic|plain|off
+  --diff/--no-diff           Show unified diffs (default: on)
   --alr-mode MODE            Alire mode: auto|yes|no
   --crate-dir PATH           Override Alire crate directory
   --log-path PATH            Override JSONL log location (default: ./adafmt_<timestamp>_log.jsonl)
@@ -893,7 +893,7 @@ class CursesUI:
 **Rationale**:
 - Transparent fallback for environments
 - Single interface for all modes
-- Easy to add new UI modes
+- Easy to add new TTY output
 - No runtime type checking needed
 
 ### 6.3 Atomic File Writes
@@ -981,7 +981,7 @@ class CursesUI:
 1. **ALS Startup**: Mitigated by warmup period
 2. **Large Files**: Consider chunking in future
 3. **Network Filesystems**: Atomic writes may be slow
-4. **Terminal Output**: UI modes for different needs
+4. **Terminal Output**: TTY output for different needs
 5. **Pattern Complexity**: Mitigated by timeouts and file size limits
 
 ## 8. Security Considerations
@@ -1069,7 +1069,7 @@ This validation ensures:
 
 - Pure functions (edits, discovery)
 - Mock-based (ALS client)
-- UI mode selection logic
+- output mode selection logic
 - Path validation
 - Pattern loading and validation
 - Pattern timeout enforcement
@@ -1090,7 +1090,7 @@ This validation ensures:
 - Multiple platform testing
 - Performance benchmarks
 - Stress testing (many files)
-- UI mode verification
+- output mode verification
 - Pattern performance impact
 - ReDoS prevention verification
 

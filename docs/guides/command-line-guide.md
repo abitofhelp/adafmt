@@ -118,13 +118,12 @@ adafmt format --project-path /project/app.gpr \
 | `--diff` | Show unified diffs | Yes |
 | `--no-diff` | Hide diffs | No |
 
-### UI Modes
-| Option | Description | When to Use |
-|--------|-------------|-------------|
-| `--ui auto` | Automatic selection (default) | General use |
-| `--ui pretty` | Rich terminal UI with colors | Interactive terminals |
-| `--ui plain` | Minimal output | Scripts, CI/CD |
-| `--ui off` | Only errors and diffs | Automation |
+### Output Format
+adafmt uses a plain text TTY UI that provides:
+- Clear progress indicators during processing
+- Color-coded file status (changed, unchanged, failed)
+- Detailed metrics at completion
+- Unified diffs for changes (when --diff is enabled)
 
 ### Pattern Control
 | Option | Description | Default |
@@ -199,13 +198,64 @@ Paths may only contain:
 --include-path /home/other/src
 ```
 
-### 5. No Unicode Beyond Basic Multilingual Plane
+### 5. No URL-Encoded Paths
+```bash
+# ❌ Bad - URL-encoded path
+--include-path /home/user/my%20project/src
+--include-path /path%2Fto%2Ffile.adb
+
+# ✅ Good - decoded path with actual characters
+--include-path "/home/user/my project/src"  # Note: quotes needed for spaces
+--include-path /path/to/file.adb
+```
+
+### 6. No Unicode Beyond Basic Multilingual Plane
 ```bash
 # ❌ Bad - emoji in path
 --include-path /home/user/project😀/src
 
 # ✅ Good - ASCII only
 --include-path /home/user/project/src
+```
+
+## Path Handling
+
+adafmt supports both relative and absolute paths for maximum flexibility:
+
+### Path Processing Flow
+1. **Input**: Accept any valid relative or absolute path from the user
+2. **Resolution**: Convert all paths to absolute using the current working directory
+3. **Validation**: Validate each resolved path for security and accessibility
+4. **Processing**: Use absolute paths throughout the application
+
+### Path Validation Rules
+All paths are validated after conversion to absolute form:
+- No empty paths or whitespace-only paths
+- No URL-encoded sequences (e.g., %20, %2F) - provide decoded paths instead
+- No control characters (ASCII 0-31, 127)
+- No illegal filesystem characters
+- No Unicode beyond Basic Multilingual Plane
+- No directory traversal attempts (../ sequences after resolution)
+- Must be accessible (readable for input, writable for output)
+
+### Benefits of Absolute Path Conversion
+- **Consistent Output**: All paths in output are absolute, making logs clearer
+- **Predictable Sorting**: Files sort consistently regardless of how they were specified
+- **CWD Independence**: If working directory changes, paths remain valid
+- **Clear Error Messages**: Validation errors show both original and resolved paths
+
+### Examples
+```bash
+# Relative paths are converted to absolute
+adafmt format --project-path ./my_app.gpr --include-path src/
+# Internally converts to: /home/user/project/my_app.gpr and /home/user/project/src/
+
+# Mixed relative and absolute paths work fine
+adafmt format --project-path /projects/app.gpr --include-path ./src --include-path /shared/ada
+# All converted to absolute for processing
+
+# Individual files can be relative or absolute
+adafmt format --project-path app.gpr --include-path . main.adb src/utils.adb /tmp/test.adb
 ```
 
 ## Exit Codes
@@ -279,7 +329,7 @@ cat /tmp/adafmt_debug.jsonl | jq '.'
 ## Tips and Best Practices
 
 1. **Start with Dry-Run**: Always run without `--write` first to preview changes
-2. **Use Absolute Paths**: All paths must be absolute - use `$PWD` or `$(pwd)` if needed
+2. **Path Flexibility**: Both relative and absolute paths are supported - paths are converted to absolute internally
 3. **Check in CI**: Use `--check` mode in CI/CD to enforce formatting
 4. **Save Logs**: Use `--log-path` when debugging issues
 5. **Validate Patterns**: Always use `--validate-patterns` when creating new pattern files

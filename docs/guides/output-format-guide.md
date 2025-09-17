@@ -7,9 +7,13 @@ This guide explains the comprehensive output format displayed after adafmt compl
 
 ---
 
-## Complete Output Example
+## Output Modes
 
-When adafmt completes a formatting run, it displays a comprehensive summary that looks like this:
+adafmt displays different metrics depending on which components are enabled:
+
+### Both ALS and Patterns (Default)
+
+When both ALS and patterns are enabled, you'll see comprehensive metrics from both:
 
 ```
 ================================================================================
@@ -24,6 +28,8 @@ ALS METRICS
   Rate       11.8 files/s
 
 PATTERN METRICS
+  Files           303  100%
+
   Pattern         Applied    Replaced    Failed
   ------------  ---------  ----------  --------
   assign_set01        130        3092         0
@@ -101,6 +107,8 @@ This section shows statistics from the custom pattern formatter system:
 
 ```
 PATTERN METRICS
+  Files           303  100%                       ← Total files scanned for patterns
+
   Pattern         Applied    Replaced    Failed
   ------------  ---------  ----------  --------
   assign_set01        130        3092         0   ← Each pattern's statistics
@@ -186,6 +194,120 @@ LOG FILES
 - **Default Location**: Same directory where adafmt was run
 - **Timestamp**: All logs share the same timestamp (start time of the run)
 - **Custom Paths**: Can be overridden with `--log-path`, `--stderr-path` flags
+
+### ALS-Only Mode (--no-patterns)
+
+When patterns are disabled with `--no-patterns`, only ALS metrics are shown:
+
+```
+================================================================================
+ALS METRICS
+  Files      303  100%
+  Changed    182   60%
+  Unchanged  115   37%
+  Failed       6    1%
+  Started    20250916T013452Z
+  Completed  20250916T013518Z
+  Elapsed    23.1s
+  Rate       11.8 files/s
+
+ADFMT RUN
+  Started        20250916T013452Z
+  Completed      20250916T013518Z
+  Total Elapsed  23.1s
+
+LOG FILES
+  Main Log     ./adafmt_20250916T013452Z_log.jsonl (default location)
+  Pattern Log  ./adafmt_20250916T013452Z_patterns.log (default location)
+  Stderr       ./adafmt_20250916T013452Z_stderr.log (default location)
+  ALS Log      ~/.als/ada_ls_log.*.log (default location)
+================================================================================
+```
+
+### Patterns-Only Mode (--no-als)
+
+When ALS is disabled with `--no-als`, only pattern metrics are shown:
+
+```
+================================================================================
+PATTERN METRICS
+  Files           303  100%
+
+  Pattern         Applied    Replaced    Failed
+  ------------  ---------  ----------  --------
+  assign_set01        130        3092         0
+  assoc_arrow1        126        7404         0
+  attr_tick_01          4          13         0
+  cmt_whole_01        182        6579         0
+  comma_space1        180        3066         0
+  comment_eol1         85         408         0
+  decl_colon01        175        4819         0
+  paren_l_sp01          1           3         0
+  paren_r_sp01          1           2         0
+  range_dots01         78         284         0
+  ws_trail_sp1        128        3941         0
+  --------        -------    --------    ------
+  Totals             1090       29611         0
+
+  Started              20250916T013452Z
+  Completed            20250916T013456Z
+  Elapsed              4.1s
+  Rate (scanned)       73.9 files/s
+  Rate (applied)       265.9 patterns/s
+  Rate (replacements)  7221.7 replacements/s
+
+ADFMT RUN
+  Started        20250916T013452Z
+  Completed      20250916T013456Z
+  Total Elapsed  4.1s
+
+LOG FILES
+  Main Log     ./adafmt_20250916T013452Z_log.jsonl (default location)
+  Pattern Log  ./adafmt_20250916T013452Z_patterns.log (default location)
+  Stderr       ./adafmt_20250916T013452Z_stderr.log (default location)
+================================================================================
+```
+
+---
+
+## Understanding Metrics Differences
+
+When using both ALS and patterns together, you'll notice that pattern metrics differ from patterns-only mode:
+
+### Why Pattern Counts Differ
+
+1. **Patterns-Only Mode (`--no-als`)**:
+   - Patterns fix all formatting issues they can find
+   - Higher pattern application count
+   - More replacements made
+
+2. **Combined Mode (default)**:
+   - ALS formats files first
+   - Patterns only fix what ALS missed or doesn't handle
+   - Lower pattern application count
+   - Fewer replacements needed
+
+### Example Comparison
+
+**Patterns-Only Mode:**
+```
+Pattern         Applied    Replaced
+assign_set01         16          48
+comment_eol1         12          24
+decl_colon01         15          30
+Totals               43         102
+```
+
+**Combined Mode (ALS + Patterns):**
+```
+Pattern         Applied    Replaced
+assign_set01          3           9
+comment_eol1          2           4
+decl_colon01          1           2
+Totals                6          15
+```
+
+This is expected behavior - ALS handles most standard formatting, leaving specialized pattern rules to handle specific cases or team preferences.
 
 ---
 

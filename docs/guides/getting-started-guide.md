@@ -89,8 +89,8 @@ adafmt license
 # Basic dry run - shows what would change without writing
 adafmt --project-path project.gpr --include-path src/
 
-# More verbose output
-adafmt --project-path project.gpr --include-path src/ --ui pretty
+# Run with full output
+adafmt --project-path project.gpr --include-path src/
 ```
 
 ### 3. Apply Formatting
@@ -141,7 +141,6 @@ adafmt --project-path project.gpr \
 # Pretty UI with comprehensive feedback
 adafmt --project-path project.gpr \
     --include-path src/ \
-    --ui pretty \
     --log-path dev_format.jsonl \
     --write
 ```
@@ -152,7 +151,7 @@ adafmt --project-path project.gpr \
 adafmt --project-path project.gpr \
     --include-path src/ \
     --check \
-    --ui quiet
+   
 
 # Returns exit code 1 if formatting is needed
 ```
@@ -175,7 +174,6 @@ adafmt --project-path project.gpr \
 adafmt --project-path project.gpr \
     --include-path src/ \
     --check \
-    --ui plain \
     --init-timeout 60 \
     --format-timeout 30 \
     --max-consecutive-timeouts 2
@@ -186,7 +184,6 @@ adafmt --project-path project.gpr \
 # Apply formatting in CI pipeline
 adafmt --project-path project.gpr \
     --include-path src/ \
-    --ui json \
     --preflight aggressive \
     --write \
     --post-hook "git add -A && git commit -m 'Auto-format code' || true"
@@ -204,7 +201,6 @@ adafmt --project-path large_project.gpr \
     --init-timeout 300 \
     --format-timeout 120 \
     --max-consecutive-timeouts 10 \
-    --ui json \
     --log-path large_project_format.jsonl \
     --write
 ```
@@ -216,7 +212,6 @@ for project in project1.gpr project2.gpr project3.gpr; do
     echo "Formatting $project..."
     adafmt --project-path "$project" \
         --include-path "$(dirname $project)/src" \
-        --ui plain \
         --write
 done
 ```
@@ -230,7 +225,6 @@ adafmt --project-path project.gpr \
     --include-path src/ \
     --log-path debug.jsonl \
     --stderr-path als_stderr.log \
-    --ui plain \
     --init-timeout 600 \
     --format-timeout 180 \
     --preflight aggressive
@@ -302,7 +296,6 @@ adafmt --project-path main.gpr \
 # Interactive development with full feedback
 adafmt --project-path project.gpr \
     --include-path src/ \
-    --ui pretty \
     --diff \
     --log-path "dev_format_$(date +%Y%m%d_%H%M%S).jsonl" \
     --write
@@ -313,7 +306,6 @@ adafmt --project-path project.gpr \
 # Automated build server formatting
 adafmt --project-path project.gpr \
     --include-path src/ \
-    --ui json \
     --check \
     --init-timeout 90 \
     --format-timeout 45 \
@@ -327,7 +319,6 @@ adafmt --project-path project.gpr \
 docker run --rm -v "$(pwd):/workspace" -w /workspace adafmt:latest \
     adafmt --project-path project.gpr \
     --include-path src/ \
-    --ui plain \
     --write
 ```
 
@@ -346,14 +337,11 @@ adafmt --project-path PROJECT.gpr --include-path DIR/ --check
 adafmt --project-path PROJECT.gpr --include-path DIR/ --diff
 ```
 
-#### UI Control
+#### Output Control
 ```bash
-# UI modes
---ui auto     # Auto-detect terminal capabilities (default)
---ui pretty   # Rich interactive UI with progress bars
---ui plain    # Simple text output for logs
---ui json     # JSON Lines output for scripts
---ui quiet    # Minimal output, errors only
+# Control what's displayed
+--diff        # Show unified diffs (default)
+--no-diff     # Hide diffs, show only status
 ```
 
 #### File Selection
@@ -377,7 +365,6 @@ adafmt --project-path PROJECT.gpr --include-path DIR/ --diff
 ```bash
 adafmt --project-path project.gpr \
     --include-path src/ \
-    --ui pretty \
     --diff \
     --log-path debug.jsonl \
     --pre-hook "git status --porcelain" \
@@ -390,7 +377,6 @@ adafmt --project-path project.gpr \
 adafmt --project-path project.gpr \
     --include-path src/ \
     --check \
-    --ui plain \
     --init-timeout 60 \
     --format-timeout 30 \
     --max-consecutive-timeouts 2 \
@@ -403,7 +389,6 @@ adafmt --project-path project.gpr \
     --include-path src/ \
     --log-path debug.jsonl \
     --stderr-path als_stderr.log \
-    --ui plain \
     --init-timeout 600 \
     --format-timeout 180 \
     --preflight aggressive

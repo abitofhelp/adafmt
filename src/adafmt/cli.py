@@ -130,14 +130,6 @@ signal.signal(signal.SIGTERM, _cleanup_handler)
 atexit.register(_cleanup_handler)
 
 # Define enums for choice fields
-class UIMode(str, Enum):
-    off = "off"
-    auto = "auto"
-    pretty = "pretty"
-    basic = "basic"
-    plain = "plain"
-
-
 class PreflightMode(str, Enum):
     off = "off"
     none = "none"
@@ -237,7 +229,6 @@ async def run_formatter(
     write: bool,
     diff: bool,
     check: bool,
-    ui_mode: str,
     preflight_mode: str,
     als_stale_minutes: int,
     pre_hook: Optional[str],
@@ -260,14 +251,17 @@ async def run_formatter(
     using_default_stderr: bool = False,
     using_default_patterns: bool = False) -> int:
     """Run the main formatting logic asynchronously."""
+    # Import path validator (imported here to avoid circular imports)
+    from .path_validator import validate_path
+    
     run_start_time = time.time()
     
     proj = project_path
     includes = include_paths  # No fallback - already validated in format_command
     excludes = exclude_paths
     
-    # UI
-    ui = make_ui(ui_mode) if ui_mode != "off" else None
+    # UI - always use plain TTY UI
+    ui = make_ui("plain")
     global _cleanup_ui
     _cleanup_ui = ui
     # --- Redirect stderr to the configured stderr file (suppress terminal output) ---
@@ -302,7 +296,21 @@ async def run_formatter(
     # resolve files
     if files:
         # User specified specific files
-        file_paths: List[Path] = [Path(p) for p in files if _is_ada_file(Path(p))]
+        # Convert to absolute paths and filter Ada files
+        file_paths: List[Path] = []
+        for p in files:
+            path = Path(p)
+            if _is_ada_file(path):
+                abs_path = path.resolve()
+                # Validate path after resolving to absolute
+                validation_error = validate_path(str(abs_path))
+                if validation_error:
+                    if ui:
+                        ui.log_line(f"[warning] Skipping invalid file path '{p}' (resolved to '{abs_path}') - {validation_error}")
+                    else:
+                        print(f"[warning] Skipping invalid file path '{p}' (resolved to '{abs_path}') - {validation_error}")
+                    continue
+                file_paths.append(abs_path)
     else:
         # Discover files in include paths
         if ui:
@@ -310,8 +318,22 @@ async def run_formatter(
         else:
             print("[discovery] Starting file discovery...")
         
-        file_paths: List[Path] = [Path(p) for p in collect_files(includes, excludes)]
-        file_paths = [p for p in file_paths if _is_ada_file(p)]
+        # Collect files and convert to absolute paths
+        collected_files = collect_files(includes, excludes)
+        file_paths: List[Path] = []
+        for p in collected_files:
+            path = Path(p)
+            if _is_ada_file(path):
+                abs_path = path.resolve()
+                # Validate path after resolving to absolute
+                validation_error = validate_path(str(abs_path))
+                if validation_error:
+                    if ui:
+                        ui.log_line(f"[warning] Skipping invalid file path '{p}' (resolved to '{abs_path}') - {validation_error}")
+                    else:
+                        print(f"[warning] Skipping invalid file path '{p}' (resolved to '{abs_path}') - {validation_error}")
+                    continue
+                file_paths.append(abs_path)
         
         if ui:
             ui.log_line("[discovery] File discovery completed")
@@ -632,10 +654,14 @@ async def run_formatter(
     else:
         print("[formatter] Starting to format files...")
     
-    changed = 0
-    failed = 0
-    done = 0
+    # ALS metrics
+    als_changed = 0
+    als_failed = 0
+    als_done = 0
     false_positives = 0
+    
+    # Pattern metrics tracked separately
+    pattern_files_changed = 0
     
     async def format_once(path: Path) -> Optional[List[dict]]:
         """Format a single Ada file using ALS."""
@@ -680,8 +706,10 @@ async def run_formatter(
                 print(f"[formatter] Processing first file: {path}")
         
         # progress
+        # Track overall progress for UI
+        current_file_idx = idx - 1  # idx is 1-based
         if ui:
-            ui.set_progress(done, len(file_paths))
+            ui.set_progress(current_file_idx, len(file_paths))
 
         status = "ok"
         note = ""
@@ -725,7 +753,7 @@ async def run_formatter(
                         # Check if patterns made changes
                         if formatted_content != original_content:
                             status = "changed"
-                            changed += 1
+                            pattern_files_changed += 1
                             
                             from .edits import unified_diff
                             from .utils import atomic_write
@@ -745,7 +773,7 @@ async def run_formatter(
                 
                 if edits:
                     status = "changed"
-                    changed += 1
+                    als_changed += 1
                     # Apply edits to get formatted content
                     try:
                         original_content = path.read_text(encoding="utf-8", errors="ignore")
@@ -802,7 +830,7 @@ async def run_formatter(
                 if attempts >= max_attempts:
                     status = "failed"
                     # note = "TimeoutError: ALS did not respond in time"  # Details in stderr log
-                    failed += 1
+                    als_failed += 1
                     if logger:
                         logger.write({
                             "path": str(path),
@@ -921,7 +949,7 @@ async def run_formatter(
                         # Real syntax error
                         status = "failed"
                         # note = f"syntax error: {error_msg}" if error_msg else f"invalid syntax (GNATFORMAT) - {compiler_msg}"  # Details in stderr log
-                        failed += 1
+                        als_failed += 1
                         
                         # Write detailed error to stderr for real syntax errors
                         error_message = f"syntax error: {error_msg}" if error_msg else f"invalid syntax (GNATFORMAT) - {compiler_msg}"
@@ -941,7 +969,7 @@ async def run_formatter(
                 if attempts >= max_attempts:
                     status = "failed"
                     # note = f"ALS error: {getattr(e, 'message', repr(e))}"  # Details in stderr log
-                    failed += 1
+                    als_failed += 1
                     
                     # Write detailed error to stderr
                     _write_stderr_error(
@@ -962,7 +990,7 @@ async def run_formatter(
                 if attempts >= max_attempts:
                     status = "failed"
                     # note = f"disconnected: {e.__class__.__name__}"  # Details in stderr log
-                    failed += 1
+                    als_failed += 1
                     
                     # Write detailed error to stderr
                     _write_stderr_error(
@@ -983,7 +1011,7 @@ async def run_formatter(
                 if attempts >= max_attempts:
                     status = "failed"
                     # note = f"{type(e).__name__}: {str(e)}"  # Details in stderr log
-                    failed += 1
+                    als_failed += 1
                     if logger:
                         logger.write({
                             "path": str(path),
@@ -1018,7 +1046,9 @@ async def run_formatter(
             'replacements': pattern_result.replacements_sum if pattern_result else 0
         })
         
-        done += 1
+        # Track ALS processing if ALS was used
+        if client:
+            als_done += 1
         prefix = f"[{idx:>4}/{total}]"
         
         # Add debug output every 50 files
@@ -1049,16 +1079,23 @@ async def run_formatter(
             line += f"  ({note})"
         if ui:
             ui.log_line(line)
-            ui.set_progress(done, len(file_paths))
+            ui.set_progress(idx, len(file_paths))
             # Update the 4-line footer
             current_time = time.time()
             elapsed = current_time - run_start_time
-            rate = done / elapsed if elapsed > 0 else 0
+            
+            # Calculate combined metrics for UI display
+            total_changed = als_changed + pattern_files_changed
+            total_failed = als_failed
+            total_done = idx
+            total_unchanged = total_done - total_changed - total_failed
+            rate = total_done / elapsed if elapsed > 0 else 0
+            
             ui.update_footer_stats(
                 total=len(file_paths),
-                changed=changed,
-                unchanged=done - changed - failed,
-                failed=failed,
+                changed=total_changed,
+                unchanged=total_unchanged,
+                failed=total_failed,
                 elapsed=elapsed,
                 rate=rate,
                 jsonl_log=f"./{log_path} (default location)" if using_default_log else str(log_path) if log_path else "Not configured",
@@ -1094,7 +1131,13 @@ async def run_formatter(
     # Calculate statistics
     end_time = time.time()
     elapsed_seconds = max(0.1, end_time - run_start_time)
-    unchanged = len(file_paths) - changed - failed
+    
+    # Calculate final metrics
+    als_unchanged = als_done - als_changed - als_failed if client else 0
+    total_changed = als_changed + pattern_files_changed
+    total_failed = als_failed
+    total_unchanged = len(file_paths) - total_changed - total_failed
+    
     rate = len(file_paths) / elapsed_seconds if len(file_paths) > 0 else 0
 
     # Update final UI state before shutdown
@@ -1103,9 +1146,9 @@ async def run_formatter(
         # Final footer update
         ui.update_footer_stats(
             total=len(file_paths),
-            changed=changed,
-            unchanged=unchanged,
-            failed=failed,
+            changed=total_changed,
+            unchanged=total_unchanged,
+            failed=total_failed,
             elapsed=elapsed_seconds,
             rate=rate,
             jsonl_log=f"./{log_path} (default location)" if using_default_log else str(log_path) if log_path else "Not configured",
@@ -1140,7 +1183,7 @@ async def run_formatter(
     # ALS processing includes warmup + file processing
     als_start_time = adafmt_start_time
     # Pattern processing happens during file processing, estimate based on timing
-    pattern_start_time = datetime.fromtimestamp(run_start_time + warmup_seconds, tz=timezone.utc)
+    pattern_start_time = datetime.fromtimestamp(run_start_time + (warmup_seconds if client else 0), tz=timezone.utc)
     pattern_end_time = adafmt_end_time
     
     # Calculate pattern processing time
@@ -1153,45 +1196,56 @@ async def run_formatter(
     
     # Print formatted metrics
     print("\n" + "=" * 80)
-    # ALS Metrics
-    print("ALS METRICS")
-    total = len(file_paths)
-    pct_changed = (changed * 100 // total) if total > 0 else 0
-    pct_unchanged = (unchanged * 100 // total) if total > 0 else 0
-    pct_failed = (failed * 100 // total) if total > 0 else 0
     
-    # File statistics table
-    file_stats = [
-        ["Files", total, "100%"],
-        ["Changed", changed, f"{pct_changed}%"],
-        ["Unchanged", unchanged, f"{pct_unchanged}%"],
-        ["Failed", failed, f"{pct_failed}%"]
-    ]
+    # Only show ALS metrics if ALS was used
+    if client:
+        print("ALS METRICS")
+        total = len(file_paths)
+        pct_changed = (als_changed * 100 // total) if total > 0 else 0
+        pct_unchanged = (als_unchanged * 100 // total) if total > 0 else 0
+        pct_failed = (als_failed * 100 // total) if total > 0 else 0
     
-    # Print table with 2-space indent
-    table_str = tabulate(file_stats, tablefmt="plain", colalign=("left", "right", "right"))
-    for line in table_str.split('\n'):
-        print(f"  {line}")
+        # File statistics table
+        file_stats = [
+            ["Files", total, "100%"],
+            ["Changed", als_changed, f"{pct_changed}%"],
+            ["Unchanged", als_unchanged, f"{pct_unchanged}%"],
+            ["Failed", als_failed, f"{pct_failed}%"]
+        ]
     
-    # Show Started timestamp before other timing info (no blank line)
-    print(f"  Started    {als_start_time.strftime('%Y%m%dT%H%M%SZ')}")
+        # Print table with 2-space indent
+        table_str = tabulate(file_stats, tablefmt="plain", colalign=("left", "right", "right"))
+        for line in table_str.split('\n'):
+            print(f"  {line}")
+        
+        # Show Started timestamp before other timing info (no blank line)
+        print(f"  Started    {als_start_time.strftime('%Y%m%dT%H%M%SZ')}")
+        
+        # Timing table (without Started since it's shown above)
+        timing_data = [
+            ["Completed", adafmt_end_time.strftime('%Y%m%dT%H%M%SZ')],
+            ["Elapsed", f"{als_elapsed:.1f}s"],
+            ["Rate", f"{rate:.1f} files/s"]
+        ]
+        table_str = tabulate(timing_data, tablefmt="plain")
+        for line in table_str.split('\n'):
+            print(f"  {line}")
     
-    # Timing table (without Started since it's shown above)
-    timing_data = [
-        ["Completed", adafmt_end_time.strftime('%Y%m%dT%H%M%SZ')],
-        ["Elapsed", f"{als_elapsed:.1f}s"],
-        ["Rate", f"{rate:.1f} files/s"]
-    ]
-    table_str = tabulate(timing_data, tablefmt="plain")
-    for line in table_str.split('\n'):
-        print(f"  {line}")
-    
-    # Pattern Metrics if enabled
+    # Pattern Metrics if enabled (or if ALS is disabled)
     if pattern_formatter and pattern_formatter.enabled:
         pattern_summary = pattern_formatter.get_summary()
-        print("\nPATTERN METRICS")
+        # Add newline only if ALS metrics were shown
+        if client:
+            print("\nPATTERN METRICS")
+        else:
+            print("PATTERN METRICS")
         
         if pattern_summary:
+            # Add Files row at the top
+            total = len(file_paths)
+            print(f"  Files      {total:>6}  100%")
+            print()  # blank line after Files
+            
             # Build pattern data table
             pattern_data = []
             total_files = 0
@@ -1302,7 +1356,7 @@ async def run_formatter(
     pattern_logger.write({
         'ev': 'run_end',
         'files_total': len(file_paths),
-        'files_als_ok': len(file_paths) - failed,
+        'files_als_ok': len(file_paths) - als_failed,
         'patterns_loaded': pattern_formatter.loaded_count if pattern_formatter else 0,
         'patterns_summary': pattern_formatter.get_summary() if pattern_formatter else {}
     })
@@ -1320,7 +1374,7 @@ async def run_formatter(
     if post_hook:
         run_hook(post_hook, "post", logger=(ui.log_line if ui else print) if ui else print, dry_run=False)
 
-    if check and changed:
+    if check and total_changed:
         _restore_stderr()
         return 1
     _restore_stderr()
@@ -1538,7 +1592,6 @@ def format_command(
         write=write,
         diff=diff,
         check=check,
-        ui_mode="plain",  # Hardcoded to plain UI
         preflight_mode=preflight.value,
         als_stale_minutes=als_stale_minutes,
         pre_hook=pre_hook,

@@ -86,6 +86,40 @@ class TestPathValidation:
             assert result is not None, f"Path '{repr(path)}' should be invalid"
             assert "control character" in result
     
+    def test_url_encoded_paths(self):
+        """Test detection of URL-encoded paths."""
+        test_cases = [
+            "/path%20with%20spaces",  # %20 = space
+            "/path%2Fwith%2Fslash",   # %2F = /
+            "/file%3Aname.txt",       # %3A = :
+            "/path%21exclamation",    # %21 = !
+            "/%E2%9C%93checkmark",    # %E2%9C%93 = ✓ (UTF-8 encoded)
+            "/mixed%20path/normal",   # Mix of encoded and normal
+        ]
+        
+        for path in test_cases:
+            result = validate_path(path)
+            assert result is not None, f"Path '{path}' should be detected as URL-encoded"
+            assert "URL-encoded" in result
+            assert "decoded path instead" in result
+    
+    def test_percent_without_encoding(self):
+        """Test paths with % that aren't URL-encoded."""
+        # These have % but not in %XX format, so should fail for different reason
+        test_cases = [
+            "/path%with%percent",     # % not followed by 2 hex digits
+            "/path%Gwrong",          # %G - G is not hex
+            "/path%2",               # %2 - only one hex digit
+            "/path%%double",         # %% - not valid encoding
+        ]
+        
+        for path in test_cases:
+            result = validate_path(path)
+            assert result is not None, f"Path '{path}' should be invalid"
+            # Should fail for illegal character, not URL encoding
+            assert "illegal character '%'" in result
+            assert "URL-encoded" not in result
+    
     def test_illegal_characters(self):
         """Test paths with characters not in allowed set."""
         test_cases = [
