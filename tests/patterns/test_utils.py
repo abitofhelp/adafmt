@@ -78,6 +78,26 @@ def fake_als(text: str) -> str:
     return text
 
 
+def is_gcc_available() -> bool:
+    """Check if gcc is available for Ada compilation."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ['gcc', '--version'],
+            capture_output=True,
+            timeout=2
+        )
+        # Check if it succeeded and doesn't have license agreement message
+        if result.returncode == 0:
+            return True
+        # Check for Xcode license message
+        output = (result.stdout or b'').decode('utf-8', errors='ignore') + (result.stderr or b'').decode('utf-8', errors='ignore')
+        if 'Xcode license' in output:
+            return False
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return False
+
 def compiles_ada(ada_code: str, timeout: int = 5) -> Tuple[bool, str]:
     """Check if Ada code compiles successfully using gcc.
     

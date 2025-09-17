@@ -61,6 +61,7 @@ end Test;
         # Run validation
         result = subprocess.run(
             ["adafmt", "format", "--project-path", str(temp_project / "test.gpr"),
+             "--include-path", str(temp_project / "src"),
              "--validate-patterns", "--patterns-path", str(patterns_file)],
             capture_output=True,
             text=True,
@@ -99,6 +100,7 @@ end Test;
         # Run validation
         result = subprocess.run(
             ["adafmt", "format", "--project-path", str(temp_project / "test.gpr"),
+             "--include-path", str(temp_project / "src"),
              "--validate-patterns", "--patterns-path", str(patterns_file)],
             capture_output=True,
             text=True,
@@ -111,18 +113,23 @@ end Test;
     
     def test_validate_patterns_no_patterns(self, temp_project):
         """Test validation with --no-patterns flag."""
+        # Create a test file
+        test_file = temp_project / "src" / "test.adb"
+        test_file.write_text("procedure Test is begin null; end Test;")
+        
         # Run validation with no patterns
         result = subprocess.run(
             ["adafmt", "format", "--project-path", str(temp_project / "test.gpr"),
+             "--include-path", str(temp_project / "src"),
              "--validate-patterns", "--no-patterns"],
             capture_output=True,
             text=True,
             cwd=temp_project
         )
         
-        # Should fail with error message
-        assert result.returncode == 1
-        assert "No patterns loaded for validation" in result.stdout
+        # Should fail with error message about conflicting options
+        assert result.returncode == 2
+        assert "Cannot use --validate-patterns with --no-patterns" in result.stderr
     
     def test_validate_patterns_empty_file(self, temp_project):
         """Test validation with empty pattern file."""
@@ -133,6 +140,7 @@ end Test;
         # Run validation
         result = subprocess.run(
             ["adafmt", "format", "--project-path", str(temp_project / "test.gpr"),
+             "--include-path", str(temp_project / "src"),
              "--validate-patterns", "--patterns-path", str(patterns_file)],
             capture_output=True,
             text=True,
@@ -185,6 +193,7 @@ end Test2;
         # Run validation
         result = subprocess.run(
             ["adafmt", "format", "--project-path", str(temp_project / "test.gpr"),
+             "--include-path", str(temp_project / "src"),
              "--validate-patterns", "--patterns-path", str(patterns_file)],
             capture_output=True,
             text=True,
