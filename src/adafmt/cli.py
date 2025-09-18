@@ -38,15 +38,17 @@ from typing_extensions import Annotated
 from tabulate import tabulate
 
 from .als_client import ALSClient, ALSProtocolError
-from .file_discovery import collect_files
+from .file_discovery_new import discover_files
 from .file_processor import FileProcessor
 from .logging_jsonl import JsonlLogger
 from .pattern_formatter import PatternFormatter, PatternLogger
 from .metrics import MetricsCollector
 from .metrics_reporter import MetricsReporter
-from .initializer import Initializer
 from .pattern_validator import PatternValidator
 from .argument_validator import ArgumentValidator
+from .pattern_loader import load_patterns
+from .als_initializer import initialize_als_client
+from .logging_setup import setup_loggers
 from .tui import make_ui
 from .utils import preflight, run_hook
 
@@ -223,10 +225,6 @@ def _write_stderr_error(path: Path, error_type: str, error_msg: str, details: Op
         sys.stderr.flush()
 
 
-def _is_ada_file(path: Path) -> bool:
-    """Check if a path points to an Ada source file."""
-    return path.suffix.lower() in (".ads", ".adb", ".ada")
-
 
 async def run_formatter(
     project_path: Path,
@@ -301,52 +299,8 @@ async def run_formatter(
     _cleanup_restore_stderr = _restore_stderr
 
     
-    # resolve files
-    if files:
-        # User specified specific files
-        # Convert to absolute paths and filter Ada files
-        file_paths: List[Path] = []
-        for p in files:
-            path = Path(p)
-            if _is_ada_file(path):
-                abs_path = path.resolve()
-                # Validate path after resolving to absolute
-                validation_error = validate_path(str(abs_path))
-                if validation_error:
-                    if ui:
-                        ui.log_line(f"[warning] Skipping invalid file path '{p}' (resolved to '{abs_path}') - {validation_error}")
-                    else:
-                        print(f"[warning] Skipping invalid file path '{p}' (resolved to '{abs_path}') - {validation_error}")
-                    continue
-                file_paths.append(abs_path)
-    else:
-        # Discover files in include paths
-        if ui:
-            ui.log_line("[discovery] Starting file discovery...")
-        else:
-            print("[discovery] Starting file discovery...")
-        
-        # Collect files and convert to absolute paths
-        collected_files = collect_files(includes, excludes)
-        file_paths: List[Path] = []
-        for p in collected_files:
-            path = Path(p)
-            if _is_ada_file(path):
-                abs_path = path.resolve()
-                # Validate path after resolving to absolute
-                validation_error = validate_path(str(abs_path))
-                if validation_error:
-                    if ui:
-                        ui.log_line(f"[warning] Skipping invalid file path '{p}' (resolved to '{abs_path}') - {validation_error}")
-                    else:
-                        print(f"[warning] Skipping invalid file path '{p}' (resolved to '{abs_path}') - {validation_error}")
-                    continue
-                file_paths.append(abs_path)
-        
-        if ui:
-            ui.log_line("[discovery] File discovery completed")
-        else:
-            print("[discovery] File discovery completed")
+    # Discover files to process
+    file_paths = discover_files(files, includes, excludes, ui)
     if ui:
         if validate_patterns:
             mode = "VALIDATE PATTERNS"
@@ -356,23 +310,10 @@ async def run_formatter(
             mode = "DRY RUN"
         ui.set_header("Ada Formatter", version=APP_VERSION, mode=mode)
 
-    # logger - always create a logger (log_path is always set now)
-    logger = JsonlLogger(log_path)
-    logger.start_fresh()  # Create empty file, ensuring it exists
-    global _cleanup_logger
+    # Setup loggers
+    logger, pattern_logger, pattern_log_path = setup_loggers(log_path)
+    global _cleanup_logger, _cleanup_pattern_logger
     _cleanup_logger = logger
-    
-    # pattern logger - create pattern log file
-    # Try to extract timestamp from log filename, or use current time
-    try:
-        timestamp = log_path.name.split('_')[1].split('.')[0]  # Extract timestamp from main log filename
-    except (IndexError, AttributeError):
-        from datetime import datetime as dt
-        timestamp = dt.now().strftime('%Y%m%dT%H%M%SZ')
-    pattern_log_path = log_path.parent / f"adafmt_{timestamp}_patterns.log"
-    pattern_logger = JsonlLogger(pattern_log_path)
-    pattern_logger.start_fresh()
-    global _cleanup_pattern_logger
     _cleanup_pattern_logger = pattern_logger
     
     # Initialize metrics collector
@@ -404,55 +345,14 @@ async def run_formatter(
             return int(pf_result)
 
 
-    # Initialize Ada Language Server client with configuration (unless --no-als)
-    client = None
-    if not no_als:
-        metrics.start_timer('als_startup')
-        als_start_success = False
-        try:
-            client = ALSClient(
-                project_file=proj, 
-                stderr_file_path=stderr_path,
-                init_timeout=init_timeout,  # Fix: Pass init_timeout
-                logger=ui.log_line if ui else print
-            )
-            await client.start()
-            als_start_success = True
-            global _cleanup_client
-            _cleanup_client = client
-        finally:
-            startup_duration = metrics.end_timer('als_startup')
-            metrics.record_als_startup(startup_duration, als_start_success, str(proj))
-        
-        # Add warmup delay after start
-        if warmup_seconds > 0:
-            if ui:
-                ui.log_line(f"[als] Warming up for {warmup_seconds} seconds...")
-            else:
-                print(f"[als] Warming up for {warmup_seconds} seconds...")
-            await asyncio.sleep(warmup_seconds)
-    else:
-        if ui:
-            ui.log_line("[als] ALS formatting disabled (--no-als)")
-        else:
-            print("[als] ALS formatting disabled (--no-als)")
-    
-    # Echo launch context for debugging
+    # Initialize Ada Language Server client
+    client = await initialize_als_client(
+        proj, no_als, stderr_path, init_timeout, 
+        warmup_seconds, metrics, ui
+    )
     if client:
-        launch_msg = f"[als] cwd={client._launch_cwd} cmd={client._launch_cmd}"
-        if ui:
-            ui.log_line(launch_msg)
-        else:
-            print(launch_msg)
-    
-    # Display log paths early so users know where to find them
-    if client:
-        if ui:
-            ui.log_line(f"[als] ALS log: {client.als_log_path or '~/.als/ada_ls_log.*.log (default location)'}")
-            ui.log_line(f"[als] Stderr log: {client._stderr_log_path}")
-        else:
-            print(f"[als] ALS log: {client.als_log_path or '~/.als/ada_ls_log.*.log (default location)'}")
-            print(f"[als] Stderr log: {client._stderr_log_path}")
+        global _cleanup_client
+        _cleanup_client = client
     
     # Log discovered files
     if ui:
@@ -461,59 +361,15 @@ async def run_formatter(
         print(f"[discovery] Found {len(file_paths)} Ada files to format")
     
     # Load pattern formatter
-    pattern_formatter = None
-    if not no_patterns:
-        if patterns_path is None:
-            patterns_path = Path("./adafmt_patterns.json")
-            using_default_patterns = True
-        
-        # Check if patterns file exists when explicitly provided
-        if not using_default_patterns and not patterns_path.exists():
-            if ui:
-                ui.log_line(f"[error] Patterns file not found: {patterns_path}")
-                ui.close()
-            else:
-                print(f"[error] Patterns file not found: {patterns_path}")
-            if client:
-                    await client.shutdown()
-            return 2
-        
-        # For default path, it's OK if it doesn't exist
-        if patterns_path.exists():
-            if ui:
-                ui.log_line(f"[patterns] Loading patterns from: {patterns_path}")
-            
-            try:
-                pattern_formatter = PatternFormatter.load_from_json(
-                    patterns_path,
-                    logger=PatternLogger(pattern_logger),
-                    ui=ui
-                )
-                
-                # Check if patterns file is empty (no patterns loaded)
-                if pattern_formatter.loaded_count == 0:
-                    if ui:
-                        ui.log_line("[patterns] Warning: Pattern file is empty, only ALS formatting will be performed")
-                    else:
-                        print("[patterns] Warning: Pattern file is empty, only ALS formatting will be performed")
-                    pattern_formatter = None  # Same as --no-patterns
-                else:
-                    if ui:
-                        ui.log_line(f"[patterns] Loaded {pattern_formatter.loaded_count} patterns")
-                        
-            except Exception:
-                raise
-        else:
-            # Default patterns file doesn't exist - that's OK, continue without patterns
-            if ui:
-                ui.log_line("[patterns] No patterns file found, only ALS formatting will be performed")
-            else:
-                print("[patterns] No patterns file found, only ALS formatting will be performed")
-    else:
-        if ui:
-            ui.log_line("[patterns] Pattern processing disabled (--no-patterns)")
-        else:
-            print("[patterns] Pattern processing disabled (--no-patterns)")
+    try:
+        pattern_formatter, patterns_path = load_patterns(
+            patterns_path, no_patterns, using_default_patterns,
+            pattern_logger, ui, client
+        )
+    except SystemExit as e:
+        if client:
+            await client.shutdown()
+        return e.code
     
     # Log pattern run_start event
     pattern_logger.write({

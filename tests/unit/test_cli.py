@@ -28,6 +28,7 @@ from unittest.mock import MagicMock, patch, AsyncMock
 import pytest
 
 from adafmt import cli
+from adafmt.file_discovery_new import is_ada_file
 
 
 class TestTeeClass:
@@ -160,18 +161,18 @@ class TestPathValidation:
         assert "./" not in result
     
     def test_is_ada_file(self):
-        """Test _is_ada_file correctly identifies Ada source files.
+        """Test is_ada_file correctly identifies Ada source files.
         
         Given: Various file paths with different extensions
-        When: _is_ada_file is called with each path
+        When: is_ada_file is called with each path
         Then: Returns True for .ads/.adb/.ada files (case-insensitive), False otherwise
         """
-        assert cli._is_ada_file(Path("test.ads"))
-        assert cli._is_ada_file(Path("test.adb"))
-        assert cli._is_ada_file(Path("test.ada"))
-        assert cli._is_ada_file(Path("TEST.ADS"))  # Case insensitive
-        assert not cli._is_ada_file(Path("test.txt"))
-        assert not cli._is_ada_file(Path("test.py"))
+        assert is_ada_file(Path("test.ads"))
+        assert is_ada_file(Path("test.adb"))
+        assert is_ada_file(Path("test.ada"))
+        assert is_ada_file(Path("TEST.ADS"))  # Case insensitive
+        assert not is_ada_file(Path("test.txt"))
+        assert not is_ada_file(Path("test.py"))
 
 
 class TestUIMode:
