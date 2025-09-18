@@ -45,7 +45,9 @@ make dev
 ## Prerequisites
 
 ### Ada Language Server (Required)
-adafmt requires ALS to be installed and available in your PATH:
+adafmt requires ALS to be installed and available in your PATH.
+
+**Important:** adafmt does NOT bundle ALS - you must install it separately:
 
 ```bash
 # Check if ALS is installed
@@ -165,6 +167,25 @@ adafmt --project-path project.gpr \
     --post-hook "git add -A" \
     --write
 ```
+
+### Patterns-Only Mode (No ALS Required)
+
+If ALS is not available or you only want to apply patterns:
+
+```bash
+# Apply only pattern-based formatting without ALS
+adafmt --project-path project.gpr \
+    --include-path src/ \
+    --no-als \
+    --patterns-path adafmt_patterns.json \
+    --write
+```
+
+**Note:** When using `--no-als`:
+- Only pattern-based formatting is applied
+- No syntax checking or ALS formatting occurs
+- Useful for CI environments without ALS
+- Cannot be combined with `--no-patterns`
 
 ### CI/CD Workflows
 

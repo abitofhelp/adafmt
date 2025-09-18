@@ -304,7 +304,10 @@ The system operates as a client to the Ada Language Server, communicating via th
 | `--write` | `--check` | ❌ | "Cannot use both --write and --check modes" | 2 |
 | No `--include-path` | No positional files | ❌ | "No files or directories to process. You must provide --include-path or specific files." | 2 |
 | Empty `--include-path` | No positional files | ❌ | "No files or directories to process. You must provide --include-path or specific files." | 2 |
-| Path with whitespace | - | ❌ | "Path contains whitespace character '...' at position X" | 2 |
+| Path with space | - | ✅ | (Spaces allowed for cross-platform support) | - |
+| Path with tab/newline | - | ❌ | "Path contains whitespace character '...' at position X" | 2 |
+| Path with URL scheme | - | ❌ | "Path appears to be a URL (...). Please provide a filesystem path instead" | 2 |
+| Path with URL encoding | - | ❌ | "Path appears to be URL-encoded. Please provide the decoded path instead" | 2 |
 | Path with control chars | - | ❌ | "Path contains control character '...' at position X" | 2 |
 | Path with illegal chars | - | ❌ | "Path contains illegal character '...' at position X" | 2 |
 | Path with Unicode supplementary | - | ❌ | "Path contains Unicode supplementary character at position X" | 2 |
@@ -313,6 +316,15 @@ The system operates as a client to the Ada Language Server, communicating via th
 | `--no-patterns` | - | ✅ | (ALS-only mode) | - |
 | `--validate-patterns` | - | ✅ | (Validate patterns against ALS) | - |
 
+- FR-9.9: SHALL support pre-format and post-format hooks with the following requirements:
+  - Execute hooks without shell interpretation for security
+  - Apply configurable timeout (default 5 seconds)
+  - Continue processing if hooks fail
+  - Log hook execution results
+- FR-9.10: SHALL provide --hook-timeout flag to configure hook execution timeout
+- FR-9.11: SHALL use secure command parsing (shlex) for hook commands
+- FR-9.12: SHALL NOT use shell=True for any subprocess execution
+
 **Acceptance Criteria:**
 - CLI arguments override environment variables
 - Invalid configuration is caught early
@@ -320,6 +332,8 @@ The system operates as a client to the Ada Language Server, communicating via th
 - All invalid flag combinations produce appropriate error messages
 - Path validation rejects dangerous or problematic paths
 - Exit codes are consistent for all validation failures
+- Hooks execute securely without shell injection vulnerabilities
+- Hook timeouts prevent hanging on slow commands
 
 ### 2.10 UI Footer Display (FR-10)
 
@@ -606,6 +620,12 @@ The system operates as a client to the Ada Language Server, communicating via th
 - NFR-5.6: SHALL enforce regex timeout protection to prevent ReDoS attacks
 - NFR-5.7: SHALL treat pattern files as trusted input (must be validated by users)
 - NFR-5.8: SHALL limit pattern file size to prevent memory exhaustion
+- NFR-5.9: SHALL execute all external processes without shell interpretation
+- NFR-5.10: SHALL enforce timeouts on all external process executions
+- NFR-5.11: SHALL validate paths to reject URL schemes (http://, https://, etc.)
+- NFR-5.12: SHALL detect and reject URL-encoded paths
+- NFR-5.13: SHALL allow space characters in paths for cross-platform compatibility
+- NFR-5.14: SHALL enforce file size limits (100KB) on Ada source files
 
 **Measurement:**
 - Security testing with malicious inputs
