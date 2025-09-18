@@ -43,7 +43,18 @@ class TestPathValidation:
             "/usr/local/bin/ada",
             "/path-with-hyphens/file_with_underscores.ada",
             "/path:with:colons/file.adb",  # Colons allowed
-            "/path?with&query=params.txt",  # URL-like chars allowed
+            "/path with spaces/file.txt",  # Spaces now allowed
+            "/path(with)parens/file.adb",  # Parentheses allowed
+            "/path[with]brackets/file.ads",  # Brackets allowed
+            "/path{with}braces/file.adb",  # Braces allowed
+            "/path@with@at/file.gpr",  # @ symbol allowed
+            "/path+with+plus/file.ada",  # Plus allowed
+            "/path~with~tilde/file.adb",  # Tilde allowed
+            "/path!with!exclaim/file.ads",  # Exclamation allowed
+            "/path$with$dollar/file.adb",  # Dollar allowed
+            "/path'with'quotes/file.gpr",  # Single quotes allowed
+            "/path,with,comma/file.ada",  # Comma allowed
+            "/path=with=equals/file.adb",  # Equals allowed
         ]
         
         for path in valid_paths:
@@ -55,8 +66,11 @@ class TestPathValidation:
         
     def test_whitespace_characters(self):
         """Test paths with various whitespace characters."""
+        # Regular space is now allowed
+        assert validate_path("/path with space/file.txt") is None
+        
+        # Other whitespace characters are still rejected
         test_cases = [
-            ("/path with space/file.txt", 5),
             ("/path\twith\ttab/file.txt", 5),
             ("/path\nwith\nnewline/file.txt", 5),
             ("/path\rwith\rcarriage/file.txt", 5),
@@ -85,6 +99,23 @@ class TestPathValidation:
             result = validate_path(path)
             assert result is not None, f"Path '{repr(path)}' should be invalid"
             assert "control character" in result
+    
+    def test_url_schemes(self):
+        """Test detection of URL schemes."""
+        test_cases = [
+            "http://example.com/file.ada",
+            "https://github.com/user/project.gpr",
+            "file:///home/user/project.adb",
+            "ftp://server.com/ada/files",
+            "HTTP://EXAMPLE.COM/FILE.ADA",  # Case insensitive
+            "File:///C:/Users/test.adb",    # Windows file URL
+        ]
+        
+        for path in test_cases:
+            result = validate_path(path)
+            assert result is not None, f"Path '{path}' should be detected as URL"
+            assert "appears to be a URL" in result
+            assert "filesystem path instead" in result
     
     def test_url_encoded_paths(self):
         """Test detection of URL-encoded paths."""
@@ -125,21 +156,12 @@ class TestPathValidation:
         test_cases = [
             ("/path<with>angle", '<', 5),
             ("/path|with|pipe", '|', 5),
-            ("/path{with}braces", '{', 5),
-            ("/path[with]brackets", '[', 5),
             ("/path\\with\\backslash", '\\', 5),
             ("/path\"with\"quotes", '"', 5),
-            ("/path'with'quotes", "'", 5),
-            ("/path@with@at", '@', 5),
             ("/path#with#hash", '#', 5),
             ("/path%with%percent", '%', 5),
             ("/path^with^caret", '^', 5),
             ("/path*with*star", '*', 5),
-            ("/path+with+plus", '+', 5),
-            ("/path~with~tilde", '~', 5),
-            ("/path!with!exclaim", '!', 5),
-            ("/path$with$dollar", '$', 5),
-            ("/path(with)parens", '(', 5),
         ]
         
         for path, char, position in test_cases:
@@ -212,6 +234,8 @@ class TestPathValidation:
             "/home/developer/projects/my-ada-lib/src/main.adb",
             "/opt/GNAT/2024/lib/gcc/x86_64-pc-linux-gnu/13.2.0/adainclude/a-except.ads",
             "C:/Users/Developer/Documents/ada_project/tests/unit_test.adb",  # Windows-style
+            "/Users/mike/Ada Projects/my lib.gpr",  # Spaces are now allowed
+            "/home/user/My Documents/Ada Code/project.gpr",  # Multiple spaces
         ]
         
         for path in valid:
@@ -219,10 +243,9 @@ class TestPathValidation:
         
         # Invalid Ada project paths
         invalid = [
-            "/Users/mike/Ada Projects/my lib.gpr",  # Spaces
             "/home/developer/ada\tproject/src.adb",  # Tab
-            "/opt/GNAT/2024/lib/[ada]/include.ads",  # Brackets
             "C:\\Users\\Developer\\ada.gpr",  # Backslashes
+            "http://example.com/project.gpr",  # URL scheme
         ]
         
         for path in invalid:

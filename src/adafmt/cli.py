@@ -528,6 +528,17 @@ async def run_formatter(
         
         for idx, path in enumerate(file_paths, 1):
             try:
+                # Check file size limit (100KB for Ada files)
+                file_size = path.stat().st_size
+                if file_size > 102400:  # 100KB = 102400 bytes
+                    validation_errors.append({
+                        "path": str(path),
+                        "error": f"File too large ({file_size:,} bytes > 100KB)"
+                    })
+                    if not ui:
+                        print(f"[{idx}/{len(file_paths)}] {path}: SKIP - File too large ({file_size:,} bytes > 100KB)")
+                    continue
+                    
                 # Read original content
                 original_content = path.read_text(encoding="utf-8", errors="ignore")
                 
@@ -668,6 +679,12 @@ async def run_formatter(
         # If ALS is disabled, return None (no edits)
         if not client:
             return None
+        
+        # Check file size before reading (100KB limit)
+        # This is a safety check - should have been caught earlier
+        file_size = path.stat().st_size
+        if file_size > 102400:  # 100KB
+            return None
             
         # Open
         await client._notify("textDocument/didOpen", {
@@ -710,6 +727,31 @@ async def run_formatter(
         current_file_idx = idx - 1  # idx is 1-based
         if ui:
             ui.set_progress(current_file_idx, len(file_paths))
+
+        # Check file size limit (100KB for Ada files)
+        try:
+            file_size = path.stat().st_size
+            if file_size > 102400:  # 100KB = 102400 bytes
+                # Log the skip
+                logger.write({
+                    'ev': 'file_skipped_too_large',
+                    'path': str(path),
+                    'size_bytes': file_size,
+                    'max_bytes': 102400
+                })
+                if ui:
+                    ui.log_line(f"[formatter] Skipping {path} - file too large ({file_size:,} bytes > 100KB)")
+                else:
+                    print(f"[formatter] Skipping {path} - file too large ({file_size:,} bytes > 100KB)")
+                total_errors += 1
+                continue
+        except Exception as e:
+            # Log error but continue processing
+            logger.write({
+                'ev': 'file_stat_error',
+                'path': str(path),
+                'error': str(e)
+            })
 
         status = "ok"
         note = ""
@@ -1419,7 +1461,7 @@ def format_command(
     warmup_seconds: Annotated[int, typer.Option("--warmup-seconds", help="Time to let ALS warm up in seconds")] = 10,
     patterns_path: Annotated[Optional[Path], typer.Option("--patterns-path", help="Path to patterns JSON file (default: ./adafmt_patterns.json)")] = None,
     no_patterns: Annotated[bool, typer.Option("--no-patterns", help="Disable pattern processing")] = False,
-    patterns_timeout_ms: Annotated[int, typer.Option("--patterns-timeout-ms", help="Timeout per pattern in milliseconds")] = 50,
+    patterns_timeout_ms: Annotated[int, typer.Option("--patterns-timeout-ms", help="Timeout per pattern in milliseconds")] = 100,
     patterns_max_bytes: Annotated[int, typer.Option("--patterns-max-bytes", help="Skip patterns for files larger than this (bytes)")] = 10485760,
     validate_patterns: Annotated[bool, typer.Option("--validate-patterns", help="Validate that applied patterns are acceptable to ALS")] = False,
     no_als: Annotated[bool, typer.Option("--no-als", help="Disable ALS formatting (patterns only)")] = False,

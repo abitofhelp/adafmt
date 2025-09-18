@@ -41,11 +41,12 @@ def validate_path(input_path: str) -> Optional[str]:
     """Validate a file/directory path for illegal characters.
     
     Checks for:
+    - URL schemes (http://, https://, file://)
     - URL-encoded sequences (e.g., %20, %2F)
     - Unicode characters outside the Basic Multilingual Plane
-    - ISO control characters 
-    - Whitespace characters
-    - Characters not matching the allowed pattern: [A-Za-z0-9?&=._:/-]
+    - ISO control characters
+    - Whitespace characters other than space
+    - Characters not matching the allowed pattern
     
     Args:
         input_path: The path string to validate
@@ -56,6 +57,12 @@ def validate_path(input_path: str) -> Optional[str]:
     if not input_path:
         return "Path cannot be empty"
     
+    # Check for URL schemes
+    url_schemes = ['http://', 'https://', 'file://', 'ftp://']
+    for scheme in url_schemes:
+        if input_path.lower().startswith(scheme):
+            return f"Path appears to be a URL ({scheme}). Please provide a filesystem path instead"
+    
     # Check for URL-encoded sequences
     if '%' in input_path:
         # Pattern to match URL encoding: %XX where XX are hexadecimal digits
@@ -63,16 +70,19 @@ def validate_path(input_path: str) -> Optional[str]:
         if url_encoded_pattern.search(input_path):
             return "Path appears to be URL-encoded. Please provide the decoded path instead"
     
-    # Pattern for allowed characters
-    allowed_pattern = re.compile(r'^[A-Za-z0-9?&=._:/-]+$')
+    # Updated pattern for allowed characters - now includes space and more common chars
+    # Letters, numbers, space, and common path characters
+    # Removed: < > | " * ? \ (unsafe across platforms)
+    # Kept: & = from original pattern for compatibility
+    allowed_pattern = re.compile(r'^[A-Za-z0-9 ._:/@()[\]{},!$+=~`\'&=-]+$')
     
     for i, char in enumerate(input_path):
         # Check for supplementary Unicode characters (outside BMP)
         if is_supplementary_code_point(char):
             return f"Path contains Unicode supplementary character at position {i}"
             
-        # Check for whitespace
-        if char.isspace():
+        # Check for whitespace other than regular space
+        if char.isspace() and char != ' ':
             return f"Path contains whitespace character '{repr(char)}' at position {i}"
             
         # Check for control characters
