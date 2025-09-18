@@ -44,6 +44,7 @@ from .logging_jsonl import JsonlLogger
 from .pattern_formatter import PatternFormatter, PatternLogger
 from .metrics import MetricsCollector
 from .metrics_reporter import MetricsReporter
+from .initializer import Initializer
 from .tui import make_ui
 from .utils import preflight, run_hook
 
@@ -248,6 +249,7 @@ async def run_formatter(
     no_patterns: bool,
     patterns_timeout_ms: int,
     patterns_max_bytes: int,
+    hook_timeout: float,
     validate_patterns: bool = False,
     metrics_path: Optional[Path] = None,
     no_als: bool = False,
@@ -1152,6 +1154,7 @@ def format_command(
         no_patterns=no_patterns,
         patterns_timeout_ms=patterns_timeout_ms,
         patterns_max_bytes=patterns_max_bytes,
+        hook_timeout=hook_timeout,
         validate_patterns=validate_patterns,
         metrics_path=metrics_path,
         no_als=no_als,

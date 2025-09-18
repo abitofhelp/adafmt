@@ -46,6 +46,7 @@ async def run_formatter_with_defaults(**kwargs):
         'no_patterns': True,  # Disable patterns for basic tests
         'patterns_timeout_ms': 100,
         'patterns_max_bytes': 1_000_000,
+        'hook_timeout': 30.0,  # Default hook timeout
         'using_default_log': False,
         'using_default_stderr': False,
         'using_default_patterns': False
