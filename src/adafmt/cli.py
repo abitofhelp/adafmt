@@ -832,7 +832,7 @@ def format_command(
     version: Annotated[Optional[bool], typer.Option("--version", "-v", callback=_version_callback, help="Show version and exit")] = None,
     als_stale_minutes: Annotated[int, typer.Option("--als-stale-minutes", help="Age threshold in minutes for considering ALS processes stale")] = 30,
     check: Annotated[bool, typer.Option("--check", help="Exit with code 1 if any files need formatting")] = False,
-    diff: Annotated[bool, typer.Option("--diff", help="Show unified diffs of changes [default: True]")] = True,
+    diff: Annotated[bool, typer.Option("--diff", help="Show unified diffs of changes")] = False,
     exclude_path: Annotated[Optional[List[Path]], typer.Option("--exclude-path", help="Directory to exclude from search (can be used multiple times)")] = None,
     format_timeout: Annotated[int, typer.Option("--format-timeout", help="Timeout per file formatting in seconds")] = 60,
     include_path: Annotated[Optional[List[Path]], typer.Option("--include-path", help="Directory to search for Ada files (can be used multiple times)")] = None,

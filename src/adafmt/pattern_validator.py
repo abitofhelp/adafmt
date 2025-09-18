@@ -51,65 +51,56 @@ class PatternValidator:
                 # Read original content
                 original_content = file_path.read_text(encoding='utf-8')
                 
-                # Format with ALS first
-                als_result = await self._format_with_als(file_path, format_timeout)
-                if not als_result or als_result.get('error'):
-                    error_msg = als_result.get('error', 'Unknown ALS error') if als_result else 'ALS timeout'
-                    errors_encountered.append(f"{file_path}: ALS error - {error_msg}")
-                    error_count += 1
-                    continue
-                
-                als_formatted_content = als_result['content']
-                
-                # Apply patterns to ALS-formatted content
-                pattern_formatted_content, pattern_result = self.pattern_formatter.apply(
+                # Apply patterns first
+                pattern_content, pattern_result = self.pattern_formatter.apply(
                     path=file_path,
-                    content=als_formatted_content
+                    text=original_content
                 )
                 
-                # Format the pattern-modified content with ALS again
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.adb', delete=False) as tmp:
-                    tmp.write(pattern_formatted_content)
-                    tmp.flush()
-                    tmp_path = Path(tmp.name)
-                
-                try:
-                    als_reformat_result = await self._format_with_als(tmp_path, format_timeout)
-                finally:
-                    tmp_path.unlink(missing_ok=True)
-                
-                if not als_reformat_result or als_reformat_result.get('error'):
-                    error_msg = als_reformat_result.get('error', 'Unknown ALS error') if als_reformat_result else 'ALS timeout'
-                    errors_encountered.append(f"{file_path}: Pattern application broke ALS formatting - {error_msg}")
-                    error_count += 1
+                # Skip if no patterns were applied
+                if not pattern_result or not hasattr(pattern_result, 'applied_names') or len(pattern_result.applied_names) == 0:
+                    validated_count += 1
                     continue
                 
-                als_reformatted_content = als_reformat_result['content']
+                # Run pattern result through ALS
+                await self.client._notify("textDocument/didOpen", {
+                    "textDocument": {
+                        "uri": file_path.as_uri(),
+                        "languageId": "ada",
+                        "version": 1,
+                        "text": pattern_content,
+                    }
+                })
                 
-                # Compare: ALS-formatted should equal ALS-re-formatted after patterns
-                if als_formatted_content != als_reformatted_content:
-                    # Find which patterns caused issues
-                    problematic_patterns = self._identify_problematic_patterns(
-                        als_formatted_content,
-                        pattern_result,
-                        als_reformatted_content
-                    )
+                try:
+                    edits = await self.client.request_with_timeout({
+                        "method": "textDocument/formatting",
+                        "params": {
+                            "textDocument": {"uri": file_path.as_uri()},
+                            "options": {"tabSize": 3, "insertSpaces": True},
+                        }
+                    }, timeout=format_timeout)
                     
-                    error_msg = f"{file_path}: Patterns interfere with ALS formatting"
-                    if problematic_patterns:
-                        error_msg += f" (patterns: {', '.join(problematic_patterns)})"
-                    errors_encountered.append(error_msg)
+                    if edits:
+                        # ALS wants to make changes to pattern output
+                        errors_encountered.append(
+                            f"{file_path}: Patterns break ALS formatting - "
+                            f"ALS wants {len(edits)} edits after applying: {', '.join(pattern_result.applied_names)}"
+                        )
+                        error_count += 1
+                    else:
+                        validated_count += 1
+                        
+                except asyncio.TimeoutError:
+                    errors_encountered.append(f"{file_path}: ALS timeout during validation")
                     error_count += 1
-                    
-                    # Log details for debugging
-                    self.logger.write({
-                        'ev': 'validation_failure',
-                        'file': str(file_path),
-                        'patterns_applied': pattern_result.applied_names if hasattr(pattern_result, 'applied_names') else [],
-                        'problematic_patterns': problematic_patterns
+                except Exception as e:
+                    errors_encountered.append(f"{file_path}: ALS error - {str(e)}")
+                    error_count += 1
+                finally:
+                    await self.client._notify("textDocument/didClose", {
+                        "textDocument": {"uri": file_path.as_uri()}
                     })
-                else:
-                    validated_count += 1
                     
             except Exception as e:
                 error_msg = f"{file_path}: Validation error - {type(e).__name__}: {str(e)}"
@@ -134,71 +125,3 @@ class PatternValidator:
             ui.log_line(f"\n[validate] ✅ All {validated_count} files validated successfully!")
             
         return error_count, errors_encountered
-        
-    async def _format_with_als(self, file_path: Path, timeout: float) -> Optional[Dict]:
-        """Format a file with ALS and return the result."""
-        try:
-            # Read the file content
-            content = file_path.read_text(encoding='utf-8')
-            
-            # Notify ALS about the file
-            await self.client._notify("textDocument/didOpen", {
-                "textDocument": {
-                    "uri": file_path.as_uri(),
-                    "languageId": "ada",
-                    "version": 1,
-                    "text": content
-                }
-            })
-            
-            try:
-                res = await self.client.request_with_timeout(
-                    {
-                        "method": "textDocument/formatting",
-                        "params": {
-                            "textDocument": {"uri": file_path.as_uri()},
-                            "options": {"tabSize": 3, "insertSpaces": True}
-                        }
-                    },
-                    timeout=timeout
-                )
-            
-                if res is None:  # Timeout
-                    return None
-                    
-                if "error" in res:
-                    return {"error": res["error"].get("message", "Unknown error")}
-                    
-                edits = res.get("result", [])
-                if not edits:
-                    # No changes needed
-                    return {"content": content}
-                    
-                # Apply edits
-                from .edits import replace_range
-                new_content = content
-                # Apply edits in reverse order to maintain positions
-                for edit in sorted(edits, key=lambda e: (e["range"]["start"]["line"], e["range"]["start"]["character"]), reverse=True):
-                    start_pos = edit["range"]["start"]
-                    end_pos = edit["range"]["end"]
-                    new_text = edit["newText"]
-                    new_content = replace_range(new_content, start_pos, end_pos, new_text)
-                return {"content": new_content}
-                
-            finally:
-                # Always close the document
-                await self.client._notify("textDocument/didClose", {
-                    "textDocument": {"uri": file_path.as_uri()}
-                })
-            
-        except Exception as e:
-            return {"error": f"{type(e).__name__}: {str(e)}"}
-            
-    def _identify_problematic_patterns(self, als_content: str, 
-                                     pattern_result: Any,
-                                     als_reformat_content: str) -> List[str]:
-        """Identify which patterns likely caused formatting issues."""
-        # Simple heuristic: patterns that made replacements are suspects
-        if hasattr(pattern_result, 'applied_names'):
-            return pattern_result.applied_names
-        return []

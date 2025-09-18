@@ -70,7 +70,7 @@ end Test;
         
         # Should succeed
         assert result.returncode == 0
-        assert "All patterns validated successfully" in result.stdout
+        assert "All 1 files validated successfully!" in result.stdout
     
     def test_validate_patterns_conflict(self, temp_project):
         """Test validation when patterns conflict with ALS formatting."""
@@ -109,7 +109,7 @@ end Test;
         
         # Should fail
         assert result.returncode == 1
-        assert "pattern conflicts" in result.stdout.lower()
+        assert "validation failed" in result.stdout.lower()
     
     def test_validate_patterns_no_patterns(self, temp_project):
         """Test validation with --no-patterns flag."""
@@ -202,5 +202,4 @@ end Test2;
         
         # Should succeed
         assert result.returncode == 0
-        assert "All patterns validated successfully" in result.stdout
-        assert "(2 files)" in result.stdout
+        assert "All 2 files validated successfully!" in result.stdout
