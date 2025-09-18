@@ -384,7 +384,7 @@ The system operates as a client to the Ada Language Server, communicating via th
 - FR-11.19: SHALL apply patterns sequentially in alphabetical order by name
 - FR-11.20: SHALL count replacements per pattern per file
 - FR-11.21: SHALL respect dry-run vs write mode (no file changes without --write)
-- FR-11.22: SHALL enforce timeout protection on each pattern application (default 50ms)
+- FR-11.22: SHALL enforce timeout protection on each pattern application (default 100ms)
 - FR-11.23: SHALL skip patterns for files larger than configured limit (default 10MB)
 - FR-11.24: SHALL continue processing after pattern timeout or error
 
@@ -546,7 +546,7 @@ The system operates as a client to the Ada Language Server, communicating via th
 - NFR-1.6: SHALL minimize file I/O operations by keeping log files open for the session duration
 - NFR-1.7: SHALL maintain data integrity through immediate flushing without compromising performance
 - NFR-1.8: SHALL apply patterns without materially increasing ALS formatting time
-- NFR-1.9: SHALL enforce pattern timeout of 50ms per pattern application
+- NFR-1.9: SHALL enforce pattern timeout of 100ms per pattern application
 - NFR-1.10: SHALL handle up to 50 patterns without performance degradation
 
 **Measurement:**

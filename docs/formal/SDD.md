@@ -551,7 +551,7 @@ class CompiledRule:
 **Pattern Application**:
 1. Skip if ALS failed (only process syntactically valid code)
 2. Check file size limit (default 10MB)
-3. Apply patterns sequentially with timeout (default 50ms)
+3. Apply patterns sequentially with timeout (default 100ms)
 4. Count replacements per pattern
 5. Update UI status line
 6. Log to pattern log
@@ -974,7 +974,7 @@ class CursesUI:
 6. **Efficient Log File I/O**: Keep log files open for the session duration, avoiding repeated open/close operations
 7. **Immediate Flush**: Flush after each write for crash safety without sacrificing performance
 8. **Pattern Compilation**: Compile patterns once at startup, not per file
-9. **Pattern Timeouts**: 50ms default prevents hanging on complex patterns
+9. **Pattern Timeouts**: 100ms default prevents hanging on complex patterns
 
 ### 7.2 Bottlenecks
 

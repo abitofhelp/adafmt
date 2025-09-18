@@ -120,8 +120,8 @@ adafmt --project-path project.gpr --no-patterns
 Control pattern execution timeout with `--patterns-timeout-ms`:
 
 ```bash
-# Set 100ms timeout per pattern (default: 50ms)
-adafmt --project-path project.gpr --patterns-timeout-ms 100
+# Set 200ms timeout per pattern (default: 100ms)
+adafmt --project-path project.gpr --patterns-timeout-ms 200
 ```
 
 ### File Size Limits
@@ -194,7 +194,7 @@ Pattern names must:
 ```bash
 --patterns-path PATH         # Pattern file location (default: ./adafmt_patterns.json)
 --no-patterns               # Disable pattern processing
---patterns-timeout-ms MS    # Timeout per pattern in milliseconds (default: 50)
+--patterns-timeout-ms MS    # Timeout per pattern in milliseconds (default: 100)
 --patterns-max-bytes BYTES  # Skip patterns for files larger than this (default: 10MB)
 --validate-patterns         # Validate patterns don't break ALS formatting
 ```
@@ -380,7 +380,7 @@ def load_from_json(cls, path: Path, logger=None, ui=None) -> 'PatternFormatter':
 Patterns are applied sequentially with timeout protection:
 
 ```python
-def apply(self, path: Path, text: str, timeout_ms: int = 50, 
+def apply(self, path: Path, text: str, timeout_ms: int = 100, 
           logger=None, ui=None) -> Tuple[str, FileApplyResult]:
     """Apply all patterns to text."""
     result = text
@@ -536,7 +536,7 @@ except ImportError:
 
 ### Timeout Protection
 
-Each pattern application is protected by a timeout (default 50ms):
+Each pattern application is protected by a timeout (default 100ms):
 
 ```python
 # With regex module
