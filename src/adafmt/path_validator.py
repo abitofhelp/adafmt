@@ -74,7 +74,7 @@ def validate_path(input_path: str) -> Optional[str]:
     # Letters, numbers, space, and common path characters
     # Removed: < > | " * ? \ (unsafe across platforms)
     # Kept: & = from original pattern for compatibility
-    allowed_pattern = re.compile(r'^[A-Za-z0-9 ._:/@()[\]{},!$+=~`\'&=-]+$')
+    allowed_pattern = re.compile(r'^[A-Za-z0-9 ._:/@()[\]{},!$+=~`\'&\-]+$')
     
     for i, char in enumerate(input_path):
         # Check for supplementary Unicode characters (outside BMP)

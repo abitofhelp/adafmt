@@ -69,6 +69,8 @@ end File3;""",
             "python3", "-m", "adafmt", "format",
             "--project-path", str(project_dir / "test.gpr"),
             "--include-path", str(project_dir),
+            "--check",  # Required for diff mode
+            "--diff",   # Show diffs in output
         ] + extra_args
         
         result = subprocess.run(
