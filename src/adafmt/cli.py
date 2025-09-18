@@ -39,6 +39,7 @@ from tabulate import tabulate
 
 from .als_client import ALSClient, ALSProtocolError
 from .file_discovery import collect_files
+from .file_processor import FileProcessor
 from .logging_jsonl import JsonlLogger
 from .pattern_formatter import PatternFormatter, PatternLogger
 from .metrics import MetricsCollector
@@ -678,55 +679,23 @@ async def run_formatter(
     else:
         print("[formatter] Starting to format files...")
     
-    # ALS metrics
-    als_changed = 0
-    als_failed = 0
-    als_done = 0
-    false_positives = 0
+    # Initialize file processor
+    file_processor = FileProcessor(
+        client=client,
+        pattern_formatter=pattern_formatter,
+        logger=logger,
+        pattern_logger=pattern_logger,
+        ui=ui,
+        metrics=metrics,
+        no_als=no_als,
+        write=write,
+        diff=diff,
+        format_timeout=format_timeout,
+        max_consecutive_timeouts=max_consecutive_timeouts
+    )
     
-    # Pattern metrics tracked separately
-    pattern_files_changed = 0
-    
-    async def format_once(path: Path) -> Optional[List[dict]]:
-        """Format a single Ada file using ALS."""
-        # If ALS is disabled, return None (no edits)
-        if not client:
-            return None
-        
-        # Check file size before reading (100KB limit)
-        # This is a safety check - should have been caught earlier
-        file_size = path.stat().st_size
-        if file_size > 102400:  # 100KB
-            return None
-            
-        # Open
-        await client._notify("textDocument/didOpen", {
-            "textDocument": {
-                "uri": path.as_uri(),
-                "languageId": "ada",
-                "version": 1,
-                "text": path.read_text(encoding="utf-8", errors="ignore"),
-            }
-        })
-        try:
-            res = await client.request_with_timeout({
-                "method": "textDocument/formatting",
-                "params": {
-                    "textDocument": {"uri": path.as_uri()},
-                    "options": {"tabSize": 3, "insertSpaces": True},
-                },
-            }, timeout=format_timeout)
-        finally:
-            with contextlib.suppress(Exception):
-                await client._notify("textDocument/didClose", {"textDocument": {"uri": path.as_uri()}})
-        
-        # Validate response
-        if res is not None and not isinstance(res, list):
-            raise TypeError(f"ALS returned unexpected type: {type(res).__name__} instead of list")
-        return res
-
+    # Process each file
     total = len(file_paths)
-    consecutive_timeouts = 0
     
     for idx, path in enumerate(file_paths, start=1):
         # Log first file to debug hanging
@@ -736,428 +705,45 @@ async def run_formatter(
             else:
                 print(f"[formatter] Processing first file: {path}")
         
-        # progress
-        # Track overall progress for UI
-        current_file_idx = idx - 1  # idx is 1-based
-        if ui:
-            ui.set_progress(current_file_idx, len(file_paths))
-
-        # Check file size limit (100KB for Ada files)
-        try:
-            file_size = path.stat().st_size
-            if file_size > 102400:  # 100KB = 102400 bytes
-                # Log the skip
-                logger.write({
-                    'ev': 'file_skipped_too_large',
-                    'path': str(path),
-                    'size_bytes': file_size,
-                    'max_bytes': 102400
-                })
-                if ui:
-                    ui.log_line(f"[formatter] Skipping {path} - file too large ({file_size:,} bytes > 100KB)")
-                else:
-                    print(f"[formatter] Skipping {path} - file too large ({file_size:,} bytes > 100KB)")
-                total_errors += 1
-                continue
-        except Exception as e:
-            # Log error but continue processing
-            logger.write({
-                'ev': 'file_stat_error',
-                'path': str(path),
-                'error': str(e)
-            })
-
-        # Start timing for this file
+        # Process the file
         file_start_time = time.time()
+        status, note = await file_processor.process_file(path, idx, total, run_start_time)
         
-        status = "ok"
-        note = ""
-        attempts = 0
-        edits = None
-        pattern_result = None
-        patterns_applied = []
-        
-        while attempts < max_attempts:
-            try:
-                edits = await format_once(path)
-                
-                # If no edits from ALS but patterns are enabled, we still need to process
-                if not edits and pattern_formatter and pattern_formatter.enabled:
-                    try:
-                        original_content = path.read_text(encoding="utf-8", errors="ignore")
-                    except Exception as e:
-                        raise TypeError(f"Failed to read file {path}: {e}") from e
-                    
-                    # Check file size limit
-                    file_size = len(original_content.encode('utf-8'))
-                    if file_size > patterns_max_bytes:
-                        # Skip patterns for large files
-                        pattern_logger.write({
-                            'ev': 'file_skipped_large',
-                            'path': str(path),
-                            'size_bytes': file_size,
-                            'max_bytes': patterns_max_bytes
-                        })
-                        if ui:
-                            ui.log_line(f"[patterns] Skipping {path} - file too large ({file_size} bytes)")
-                    else:
-                        # Apply patterns to original content
-                        formatted_content, pattern_result = pattern_formatter.apply(
-                            path,
-                            original_content,
-                            timeout_ms=patterns_timeout_ms,
-                            logger=PatternLogger(pattern_logger),
-                            ui=ui
-                        )
-                        
-                        # Check if patterns made changes
-                        if formatted_content != original_content:
-                            status = "changed"
-                            pattern_files_changed += 1
-                            
-                            from .edits import unified_diff
-                            from .utils import atomic_write
-                            
-                            if write:
-                                # Write to file
-                                atomic_write(str(path), formatted_content)
-                            elif diff:
-                                # Show diff in dry-run mode
-                                diff_output = unified_diff(
-                                    original_content,
-                                    formatted_content,
-                                    str(path)
-                                )
-                                if diff_output and not ui:
-                                    print(diff_output)
-                
-                if edits:
-                    status = "changed"
-                    als_changed += 1
-                    # Apply edits to get formatted content
-                    try:
-                        original_content = path.read_text(encoding="utf-8", errors="ignore")
-                    except Exception as e:
-                        raise TypeError(f"Failed to read file {path}: {e}") from e
-                    
-                    from .edits import apply_text_edits, unified_diff
-                    from .utils import atomic_write
-                    formatted_content = apply_text_edits(original_content, edits)
-                    
-                    # Apply patterns if enabled and ALS succeeded
-                    pattern_result = None
-                    if pattern_formatter and pattern_formatter.enabled:
-                        # Check file size limit
-                        file_size = len(formatted_content.encode('utf-8'))
-                        if file_size > patterns_max_bytes:
-                            # Skip patterns for large files
-                            pattern_logger.write({
-                                'ev': 'file_skipped_large',
-                                'path': str(path),
-                                'size_bytes': file_size,
-                                'max_bytes': patterns_max_bytes
-                            })
-                            if ui:
-                                ui.log_line(f"[patterns] Skipping {path} - file too large ({file_size} bytes)")
-                        else:
-                            # Apply patterns
-                            formatted_content, pattern_result = pattern_formatter.apply(
-                                path,
-                                formatted_content,
-                                timeout_ms=patterns_timeout_ms,
-                                logger=PatternLogger(pattern_logger),
-                                ui=ui
-                            )
-                    
-                    if write:
-                        # Write to file
-                        atomic_write(str(path), formatted_content)
-                    elif diff:
-                        # Show diff in dry-run mode
-                        diff_output = unified_diff(
-                            original_content,
-                            formatted_content,
-                            str(path)
-                        )
-                        if diff_output and not ui:
-                            print(diff_output)
-                consecutive_timeouts = 0
-                break  # Success, exit retry loop
-            
-            except asyncio.TimeoutError:
-                attempts += 1
-                consecutive_timeouts += 1
-                if attempts >= max_attempts:
-                    status = "failed"
-                    # note = "TimeoutError: ALS did not respond in time"  # Details in stderr log
-                    als_failed += 1
-                    if logger:
-                        logger.write({
-                            "path": str(path),
-                            "status": status,
-                            "note": note,
-                            "error": "TimeoutError",
-                            "format_timeout": format_timeout,
-                            "attempts": attempts,
-                        })
-                    _write_stderr_error(
-                        path=path,
-                        error_type="TIMEOUT",
-                        error_msg="TimeoutError: ALS did not respond in time",
-                        details={
-                            "attempts": attempts,
-                            "format_timeout_s": format_timeout,
-                            "action": "ALS unresponsive to formatting request",
-                            "suggestion": "Try lower timeout or increase --init-timeout; check ALS log",
-                        },
-                    )
-                    # Break or abort on too many consecutive timeouts
-                    if max_consecutive_timeouts and consecutive_timeouts >= max_consecutive_timeouts:
-                        _write_stderr_error(
-                            path=path,
-                            error_type="TIMEOUT_BARRIER",
-                            error_msg=f"Aborting after {consecutive_timeouts} consecutive timeouts",
-                            details={"action": "Investigate ALS; try --preflight aggressive, increase --init-timeout"},
-                        )
-                        raise RuntimeError("Too many consecutive timeouts")
-                    break
-                # Controlled restart before retry
-                with contextlib.suppress(Exception):
-                    await client.restart()
-                continue
-            
-            except ALSProtocolError as e:
-                # Handle syntax errors
-                if getattr(e.payload, "code", None) == -32803 or "-32803" in str(e) or "Syntactically invalid code" in str(e):
-                    # Log the error details
-                    error_msg = ""
-                    if hasattr(e, 'payload') and isinstance(e.payload, dict):
-                        error_msg = e.payload.get('message', str(e.payload))
-                        if 'data' in e.payload:
-                            error_msg += f" - {e.payload['data']}"
-                    else:
-                        error_msg = str(e)
-                    
-                    if logger:
-                        logger.write({
-                            "path": str(path),
-                            "als_error": "Syntax error detected by ALS",
-                            "error_details": error_msg,
-                            "error_code": -32803,
-                        })
-                    
-                    # Write detailed error to stderr
-                    _write_stderr_error(
-                        path=path,
-                        error_type="ALS_SYNTAX_ERROR",
-                        error_msg=error_msg,
-                        details={
-                            "error_code": "-32803",
-                            "description": "ALS reported syntactically invalid code"
-                        }
-                    )
-                    
-                    # Try to compile to verify
-                    compile_success = False
-                    compiler_msg = ""
-                    
-                    if path.suffix.lower() in (".adb", ".ada"):
-                        try:
-                            import subprocess
-                            compile_cwd = client._launch_cwd if hasattr(client, '_launch_cwd') else None
-                            
-                            compile_cmd = ["gcc", "-c", "-gnatc", str(path)]
-                            
-                            if proj and proj.exists():
-                                compile_cmd.extend(["-P", str(proj)])
-                            
-                            result = subprocess.run(
-                                compile_cmd,
-                                cwd=compile_cwd,
-                                capture_output=True,
-                                text=True,
-                                timeout=10
-                            )
-                            compile_success = (result.returncode == 0)
-                            if compile_success:
-                                compiler_msg = "Compiler OK, GNATFORMAT false positive"
-                            else:
-                                compiler_msg = "Compiler also reports errors"
-                        except (subprocess.TimeoutExpired, FileNotFoundError):
-                            compile_success = False
-                            compiler_msg = "Could not verify with compiler"
-                    else:
-                        compiler_msg = "Spec file - not compiled"
-                    
-                    if compile_success:
-                        # False positive from GNATFORMAT!
-                        status = "ok"
-                        note = "GNATFORMAT false positive - file compiles OK!"
-                        false_positives += 1
-                        if logger:
-                            logger.write({
-                                "path": str(path),
-                                "warning": "GNATFORMAT reported syntax error but file compiles successfully",
-                                "als_error": str(e),
-                            })
-                        warning_msg = f"[warning] {path.name}: GNATFORMAT syntax error but compiles OK"
-                        if ui:
-                            ui.log_line(warning_msg)
-                        else:
-                            print(f"\033[93m{warning_msg}\033[0m")  # Yellow color
-                    else:
-                        # Real syntax error
-                        status = "failed"
-                        # note = f"syntax error: {error_msg}" if error_msg else f"invalid syntax (GNATFORMAT) - {compiler_msg}"  # Details in stderr log
-                        als_failed += 1
-                        
-                        # Write detailed error to stderr for real syntax errors
-                        error_message = f"syntax error: {error_msg}" if error_msg else f"invalid syntax (GNATFORMAT) - {compiler_msg}"
-                        _write_stderr_error(
-                            path=path,
-                            error_type="SYNTAX_ERROR_CONFIRMED",
-                            error_msg=error_message,
-                            details={
-                                "als_error": error_msg,
-                                "compiler_verification": compiler_msg,
-                                "action": "Manual fix required - file has syntax errors"
-                            }
-                        )
-                    break  # No retry for syntax errors
-                # other protocol errors: attempt restart
-                attempts += 1
-                if attempts >= max_attempts:
-                    status = "failed"
-                    # note = f"ALS error: {getattr(e, 'message', repr(e))}"  # Details in stderr log
-                    als_failed += 1
-                    
-                    # Write detailed error to stderr
-                    _write_stderr_error(
-                        path=path,
-                        error_type="ALS_PROTOCOL_ERROR",
-                        error_msg=f"ALS error: {getattr(e, 'message', repr(e))}",
-                        details={
-                            "error_class": e.__class__.__name__,
-                            "attempts": attempts,
-                            "action": "ALS communication failed after retries"
-                        }
-                    )
-                    break
-                with contextlib.suppress(Exception):
-                    await client.restart()
-            except (ConnectionResetError, BrokenPipeError, asyncio.IncompleteReadError) as e:
-                attempts += 1
-                if attempts >= max_attempts:
-                    status = "failed"
-                    # note = f"disconnected: {e.__class__.__name__}"  # Details in stderr log
-                    als_failed += 1
-                    
-                    # Write detailed error to stderr
-                    _write_stderr_error(
-                        path=path,
-                        error_type="CONNECTION_ERROR",
-                        error_msg=f"disconnected: {e.__class__.__name__}",
-                        details={
-                            "error_class": e.__class__.__name__,
-                            "attempts": attempts,
-                            "action": "ALS connection lost, unable to recover"
-                        }
-                    )
-                    break
-                with contextlib.suppress(Exception):
-                    await client.restart()
-            except Exception as e:
-                attempts += 1
-                if attempts >= max_attempts:
-                    status = "failed"
-                    # note = f"{type(e).__name__}: {str(e)}"  # Details in stderr log
-                    als_failed += 1
-                    if logger:
-                        logger.write({
-                            "path": str(path),
-                            "error": type(e).__name__,
-                            "error_message": str(e),
-                            "traceback": "See log for details"
-                        })
-                    
-                    # Write detailed error to stderr
-                    _write_stderr_error(
-                        path=path,
-                        error_type="UNEXPECTED_ERROR",
-                        error_msg=f"{type(e).__name__}: {str(e)}",
-                        details={
-                            "error_class": type(e).__name__,
-                            "attempts": attempts,
-                            "action": "Unexpected error during formatting",
-                            "suggestion": "Check ALS logs for more details"
-                        }
-                    )
-                    break
-                with contextlib.suppress(Exception):
-                    await client.restart()
-
-        # Log file event to pattern log
-        pattern_logger.write({
-            'ev': 'file',
-            'path': str(path),
-            'als_ok': status != "failed",
-            'als_edits': len(edits) if edits else 0,
-            'patterns_applied': pattern_result.applied_names if pattern_result else [],
-            'replacements': pattern_result.replacements_sum if pattern_result else 0
-        })
-        
-        # Record file metrics
-        file_duration = time.time() - file_start_time
-        metrics.record_file_format(
-            file_path=str(path),
-            als_success=status != "failed",
-            als_edits=len(edits) if edits else 0,
-            patterns_applied=pattern_result.applied_names if pattern_result else [],
-            duration=file_duration,
-            error=note if status == "failed" else None
-        )
-        
-        # Track ALS processing if ALS was used
-        if client:
-            als_done += 1
+        # Update UI/console with progress
         prefix = f"[{idx:>4}/{total}]"
         
-        # Add debug output every 50 files
-        if idx % 50 == 0:
-            pass  # Debug output removed
-        
-        # Build pattern info for status line (only show if patterns were applied)
-        pattern_info = ""
-        if pattern_formatter and pattern_formatter.enabled and pattern_result:
-            patterns_applied = len(pattern_result.applied_names)
-            replacements = pattern_result.replacements_sum
-            if patterns_applied > 0:
-                pattern_info = f" | Patterns: applied={patterns_applied} ({replacements})"
-        
+        # Build status line
         line = f"{prefix} [{status:^7}] {path}"
-        if no_als:
-            # In patterns-only mode, don't show ALS status
-            pass
-        elif edits:
-            line += f" | ALS: ✓ edits={len(edits)}"
-        else:
-            line += " | ALS: ✓ edits=0"
-        line += pattern_info
+        
+        # Add ALS info if not in patterns-only mode
+        if not no_als and status == "changed":
+            line += " | ALS: ✓"
+        
+        # Add pattern info if patterns were applied
+        if pattern_formatter and pattern_formatter.enabled:
+            pattern_result = pattern_formatter.files_touched.get(str(path))
+            if pattern_result:
+                patterns_applied = len(pattern_result.applied_names)
+                replacements = pattern_result.replacements_sum
+                if patterns_applied > 0:
+                    line += f" | Patterns: applied={patterns_applied} ({replacements})"
         
         if status == "failed":
             line += "  (details in the stderr log)"
         elif note:
             line += f"  ({note})"
+            
         if ui:
             ui.log_line(line)
             ui.set_progress(idx, len(file_paths))
-            # Update the 4-line footer
+            
+            # Update footer stats
             current_time = time.time()
             elapsed = current_time - run_start_time
             
-            # Calculate combined metrics for UI display
-            total_changed = als_changed + pattern_files_changed
-            total_failed = als_failed
+            # Get current stats from processor
+            total_changed = file_processor.als_changed + file_processor.pattern_files_changed
+            total_failed = file_processor.als_failed
             total_done = idx
             total_unchanged = total_done - total_changed - total_failed
             rate = total_done / elapsed if elapsed > 0 else 0
@@ -1178,12 +764,12 @@ async def run_formatter(
             # Apply colors in terminal
             if sys.stdout.isatty():
                 colored_line = line
-                # Color [failed ] in bright red (with padding)
+                # Color [failed ] in bright red
                 if "[failed ]" in line:
                     start_idx = line.find("[failed ]")
                     end_idx = start_idx + len("[failed ]")
                     colored_line = line[:start_idx] + "\033[91m\033[1m[failed ]\033[0m" + line[end_idx:]
-                # Color [changed] in bright yellow (with padding)
+                # Color [changed] in bright yellow
                 elif "[changed]" in line:
                     start_idx = line.find("[changed]")
                     end_idx = start_idx + len("[changed]")
@@ -1191,22 +777,22 @@ async def run_formatter(
                 print(colored_line)
             else:
                 print(line)
-
-        if logger:
-            logger.write({
-                "path": str(path),
-                "status": status,
-                "note": note,
-            })
-
+    
+    # Get final statistics from processor
+    als_changed = file_processor.als_changed
+    als_failed = file_processor.als_failed
+    pattern_files_changed = file_processor.pattern_files_changed
+    total_errors = file_processor.total_errors
+    false_positives = 0  # TODO: Track false positives in FileProcessor
     # Calculate statistics
     end_time = time.time()
     elapsed_seconds = max(0.1, end_time - run_start_time)
     
     # Calculate final metrics
-    als_unchanged = als_done - als_changed - als_failed if client else 0
+    total_processed = len(file_paths)
     total_changed = als_changed + pattern_files_changed
     total_failed = als_failed
+    als_unchanged = total_processed - als_changed - als_failed if client else 0
     total_unchanged = len(file_paths) - total_changed - total_failed
     
     rate = len(file_paths) / elapsed_seconds if len(file_paths) > 0 else 0
@@ -1311,10 +897,11 @@ async def run_formatter(
         else:
             print("PATTERN METRICS")
         
+        # Always show Files row at the top
+        total = len(file_paths)
+        print(f"  Files      {total:>6}  100%")
+        
         if pattern_summary:
-            # Add Files row at the top
-            total = len(file_paths)
-            print(f"  Files      {total:>6}  100%")
             print()  # blank line after Files
             
             # Build pattern data table
@@ -1343,6 +930,7 @@ async def run_formatter(
             for line in table_str.split('\n'):
                 print(f"  {line}")
         else:
+            print()  # blank line after Files
             print("  No patterns were applied to any files")
         
         # Leave blank line before timing info
