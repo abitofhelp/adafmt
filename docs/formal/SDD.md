@@ -147,6 +147,9 @@ class ALSClient:
 - Request correlation via unique IDs
 - Async request/response handling
 - Timeout management per request
+- **Robust LSP header parsing**: Handles both CRLF and LF line endings
+- **No assert statements**: Uses proper exceptions for error handling
+- **Defensive programming**: Validates process state before operations
 
 **Process Management**:
 ```python
@@ -993,12 +996,15 @@ class CursesUI:
 - Resolved paths are validated for illegal characters:
   - Unicode characters outside BMP (U+10000+)
   - ISO control characters
-  - Whitespace characters
-  - Characters not matching: [A-Za-z0-9?&=._:/-]
+  - Whitespace characters (except regular space for cross-platform support)
+  - Characters not matching: [A-Za-z0-9 ._:/@()[\]{},!$+=~`'&=-]
   - Directory traversal sequences (..)
+  - URL schemes (http://, https://, file://, ftp://)
+  - URL-encoded sequences (e.g., %20, %2F)
 - No shell command injection
 - Safe temp file creation
 - Proper quote handling
+- File size limit enforcement (100KB for Ada source files)
 
 #### Command-Line Flag Validation Matrix
 
@@ -1047,6 +1053,10 @@ This validation ensures:
 - No shared memory
 - Limited to stdio communication
 - Proper cleanup on exit
+- **All subprocess execution uses shell=False** (no shell interpretation)
+- **Timeouts enforced on all external processes** (default 5s)
+- **Hook commands parsed with shlex** for secure command splitting
+- **No user input directly passed to shell**
 
 ### 8.3 File Safety
 
@@ -1062,6 +1072,34 @@ This validation ensures:
 - **Memory Limits**: File size caps prevent exhaustion
 - **Error Isolation**: Malformed patterns can't crash formatter
 - **No Code Execution**: Patterns are data, not executable code
+
+### 8.5 Hook Security
+
+**Implementation**:
+```python
+def run_hook(hook_cmd: Optional[str], phase: str, logger=None, timeout: int=5) -> bool:
+    if not hook_cmd:
+        return True
+    
+    # Parse command safely without shell
+    import shlex
+    try:
+        cmd_list = shlex.split(hook_cmd)
+    except ValueError as e:
+        logger(f"[{phase}-hook] Invalid command format: {e}")
+        return False
+    
+    # Execute without shell for security
+    result = subprocess.run(cmd_list, capture_output=True, text=True, 
+                          timeout=timeout, check=False)
+```
+
+**Security Features**:
+- **No shell=True**: Prevents shell injection attacks
+- **Shlex parsing**: Safely splits commands respecting quotes
+- **Timeout protection**: Default 5s, configurable with --hook-timeout
+- **Failure handling**: Hook failures don't stop formatting
+- **Safe logging**: Hook output is sanitized before logging
 
 ## 9. Testing Strategy
 
