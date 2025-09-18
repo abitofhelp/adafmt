@@ -17,7 +17,6 @@ from __future__ import annotations
 import asyncio
 import atexit
 import contextlib
-import io
 import os
 import signal
 import sys
@@ -49,6 +48,8 @@ from .argument_validator import ArgumentValidator
 from .pattern_loader import load_patterns
 from .als_initializer import initialize_als_client
 from .logging_setup import setup_loggers
+from .final_reporter import finalize_and_report
+from .stderr_handler import setup_stderr_redirect
 from .tui import make_ui
 from .utils import preflight, run_hook
 
@@ -68,25 +69,6 @@ _cleanup_pattern_logger: Optional[JsonlLogger] = None
 _cleanup_restore_stderr = None
 
 
-class _Tee(io.TextIOBase):
-    """Redirect output to multiple streams."""
-    def __init__(self, *streams):
-        self._streams = [s for s in streams if s is not None]
-    
-    def write(self, s):
-        wrote = 0
-        for st in self._streams:
-            try:
-                wrote = st.write(s)
-                st.flush()
-            except Exception:
-                pass
-        return wrote
-    
-    def flush(self):
-        for st in self._streams:
-            with contextlib.suppress(Exception):
-                st.flush()
 
 def _cleanup_handler(signum=None, frame=None):
     """Clean up resources on exit or signal."""
@@ -270,31 +252,9 @@ async def run_formatter(
     ui = make_ui("plain")
     global _cleanup_ui
     _cleanup_ui = ui
-    # --- Redirect stderr to the configured stderr file (suppress terminal output) ---
-    _orig_stderr = sys.stderr
-    _tee_fp = None
-    def _restore_stderr():
-        nonlocal _tee_fp, _orig_stderr
-        try:
-            sys.stderr = _orig_stderr
-        except Exception:
-            pass
-        if _tee_fp:
-            with contextlib.suppress(Exception):
-                _tee_fp.flush()
-                _tee_fp.close()
-            _tee_fp = None
-
-    try:
-        if stderr_path:
-            stderr_path.parent.mkdir(parents=True, exist_ok=True)
-            _tee_fp = open(stderr_path, "w", encoding="utf-8")
-            _tee_fp.write(f"{datetime.now().isoformat()} | INFO  | ADAFMT STDERR START\n")
-            _tee_fp.flush()
-            sys.stderr = _Tee(_tee_fp)  # Only write to file, not to terminal
-    except Exception:
-        sys.stderr = _orig_stderr
-
+    
+    # Setup stderr redirection
+    _orig_stderr, _tee_fp, _restore_stderr = setup_stderr_redirect(stderr_path)
     global _cleanup_restore_stderr
     _cleanup_restore_stderr = _restore_stderr
 
@@ -528,147 +488,44 @@ async def run_formatter(
                 print(line)
     
     # Get final statistics from processor
-    als_changed = file_processor.als_changed
-    als_failed = file_processor.als_failed
-    pattern_files_changed = file_processor.pattern_files_changed
-    total_errors = file_processor.total_errors
-    false_positives = 0  # TODO: Track false positives in FileProcessor
-    # Calculate statistics
-    end_time = time.time()
-    elapsed_seconds = max(0.1, end_time - run_start_time)
-    
-    # Calculate final metrics
-    total_processed = len(file_paths)
-    total_changed = als_changed + pattern_files_changed
-    total_failed = als_failed
-    als_unchanged = total_processed - als_changed - als_failed if client else 0
-    total_unchanged = len(file_paths) - total_changed - total_failed
-    
-    rate = len(file_paths) / elapsed_seconds if len(file_paths) > 0 else 0
-
-    # Update final UI state before shutdown
-    if ui:
-        ui.set_progress(len(file_paths), len(file_paths))
-        # Final footer update
-        ui.update_footer_stats(
-            total=len(file_paths),
-            changed=total_changed,
-            unchanged=total_unchanged,
-            failed=total_failed,
-            elapsed=elapsed_seconds,
-            rate=rate,
-            jsonl_log=f"./{log_path} (default location)" if using_default_log else str(log_path) if log_path else "Not configured",
-            als_log=((client.als_log_path if client else None) or "~/.als/ada_ls_log.*.log (default location)") if not no_als else "N/A (ALS disabled)",
-            stderr_log=f"./{stderr_path} (default location)" if using_default_stderr else str(stderr_path) if stderr_path else "Not configured",
-            pattern_log=f"./{pattern_log_path} (default location)" if using_default_patterns else str(pattern_log_path)
-        )
-        
-        # Only show warnings if there were false positives
-        if false_positives > 0:
-            ui.log_line("")
-            ui.log_line(f"Warning: GNATFORMAT reported {false_positives} false positive(s) (files compile OK)")
-        
-        # Only wait for key in curses-based UIs (not PlainUI)
-        ui_type_name = type(ui).__name__
-        if ui_type_name not in ('PlainUI', 'NoneType'):
-            # Only wait for key in curses-based UIs
-            ui.log_line("")
-            ui.log_line("Press any key to exit...")
-            
-            # Wait for keypress while UI is still active
-            ui.wait_for_key()
-        
-        ui.close()
-    
-    # Get timestamps from start and end
-    from datetime import datetime, timezone
-    adafmt_start_time = datetime.fromtimestamp(run_start_time, tz=timezone.utc)
-    adafmt_end_time = datetime.fromtimestamp(end_time, tz=timezone.utc)
-    
-    # Estimate ALS and pattern processing times
-    # ALS processing includes warmup + file processing
-    als_start_time = adafmt_start_time
-    # Pattern processing happens during file processing, estimate based on timing
-    pattern_start_time = datetime.fromtimestamp(run_start_time + (warmup_seconds if client else 0), tz=timezone.utc)
-    pattern_end_time = adafmt_end_time
-    
-    # Calculate pattern processing time
-    pattern_elapsed = 0
-    if pattern_formatter and pattern_formatter.enabled:
-        # Rough estimate: patterns take about 10% of total processing time
-        pattern_elapsed = elapsed_seconds * 0.1
-    
-    als_elapsed = elapsed_seconds - pattern_elapsed
-    
-    # Create metrics reporter and print summary
-    reporter = MetricsReporter()
-    reporter.print_summary(
-        # File counts
+    # Finalize and generate reports
+    exit_code = await finalize_and_report(
+        file_processor=file_processor,
         file_paths=file_paths,
-        als_changed=als_changed,
-        als_failed=als_failed,
-        als_unchanged=als_unchanged,
-        # Timing info
         run_start_time=run_start_time,
-        run_end_time=end_time,
-        pattern_elapsed=pattern_elapsed,
-        # Timestamps
-        adafmt_start_time=adafmt_start_time,
-        adafmt_end_time=adafmt_end_time,
-        als_start_time=als_start_time,
-        pattern_start_time=pattern_start_time,
-        pattern_end_time=pattern_end_time,
-        # Components
-        client=client,
-        pattern_formatter=pattern_formatter,
-        # Log paths
+        warmup_seconds=warmup_seconds,
         log_path=log_path,
         stderr_path=stderr_path,
         pattern_log_path=pattern_log_path,
         using_default_log=using_default_log,
         using_default_stderr=using_default_stderr,
         using_default_patterns=using_default_patterns,
+        pattern_logger=pattern_logger,
+        client=client,
+        pattern_formatter=pattern_formatter,
+        ui=ui,
         no_als=no_als,
-        ui=ui
+        check=check,
+        post_hook=post_hook,
+        hook_timeout=hook_timeout
     )
-
-    # Log pattern run_end event
-    pattern_logger.write({
-        'ev': 'run_end',
-        'files_total': len(file_paths),
-        'files_als_ok': len(file_paths) - als_failed,
-        'patterns_loaded': pattern_formatter.loaded_count if pattern_formatter else 0,
-        'patterns_summary': pattern_formatter.get_summary() if pattern_formatter else {}
-    })
     
     # Record run summary metrics
     total_duration = time.time() - metrics_start_time
     metrics.record_run_summary(
         total_files=len(file_paths),
-        als_succeeded=len(file_paths) - als_failed,
-        als_failed=als_failed,
-        patterns_changed=pattern_files_changed,
+        als_succeeded=file_processor.als_changed + (len(file_paths) - file_processor.als_changed - file_processor.als_failed),
+        als_failed=file_processor.als_failed,
+        patterns_changed=file_processor.pattern_files_changed,
         total_duration=total_duration
     )
     
-    # Shutdown ALS after UI updates
-    with contextlib.suppress(Exception):
-        if client:
-                await client.shutdown()
-
     # Close logger to ensure all data is written
     if logger:
         logger.close()
-
-    # Post-hook (do not fail the overall run if it fails)
-    if post_hook:
-        run_hook(post_hook, "post", logger=(ui.log_line if ui else print) if ui else print, timeout=hook_timeout, dry_run=False)
-
-    if check and total_changed:
-        _restore_stderr()
-        return 1
+    
     _restore_stderr()
-    return 0
+    return exit_code
 
 
 @app.command("license", help="Show the project's license text (BSD-3-Clause).")

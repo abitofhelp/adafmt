@@ -29,10 +29,11 @@ import pytest
 
 from adafmt import cli
 from adafmt.file_discovery_new import is_ada_file
+from adafmt.stderr_handler import Tee
 
 
 class TestTeeClass:
-    """Test suite for the _Tee class used for stderr capture.
+    """Test suite for the Tee class used for stderr capture.
     
     Tests the Tee implementation that allows capturing stderr output
     to a file while optionally echoing to the terminal. This is used
@@ -50,7 +51,7 @@ class TestTeeClass:
         file_stream = io.StringIO()
         
         # Create tee with single stream (GPT-5 fix behavior)
-        tee = cli._Tee(file_stream)
+        tee = Tee(file_stream)
         
         # Write test data
         test_data = "Test stderr output\n"
@@ -68,7 +69,7 @@ class TestTeeClass:
         Then: Method executes without error (required for stderr compatibility)
         """
         file_stream = io.StringIO()
-        tee = cli._Tee(file_stream)
+        tee = Tee(file_stream)
         
         # Should not raise
         tee.flush()
@@ -84,7 +85,7 @@ class TestTeeClass:
         file_stream = io.StringIO()
         
         try:
-            sys.stderr = cli._Tee(file_stream)
+            sys.stderr = Tee(file_stream)
             print("Test message", file=sys.stderr)
             assert "Test message\n" in file_stream.getvalue()
         finally:
