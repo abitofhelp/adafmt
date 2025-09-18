@@ -39,7 +39,7 @@ end Test;
         # Create a pattern that ALS won't change
         patterns = [
             {
-                "name": "comment-norm",
+                "name": "comment_norm",
                 "title": "Normalize comment spacing",
                 "category": "comment",
                 "find": " -- ",
@@ -77,7 +77,7 @@ end Test;
         # Create a pattern that removes spaces ALS wants
         patterns = [
             {
-                "name": "bad-spacing1",
+                "name": "bad_spacing1",
                 "title": "Remove assignment spacing",
                 "category": "operator",
                 "find": " := ",
