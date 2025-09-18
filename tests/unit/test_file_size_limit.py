@@ -123,9 +123,17 @@ end Normal;
         content += "null;\nend LargePatterns;"
         large_file.write_text(content)
         
-        # Create pattern file
-        pattern_file = tmp_path / "pattern.yaml"
-        pattern_file.write_text("patterns:\n  - pattern: 'TODO'\n    replacement: 'DONE'")
+        # Create pattern file (JSON format)
+        pattern_file = tmp_path / "pattern.json"
+        import json
+        patterns = [{
+            "name": "todo_to_done",
+            "title": "Convert TODO to DONE",
+            "category": "comment",
+            "find": "TODO",
+            "replace": "DONE"
+        }]
+        pattern_file.write_text(json.dumps(patterns))
         
         # Run format with patterns only (no ALS)
         result = subprocess.run([

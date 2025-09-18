@@ -138,40 +138,58 @@ class PatternValidator:
     async def _format_with_als(self, file_path: Path, timeout: float) -> Optional[Dict]:
         """Format a file with ALS and return the result."""
         try:
-            res = await self.client.request_with_timeout(
-                {
-                    "method": "textDocument/formatting",
-                    "params": {
-                        "textDocument": {"uri": file_path.as_uri()},
-                        "options": {"tabSize": 3, "insertSpaces": True}
-                    }
-                },
-                timeout=timeout
-            )
-            
-            if res is None:  # Timeout
-                return None
-                
-            if "error" in res:
-                return {"error": res["error"].get("message", "Unknown error")}
-                
-            edits = res.get("result", [])
-            if not edits:
-                # No changes needed
-                content = file_path.read_text(encoding='utf-8')
-                return {"content": content}
-                
-            # Apply edits
-            from .edits import replace_range
+            # Read the file content
             content = file_path.read_text(encoding='utf-8')
-            new_content = content
-            # Apply edits in reverse order to maintain positions
-            for edit in sorted(edits, key=lambda e: (e["range"]["start"]["line"], e["range"]["start"]["character"]), reverse=True):
-                start_pos = edit["range"]["start"]
-                end_pos = edit["range"]["end"]
-                new_text = edit["newText"]
-                new_content = replace_range(new_content, start_pos, end_pos, new_text)
-            return {"content": new_content}
+            
+            # Notify ALS about the file
+            await self.client._notify("textDocument/didOpen", {
+                "textDocument": {
+                    "uri": file_path.as_uri(),
+                    "languageId": "ada",
+                    "version": 1,
+                    "text": content
+                }
+            })
+            
+            try:
+                res = await self.client.request_with_timeout(
+                    {
+                        "method": "textDocument/formatting",
+                        "params": {
+                            "textDocument": {"uri": file_path.as_uri()},
+                            "options": {"tabSize": 3, "insertSpaces": True}
+                        }
+                    },
+                    timeout=timeout
+                )
+            
+                if res is None:  # Timeout
+                    return None
+                    
+                if "error" in res:
+                    return {"error": res["error"].get("message", "Unknown error")}
+                    
+                edits = res.get("result", [])
+                if not edits:
+                    # No changes needed
+                    return {"content": content}
+                    
+                # Apply edits
+                from .edits import replace_range
+                new_content = content
+                # Apply edits in reverse order to maintain positions
+                for edit in sorted(edits, key=lambda e: (e["range"]["start"]["line"], e["range"]["start"]["character"]), reverse=True):
+                    start_pos = edit["range"]["start"]
+                    end_pos = edit["range"]["end"]
+                    new_text = edit["newText"]
+                    new_content = replace_range(new_content, start_pos, end_pos, new_text)
+                return {"content": new_content}
+                
+            finally:
+                # Always close the document
+                await self.client._notify("textDocument/didClose", {
+                    "textDocument": {"uri": file_path.as_uri()}
+                })
             
         except Exception as e:
             return {"error": f"{type(e).__name__}: {str(e)}"}
