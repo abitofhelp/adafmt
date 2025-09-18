@@ -41,6 +41,7 @@ from .als_client import ALSClient, ALSProtocolError
 from .file_discovery import collect_files
 from .logging_jsonl import JsonlLogger
 from .pattern_formatter import PatternFormatter, PatternLogger
+from .metrics import MetricsCollector
 from .tui import make_ui
 from .utils import preflight, run_hook
 
@@ -246,6 +247,7 @@ async def run_formatter(
     patterns_timeout_ms: int,
     patterns_max_bytes: int,
     validate_patterns: bool = False,
+    metrics_path: Optional[Path] = None,
     no_als: bool = False,
     using_default_log: bool = False,
     using_default_stderr: bool = False,
@@ -366,6 +368,10 @@ async def run_formatter(
     pattern_logger.start_fresh()
     global _cleanup_pattern_logger
     _cleanup_pattern_logger = pattern_logger
+    
+    # Initialize metrics collector
+    metrics = MetricsCollector(str(metrics_path) if metrics_path else None)
+    metrics_start_time = time.time()
 
     # Hooks
     if pre_hook:
@@ -395,15 +401,22 @@ async def run_formatter(
     # Initialize Ada Language Server client with configuration (unless --no-als)
     client = None
     if not no_als:
-        client = ALSClient(
-            project_file=proj, 
-            stderr_file_path=stderr_path,
-            init_timeout=init_timeout,  # Fix: Pass init_timeout
-            logger=ui.log_line if ui else print
-        )
-        await client.start()
-        global _cleanup_client
-        _cleanup_client = client
+        metrics.start_timer('als_startup')
+        als_start_success = False
+        try:
+            client = ALSClient(
+                project_file=proj, 
+                stderr_file_path=stderr_path,
+                init_timeout=init_timeout,  # Fix: Pass init_timeout
+                logger=ui.log_line if ui else print
+            )
+            await client.start()
+            als_start_success = True
+            global _cleanup_client
+            _cleanup_client = client
+        finally:
+            startup_duration = metrics.end_timer('als_startup')
+            metrics.record_als_startup(startup_duration, als_start_success, str(proj))
         
         # Add warmup delay after start
         if warmup_seconds > 0:
@@ -714,6 +727,7 @@ async def run_formatter(
 
     total = len(file_paths)
     consecutive_timeouts = 0
+    
     for idx, path in enumerate(file_paths, start=1):
         # Log first file to debug hanging
         if idx == 1:
@@ -753,11 +767,15 @@ async def run_formatter(
                 'error': str(e)
             })
 
+        # Start timing for this file
+        file_start_time = time.time()
+        
         status = "ok"
         note = ""
         attempts = 0
         edits = None
         pattern_result = None
+        patterns_applied = []
         
         while attempts < max_attempts:
             try:
@@ -1088,6 +1106,17 @@ async def run_formatter(
             'replacements': pattern_result.replacements_sum if pattern_result else 0
         })
         
+        # Record file metrics
+        file_duration = time.time() - file_start_time
+        metrics.record_file_format(
+            file_path=str(path),
+            als_success=status != "failed",
+            als_edits=len(edits) if edits else 0,
+            patterns_applied=pattern_result.applied_names if pattern_result else [],
+            duration=file_duration,
+            error=note if status == "failed" else None
+        )
+        
         # Track ALS processing if ALS was used
         if client:
             als_done += 1
@@ -1294,9 +1323,9 @@ async def run_formatter(
             total_replacements = 0
             total_failures = 0
             
-            for name, metrics in sorted(pattern_summary.items()):
-                files_touched = metrics['files_touched']
-                replacements = metrics['replacements']
+            for name, pattern_stats in sorted(pattern_summary.items()):
+                files_touched = pattern_stats['files_touched']
+                replacements = pattern_stats['replacements']
                 failures = 0  # Pattern failures aren't tracked yet
                 
                 pattern_data.append([name, files_touched, replacements, failures])
@@ -1406,6 +1435,16 @@ async def run_formatter(
         'patterns_summary': pattern_formatter.get_summary() if pattern_formatter else {}
     })
     
+    # Record run summary metrics
+    total_duration = time.time() - metrics_start_time
+    metrics.record_run_summary(
+        total_files=len(file_paths),
+        als_succeeded=len(file_paths) - als_failed,
+        als_failed=als_failed,
+        patterns_changed=pattern_files_changed,
+        total_duration=total_duration
+    )
+    
     # Shutdown ALS after UI updates
     with contextlib.suppress(Exception):
         if client:
@@ -1464,6 +1503,7 @@ def format_command(
     patterns_timeout_ms: Annotated[int, typer.Option("--patterns-timeout-ms", help="Timeout per pattern in milliseconds")] = 100,
     patterns_max_bytes: Annotated[int, typer.Option("--patterns-max-bytes", help="Skip patterns for files larger than this (bytes)")] = 10485760,
     validate_patterns: Annotated[bool, typer.Option("--validate-patterns", help="Validate that applied patterns are acceptable to ALS")] = False,
+    metrics_path: Annotated[Optional[Path], typer.Option("--metrics-path", help="Path to cumulative metrics file (default: ~/.adafmt/metrics.jsonl)")] = None,
     no_als: Annotated[bool, typer.Option("--no-als", help="Disable ALS formatting (patterns only)")] = False,
     max_consecutive_timeouts: Annotated[int, typer.Option("--max-consecutive-timeouts", help="Abort after this many timeouts in a row (0 = no limit)")] = 5,
     write: Annotated[bool, typer.Option("--write", help="Apply changes to files")] = False,
@@ -1655,6 +1695,7 @@ def format_command(
         patterns_timeout_ms=patterns_timeout_ms,
         patterns_max_bytes=patterns_max_bytes,
         validate_patterns=validate_patterns,
+        metrics_path=metrics_path,
         no_als=no_als,
         using_default_log=using_default_log,
         using_default_stderr=using_default_stderr,
