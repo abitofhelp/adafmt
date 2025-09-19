@@ -11,11 +11,17 @@ jobs:
       id-token: write    # for PyPI trusted publishing (optional)
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
       - uses: actions/setup-python@v5
         with: { python-version: '3.11' }
+
       - run: pip install build python-semantic-release
-      - name: semantic-release
+      - name: Semantic Release (publish to PyPI)
         env:
           PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}   # or use trusted publishing
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: semantic-release publish
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          semantic-release publish

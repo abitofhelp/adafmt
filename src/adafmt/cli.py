@@ -67,7 +67,7 @@ app = typer.Typer(
 )
 
 @app.callback(invoke_without_command=False)
-def main_callback():
+def main_callback() -> None:
     """Print header for all commands."""
     print(f"Ada Formatter  {APP_VERSION}")
     print("=" * 80)
@@ -380,7 +380,7 @@ async def run_formatter(
 
 
 @app.command("license", help="Show the project's license text (BSD-3-Clause).")
-def license_command():
+def license_command() -> None:
     """Show the BSD-3-Clause license text."""
     try:
         license_text = read_license_text()

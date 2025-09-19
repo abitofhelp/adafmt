@@ -12,7 +12,7 @@ import asyncio
 import contextlib
 import signal
 import sys
-from typing import Optional, Any
+from typing import Any, Optional
 
 from .als_client import ALSClient
 from .logging_jsonl import JsonlLogger
@@ -26,7 +26,7 @@ cleanup_pattern_logger: Optional[JsonlLogger] = None
 cleanup_restore_stderr: Optional[Any] = None
 
 
-def cleanup_handler(signum=None, frame=None):
+def cleanup_handler(signum: Optional[int] = None, frame: Optional[Any] = None) -> None:
     """Clean up resources on exit or signal."""
     try:
         if cleanup_client:
@@ -71,38 +71,38 @@ def cleanup_handler(signum=None, frame=None):
         sys.exit(1)
 
 
-def setup_cleanup_handlers():
+def setup_cleanup_handlers() -> None:
     """Register signal handlers and atexit handler."""
     signal.signal(signal.SIGINT, cleanup_handler)
     signal.signal(signal.SIGTERM, cleanup_handler)
     atexit.register(cleanup_handler)
 
 
-def set_cleanup_client(client: Optional[ALSClient]):
+def set_cleanup_client(client: Optional[ALSClient]) -> None:
     """Set the ALS client for cleanup."""
     global cleanup_client
     cleanup_client = client
 
 
-def set_cleanup_ui(ui: Optional[Any]):
+def set_cleanup_ui(ui: Optional[Any]) -> None:
     """Set the UI for cleanup."""
     global cleanup_ui
     cleanup_ui = ui
 
 
-def set_cleanup_logger(logger: Optional[JsonlLogger]):
+def set_cleanup_logger(logger: Optional[JsonlLogger]) -> None:
     """Set the main logger for cleanup."""
     global cleanup_logger
     cleanup_logger = logger
 
 
-def set_cleanup_pattern_logger(logger: Optional[JsonlLogger]):
+def set_cleanup_pattern_logger(logger: Optional[JsonlLogger]) -> None:
     """Set the pattern logger for cleanup."""
     global cleanup_pattern_logger
     cleanup_pattern_logger = logger
 
 
-def set_cleanup_restore_stderr(restore_fn: Optional[Any]):
+def set_cleanup_restore_stderr(restore_fn: Optional[Any]) -> None:
     """Set the stderr restore function for cleanup."""
     global cleanup_restore_stderr
     cleanup_restore_stderr = restore_fn
