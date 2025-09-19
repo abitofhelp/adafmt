@@ -15,4 +15,4 @@ Establishes stable 1.x CLI and formatter behavior for consistent, modern Ada cod
 - **Extensibility**: Pre/post hooks for custom workflows, pattern validation mode, metrics collection
 - **Requirement**: `ada_language_server` must be on PATH (not bundled)
 
-BREAKING CHANGE: First stable release; prior pre-1.0 behavior is not guaranteed compatible. 
+BREAKING CHANGE: First stable release; prior pre-1.0 behavior is not guaranteed compatible.
