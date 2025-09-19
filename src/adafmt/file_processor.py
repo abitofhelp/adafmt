@@ -42,7 +42,8 @@ class FileProcessor:
         write: bool = False,
         diff: bool = False,
         format_timeout: int = 60,
-        max_consecutive_timeouts: int = 5
+        max_consecutive_timeouts: int = 5,
+        max_file_size: int = 102400  # 100KB default
     ):
         """Initialize the file processor.
         
@@ -58,6 +59,7 @@ class FileProcessor:
             diff: If True, show diffs
             format_timeout: Timeout for formatting operations
             max_consecutive_timeouts: Max consecutive timeouts before aborting
+            max_file_size: Maximum file size in bytes to process (default 100KB)
         """
         self.client = client
         self.pattern_formatter = pattern_formatter
@@ -70,6 +72,7 @@ class FileProcessor:
         self.diff = diff
         self.format_timeout = format_timeout
         self.max_consecutive_timeouts = max_consecutive_timeouts
+        self.max_file_size = max_file_size
         
         # Statistics
         self.als_changed = 0
@@ -94,7 +97,14 @@ class FileProcessor:
             return []
             
         # Open the file in ALS
-        content = path.read_text(encoding="utf-8", errors="ignore")
+        try:
+            content = path.read_text(encoding="utf-8", errors="ignore")
+        except FileNotFoundError:
+            raise FileNotFoundError(f"File not found: {path}")
+        except PermissionError:
+            raise PermissionError(f"Permission denied reading file: {path}")
+        except Exception as e:
+            raise IOError(f"Failed to read file {path}: {e}")
         await self.client._notify("textDocument/didOpen", {
             "textDocument": {
                 "uri": path.as_uri(),
@@ -126,7 +136,7 @@ class FileProcessor:
         
         # Validate response
         if res is not None and not isinstance(res, list):
-            raise TypeError(f"ALS returned unexpected type: {type(res).__name__} instead of list")
+            raise TypeError(f"ALS returned unexpected type for {path}: {type(res).__name__} instead of list")
         return res
     
     async def process_file(
@@ -155,13 +165,13 @@ class FileProcessor:
         # Check file size limit
         try:
             file_size = path.stat().st_size
-            if file_size > 102400:  # 100KB
+            if file_size > self.max_file_size:
                 if self.logger:
                     self.logger.write({
                         'ev': 'file_skipped_too_large',
                         'path': str(path),
                         'size_bytes': file_size,
-                        'max_bytes': 102400
+                        'max_bytes': self.max_file_size
                     })
                 if self.ui:
                     self.ui.log_line(f"[formatter] Skipping {path} - file too large ({file_size:,} bytes > 100KB)")
@@ -169,6 +179,16 @@ class FileProcessor:
                     print(f"[formatter] Skipping {path} - file too large ({file_size:,} bytes > 100KB)")
                 self.total_errors += 1
                 return "failed", "file too large"
+        except FileNotFoundError:
+            error_msg = f"File not found: {path}"
+            if self.logger:
+                self.logger.write({
+                    'ev': 'file_not_found',
+                    'path': str(path),
+                    'error': error_msg
+                })
+            self.total_errors += 1
+            return "failed", error_msg
         except Exception as e:
             if self.logger:
                 self.logger.write({
@@ -196,7 +216,14 @@ class FileProcessor:
     ) -> Tuple[str, Optional[str]]:
         """Process file with patterns only (no ALS)."""
         try:
-            original_content = path.read_text(encoding="utf-8", errors="ignore")
+            try:
+                original_content = path.read_text(encoding="utf-8", errors="ignore")
+            except FileNotFoundError:
+                raise FileNotFoundError(f"File not found: {path}")
+            except PermissionError:
+                raise PermissionError(f"Permission denied reading file: {path}")
+            except Exception as e:
+                raise IOError(f"Failed to read file {path}: {e}")
             formatted_content = original_content
             
             # Apply patterns if available
@@ -271,7 +298,14 @@ class FileProcessor:
             if edits:
                 self.als_changed += 1
                 # Apply edits to get formatted content
-                original_content = path.read_text(encoding="utf-8", errors="ignore")
+                try:
+                    original_content = path.read_text(encoding="utf-8", errors="ignore")
+                except FileNotFoundError:
+                    raise FileNotFoundError(f"File not found: {path}")
+                except PermissionError:
+                    raise PermissionError(f"Permission denied reading file: {path}")
+                except Exception as e:
+                    raise IOError(f"Failed to read file {path}: {e}")
                 formatted_content = apply_text_edits(original_content, edits)
                 
                 # Apply patterns if enabled
@@ -304,7 +338,14 @@ class FileProcessor:
             else:
                 # No ALS changes, but still check patterns
                 if self.pattern_formatter and self.pattern_formatter.enabled:
-                    original_content = path.read_text(encoding="utf-8", errors="ignore")
+                    try:
+                        original_content = path.read_text(encoding="utf-8", errors="ignore")
+                    except FileNotFoundError:
+                        raise FileNotFoundError(f"File not found: {path}")
+                    except PermissionError:
+                        raise PermissionError(f"Permission denied reading file: {path}")
+                    except Exception as e:
+                        raise IOError(f"Failed to read file {path}: {e}")
                     formatted_content, pattern_result = self.pattern_formatter.apply(
                         path, original_content
                     )
@@ -322,7 +363,10 @@ class FileProcessor:
             status = "failed"
             note = f"timeout after {self.format_timeout}s"
             if self.max_consecutive_timeouts > 0 and self.consecutive_timeouts >= self.max_consecutive_timeouts:
-                raise RuntimeError("Too many consecutive timeouts")
+                raise RuntimeError(
+                    f"Too many consecutive timeouts ({self.consecutive_timeouts}) while processing files. "
+                    f"Consider increasing --timeout or checking if ALS is responding properly."
+                )
         except Exception as e:
             self.als_failed += 1
             status = "failed"
