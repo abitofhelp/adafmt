@@ -65,44 +65,27 @@ adafmt = ["LICENSE"]
 # Python Semantic Release (PSR)
 # -----------------------------
 [tool.semantic_release]
-# Where to write the version back
 version_toml = ["pyproject.toml:project.version"]
-
-# Branches: release only from main
 branch = "main"
-
-# Tag format you’re using
 tag_format = "v{version}"
-
-# Build wheels/sdist
 build_command = "python -m build"
-
-# Keep release commit message simple
 commit_message = "{version}\n"
-
-# --- New/adjusted bits below ---
-
-# Use the default Angular commit parser explicitly
-[tool.semantic_release.commit_parser]
-parser = "angular"
+commit_parser = "angular"
 
 [tool.semantic_release.commit_parser_options]
-# Keep it simple: we’ll accept standard types; major comes from BREAKING CHANGE or "!".
 allowed_tags = ["feat","fix","perf","docs","style","refactor","test","build","ci","chore"]
 minor_tags   = ["feat"]
 patch_tags   = ["fix","perf"]
 
-# Modern changelog config location (v10)
+# v10 location for the changelog file setting
 [tool.semantic_release.changelog.default_templates]
 changelog_file = "CHANGELOG.md"
 
-# Enable both PyPI and GitHub release upload
 [tool.semantic_release.publish]
 upload_to_pypi = true
 upload_to_vcs_release = true
 dist_glob_patterns = ["dist/*"]
 
-# Remote (GitHub) — defaults are fine, but this is explicit
 [tool.semantic_release.remote]
 name = "origin"
 type = "github"
