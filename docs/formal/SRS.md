@@ -260,7 +260,7 @@ The system operates as a client to the Ada Language Server, communicating via th
   - UNEXPECTED_ERROR: Other errors not falling into above categories
 - FR-8.10: SHALL provide specific user actions for each error type:
   - SYNTAX_ERROR_CONFIRMED: "Fix syntax errors in the file and retry"
-  - ALS_PROTOCOL_ERROR: "Check ALS installation and try --preflight-mode kill"
+  - ALS_PROTOCOL_ERROR: "Check ALS installation and try --preflight kill"
   - CONNECTION_ERROR: "Retry the operation or restart ALS"
   - UNEXPECTED_ERROR: "Check the log file for more details"
 

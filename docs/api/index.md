@@ -12,16 +12,25 @@ The `adafmt` package provides a comprehensive Ada Language Formatter that levera
 
 ```
 adafmt/
-├── __init__.py          # Package initialization and version management
-├── __main__.py          # Entry point for python -m adafmt
-├── als_client.py        # Ada Language Server client implementation
-├── cli.py               # Command-line interface using Typer
-├── cli_argparse.py      # Alternative CLI using argparse
-├── edits.py             # Text edit operations and diff management
-├── file_discovery.py    # Ada file discovery and filtering
-├── logging_jsonl.py     # JSONL structured logging
-├── tui.py               # Terminal User Interface components
-└── utils.py             # Utility functions and helpers
+├── __init__.py              # Package initialization and version management
+├── __main__.py              # Entry point for python -m adafmt
+├── als_client.py            # Ada Language Server client implementation
+├── als_initializer.py       # ALS path resolution and verification
+├── cli.py                   # Command-line interface using Typer
+├── cli_helpers.py           # CLI helper functions and utilities
+├── edits.py                 # Text edit operations and diff management
+├── file_discovery.py        # Ada file discovery and filtering
+├── file_processor.py        # File processing orchestration
+├── logging_jsonl.py         # JSONL structured logging
+├── logging_setup.py         # Logging configuration
+├── pattern_formatter.py     # Pattern-based post-formatting
+├── pattern_loader.py        # Pattern configuration loading
+├── pattern_validator.py     # Pattern validation
+├── metrics.py               # Metrics collection
+├── metrics_reporter.py      # Metrics reporting
+├── tui.py                   # Terminal User Interface components
+├── utils.py                 # Utility functions and helpers
+└── ... (additional modules) # Error handling, path validation, etc.
 ```
 
 ## Core Modules
@@ -39,7 +48,7 @@ The heart of adafmt - manages communication with the Ada Language Server using t
 Modern command-line interface built with Typer, providing the main entry point for users.
 
 **Key Features:**
-- Multiple UI modes (auto, pretty, plain, json, quiet)
+- Plain text TTY output with color-coded status
 - Comprehensive error handling
 - Progress tracking and reporting
 - Configuration management

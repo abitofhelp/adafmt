@@ -173,14 +173,13 @@ adafmt --project-path /path/to/project.gpr \
 
 ```bash
 # Check if any files need formatting (exits 1 if changes needed)
-adafmt --project-path /path/to/project.gpr \
+adafmt format --project-path /path/to/project.gpr \
        --include-path /path/to/src \
        --check
 
-# Use plain output for CI logs
-adafmt --project-path /path/to/project.gpr \
+# Check mode for CI logs
+adafmt format --project-path /path/to/project.gpr \
        --include-path /path/to/src \
-       --ui plain \
        --check
 ```
 
@@ -202,13 +201,9 @@ adafmt --project-path /path/to/project.gpr \
 - `--diff` / `--no-diff`: Show/hide unified diffs of changes (default: --diff)
 - `--check`: Exit with code 1 if any files need formatting
 
-#### User Interface
-- `--ui {off,auto,pretty,basic,plain}`: UI mode selection
-  - `off`: No UI, only output diffs
-  - `auto`: Best available UI (default)
-  - `pretty`: Curses UI with progress bar
-  - `basic`: Simple text UI
-  - `plain`: Minimal output for scripts
+#### Output Format
+- **Plain TTY output**: Simple progress tracking with color-coded status
+- **Exit codes**: 0 for success, 1 for formatting needed (with `--check`), non-zero for errors
 
 #### Advanced Error Handling
 - **Smart Error Detection**: Distinguishes between syntax errors (prevent formatting) and semantic errors (allow formatting)
@@ -231,8 +226,8 @@ adafmt --project-path /path/to/project.gpr \
 - `--max-attempts N`: Retry attempts for transient errors (default: 2)
 
 #### Debugging
-- `--log-file-path PATH`: Write structured logs to JSONL file
-- `--stderr-file-path PATH`: Capture ALS stderr output to file
+- `--log-path PATH`: Write structured logs to JSONL file
+- `--stderr-path PATH`: Capture ALS stderr output to file
 
 ### Environment Variables
 
@@ -261,13 +256,13 @@ adafmt searches for Ada source files using these rules:
 .PHONY: format format-check
 
 format:
-	adafmt --project-file-path $(PROJECT_GPR) \
+	adafmt --project-path $(PROJECT_GPR) \
 	       --include-path src \
 	       --exclude-path obj \
 	       --write
 
 format-check:
-	adafmt --project-file-path $(PROJECT_GPR) \
+	adafmt --project-path $(PROJECT_GPR) \
 	       --include-path src \
 	       --exclude-path obj \
 	       --check
@@ -280,10 +275,9 @@ format-check:
 # .git/hooks/pre-commit
 
 # Check Ada files formatting
-adafmt --project-file-path project.gpr \
+adafmt format --project-path project.gpr \
        --include-path src \
-       --check \
-       --ui plain
+       --check
 
 if [ $? -ne 0 ]; then
     echo "Error: Ada files need formatting. Run 'make format' and try again."
@@ -320,10 +314,9 @@ jobs:
 
       - name: Check formatting
         run: |
-          adafmt --project-file-path project.gpr \
+          adafmt format --project-path project.gpr \
                  --include-path src \
-                 --check \
-                 --ui plain
+                 --check
 ```
 
 ## Troubleshooting
@@ -340,7 +333,7 @@ jobs:
 
 #### Timeout Errors
 - Increase timeouts: `--init-timeout 300 --warmup-seconds 20 --format-timeout 120`
-- Check ALS stderr: `--stderr-file-path als-debug.log`
+- Check ALS stderr: `--stderr-path als-debug.log`
 
 #### Understanding Error Types
 
@@ -369,11 +362,10 @@ jobs:
 Enable comprehensive logging to diagnose issues:
 
 ```bash
-adafmt --project-file-path /path/to/project.gpr \
+adafmt format --project-path /path/to/project.gpr \
        --include-path /path/to/src \
-       --log-file-path adafmt-debug.jsonl \
-       --stderr-file-path als-stderr.log \
-       --ui plain
+       --log-path adafmt-debug.jsonl \
+       --stderr-path als-stderr.log
 ```
 
 View logs:
@@ -406,35 +398,46 @@ adafmt follows a modular architecture:
 
 ```
 adafmt/
-├── src/adafmt/          # Main package source code
-│   ├── __init__.py      # Package initialization
-│   ├── cli.py           # Command-line interface and main entry point
-│   ├── als_client.py    # Ada Language Server async client
-│   ├── tui.py           # Terminal UI with curses/plain fallback
-│   ├── file_discovery.py # Ada source file discovery logic
-│   ├── edits.py         # LSP TextEdit application and diff generation
-│   ├── utils.py         # Utility functions (atomic write, Alire detection)
-│   └── logging_jsonl.py # Structured JSON Lines logging
-├── tests/               # Test suite
-│   ├── test_*.py        # Unit tests for each module
-│   └── test_integration.py # Integration tests with ALS
-├── docs/                # Comprehensive documentation
-│   ├── api/            # API reference documentation
-│   ├── guides/          # User and developer guides
-│   ├── formal/         # Requirements and design documents
-│   ├── reference/      # Technical references and deep-dives
-│   └── user/           # User guides and troubleshooting
-├── scripts/             # Build and release scripts
-├── pyproject.toml       # Project configuration and dependencies
-├── Makefile            # Common development tasks
-└── README.md           # This file
+├── src/adafmt/              # Main package source code
+│   ├── __init__.py          # Package initialization
+│   ├── __main__.py          # Entry point for python -m adafmt
+│   ├── cli.py               # Command-line interface and main entry point
+│   ├── cli_helpers.py       # CLI helper functions
+│   ├── als_client.py        # Ada Language Server async client
+│   ├── als_initializer.py   # ALS path resolution and verification
+│   ├── tui.py               # Terminal UI with plain text output
+│   ├── file_discovery.py    # Ada source file discovery logic
+│   ├── file_processor.py    # File processing orchestration
+│   ├── edits.py             # LSP TextEdit application and diff generation
+│   ├── utils.py             # Utility functions (atomic write, process management)
+│   ├── logging_jsonl.py     # Structured JSON Lines logging
+│   ├── logging_setup.py     # Logging configuration
+│   ├── pattern_formatter.py # Pattern-based post-formatting
+│   ├── pattern_loader.py    # Pattern configuration loading
+│   ├── pattern_validator.py # Pattern validation
+│   ├── metrics.py           # Metrics collection
+│   ├── metrics_reporter.py  # Metrics reporting
+│   └── ... (other modules)  # Additional utility modules
+├── tests/                   # Test suite
+│   ├── unit/               # Unit tests for each module
+│   ├── integration/        # Integration tests with ALS
+│   └── patterns/           # Pattern formatter tests
+├── docs/                   # Comprehensive documentation
+│   ├── api/               # API reference documentation
+│   ├── guides/            # User and developer guides
+│   └── formal/            # Requirements and design documents
+├── scripts/                # Build and release scripts
+├── tools/                  # Development tools
+├── pyproject.toml         # Project configuration and dependencies
+├── Makefile               # Common development tasks
+└── README.md              # This file
 ```
 
 ### Key Components
 
 - **CLI** (`cli.py`): Command-line argument parsing and orchestration
 - **ALS Client** (`als_client.py`): Async JSON-RPC client for Language Server Protocol
-- **TUI** (`tui.py`): Terminal UI with automatic fallback to simpler modes
+- **TUI** (`tui.py`): Plain text terminal UI with color-coded status and progress tracking
 - **File Discovery** (`file_discovery.py`): Smart Ada source file detection with exclusion support
 - **Edit Engine** (`edits.py`): LSP TextEdit application with unified diff generation
 - **Logger** (`logging_jsonl.py`): Structured logging for debugging and auditing
