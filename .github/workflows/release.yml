@@ -1,18 +1,15 @@
-# .github/workflows/release.yml
 name: release
 
 on:
   push:
-    branches: [main]
-  workflow_dispatch:
+    branches: [ main ]
+
+permissions:
+  contents: write  # needed for creating tags/releases
 
 jobs:
   release:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write    # create tags/releases
-      id-token: write    # for PyPI trusted publishing (optional)
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,35 +17,22 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-      - name: Install semantic-release (Python)
+      - name: Upgrade pip and install tools
         run: |
           python -m pip install --upgrade pip
           pip install build python-semantic-release
 
-      # Optional: Dry-run when manually triggered
-      - name: Semantic Release (dry run)
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          SEMANTIC_RELEASE_LOG_LEVEL: DEBUG
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          python -m semantic_release publish --noop
+      - name: Clean dist
+        run: rm -rf dist
 
-      # Actual publish on push to main
-      - name: Semantic Release (publish)
-        if: ${{ github.event_name != 'workflow_dispatch' }}
+      - name: Run semantic-release
         env:
-          PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}   # or use trusted publishing
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
           SEMANTIC_RELEASE_LOG_LEVEL: DEBUG
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          python -m semantic_release publish
+        run: python -m semantic_release publish
