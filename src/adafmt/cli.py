@@ -67,7 +67,9 @@ app = typer.Typer(
 )
 
 @app.callback(invoke_without_command=False)
-def main_callback() -> None:
+def main_callback(
+    version: Annotated[Optional[bool], typer.Option("--version", "-v", callback=version_callback, help="Show version and exit")] = None
+) -> None:
     """Print header for all commands."""
     print(f"Ada Formatter  {APP_VERSION}")
     print("=" * 80)
@@ -394,7 +396,6 @@ def license_command() -> None:
 @app.command(name="format")
 def format_command(
     project_path: Annotated[Path, typer.Option("--project-path", help="Path to your GNAT project file (.gpr)")],
-    version: Annotated[Optional[bool], typer.Option("--version", "-v", callback=version_callback, help="Show version and exit")] = None,
     als_stale_minutes: Annotated[int, typer.Option("--als-stale-minutes", help="Age threshold in minutes for considering ALS processes stale")] = 30,
     check: Annotated[bool, typer.Option("--check", help="Exit with code 1 if any files need formatting")] = False,
     diff: Annotated[bool, typer.Option("--diff", help="Show unified diffs of changes")] = False,

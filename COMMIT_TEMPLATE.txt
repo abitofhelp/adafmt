@@ -1,4 +1,4 @@
-feat(project)!: initial public release
+feat(cli): Relocated the --version flag to the top-level command.
 
 Establishes stable 1.x CLI and formatter behavior for consistent, modern Ada code formatting through the Ada Language Server. Provides robust error handling, comprehensive logging, and both ALS-based formatting and custom pattern transformations for project-specific style enforcement.
 
@@ -14,5 +14,3 @@ Establishes stable 1.x CLI and formatter behavior for consistent, modern Ada cod
 - **Cross-Platform**: Works on Linux, macOS, Windows with appropriate ALS installation
 - **Extensibility**: Pre/post hooks for custom workflows, pattern validation mode, metrics collection
 - **Requirement**: `ada_language_server` must be on PATH (not bundled)
-
-BREAKING CHANGE: First stable release; prior pre-1.0 behavior is not guaranteed compatible.
