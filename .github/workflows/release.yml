@@ -24,7 +24,8 @@ jobs:
         env:
           PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}   # or use trusted publishing
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          SEMANTIC_RELEASE_LOG_LEVEL: DEBUG
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          semantic-release --verbosity DEBUG publish
+          semantic-release publish
