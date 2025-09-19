@@ -19,6 +19,15 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: '3.11' }
 
+      # .github/workflows/release.yml  (inside your release job, before the real publish)
+      - name: Semantic Release (dry run; show bump)
+        env:
+            SEMANTIC_RELEASE_LOG_LEVEL: DEBUG
+        run: |
+            semantic-release publish --noop
+
+
+
       - run: pip install build python-semantic-release
       - name: Semantic Release (publish to PyPI)
         env:

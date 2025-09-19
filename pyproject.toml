@@ -70,7 +70,7 @@ branch = "main"
 tag_format = "v{version}"
 build_command = "python -m build"
 commit_message = "{version}\n"
-commit_parser = "angular"
+commit_parser = "conventional"
 
 [tool.semantic_release.commit_parser_options]
 allowed_tags = ["feat","fix","perf","docs","style","refactor","test","build","ci","chore"]
