@@ -4,86 +4,103 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "adafmt"
-version = "0.0.0"
+version = "0.0.0"  # bumped by python-semantic-release
 description = "Ada Language Formatter (ALS-backed, Customizable)"
-authors = [
-  { name = "Michael Gardner, A Bit of Help, Inc." }
-]
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "BSD-3-Clause" }
+authors = [{ name = "Michael Gardner, A Bit of Help, Inc." }]
+keywords = ["ada", "formatter", "lsp", "als", "cli"]
 classifiers = [
   "License :: OSI Approved :: BSD License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-    "typer>=0.9.0",
-    "tabulate>=0.9.0",
+  "typer>=0.9.0",
+  "tabulate>=0.9.0",
 ]
 
 [project.urls]
 Homepage = "https://github.com/abitofhelp/adafmt"
-Source = "https://github.com/abitofhelp/adafmt"
+Source   = "https://github.com/abitofhelp/adafmt"
 Changelog = "https://github.com/abitofhelp/adafmt/releases"
-Issues = "https://github.com/abitofhelp/adafmt/issues"
+Issues   = "https://github.com/abitofhelp/adafmt/issues"
 
 [project.scripts]
 adafmt = "adafmt.cli:main"
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.0",
-    "pytest-cov",
-    "pytest-asyncio",
-    "black",
-    "mypy",
-    "ruff",
+  "pytest>=7.0",
+  "pytest-cov",
+  "pytest-asyncio",
+  "black",
+  "mypy",
+  "ruff",
 ]
 test = [
-    "pytest>=7.0",
-    "pytest-asyncio",
+  "pytest>=7.0",
+  "pytest-asyncio",
 ]
 patterns = [
-    "regex>=2022.0.0",  # For cross-platform timeout support in pattern processing
+  "regex>=2022.0.0",  # For cross-platform timeout support in pattern processing
 ]
 
 [tool.setuptools]
 include-package-data = true
 
+# src/ layout discovery
 [tool.setuptools.packages.find]
 where = ["src"]
+include = ["adafmt*"]
 
+# optional: include extra non-Python files from the package
 [tool.setuptools.package-data]
 adafmt = ["LICENSE"]
 
+# -----------------------------
+# Python Semantic Release (PSR)
+# -----------------------------
 [tool.semantic_release]
+# PSR will bump this value in pyproject.toml
 version_toml = ["pyproject.toml:project.version"]
+
 branch = "main"
-changelog_file = "CHANGELOG.md"
-build_command = "python3 -m build"
 tag_format = "v{version}"
+build_command = "python -m build"
 commit_message = "{version}\n"
 
+# Use Actions bot for release commits
+commit_author = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+
+# Branch configuration
 [tool.semantic_release.branches.main]
 match = "main"
 prerelease = false
 
+# Changelog configuration (new, non-deprecated location)
 [tool.semantic_release.changelog]
 template_dir = "templates"
+
+[tool.semantic_release.changelog.default_templates]
 changelog_file = "CHANGELOG.md"
 
+# Commit parsing (conventional commits)
 [tool.semantic_release.commit_parser_options]
 allowed_tags = ["build", "chore", "ci", "docs", "feat", "fix", "perf", "refactor", "style", "test"]
 minor_tags = ["feat"]
 patch_tags = ["fix", "perf"]
 
+# Publishing
 [tool.semantic_release.publish]
 dist_glob_patterns = ["dist/*"]
 upload_to_pypi = true
 upload_to_vcs_release = true
 
+# Git remote for release notes/assets
 [tool.semantic_release.remote]
 name = "origin"
 type = "github"
-
