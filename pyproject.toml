@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "adafmt"
-version = "0.0.0"  # bumped by python-semantic-release
+version = "1.0.0"  # bumped by python-semantic-release
 description = "Ada Language Formatter (ALS-backed, Customizable)"
 readme = "README.md"
 requires-python = ">=3.11"
