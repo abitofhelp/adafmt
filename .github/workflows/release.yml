@@ -1,35 +1,49 @@
 # .github/workflows/release.yml
 name: release
+
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:  # <— enables the “Run workflow” button
+    branches: [main]
+  workflow_dispatch:
+
 jobs:
   release:
     runs-on: ubuntu-latest
     permissions:
       contents: write    # create tags/releases
       id-token: write    # for PyPI trusted publishing (optional)
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           fetch-tags: true
 
-      - uses: actions/setup-python@v5
-        with: { python-version: '3.11' }
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-      # .github/workflows/release.yml  (inside your release job, before the real publish)
-      - name: Semantic Release (dry run; show bump)
-        env:
-            SEMANTIC_RELEASE_LOG_LEVEL: DEBUG
+      - name: Install semantic-release (Python)
         run: |
-            semantic-release publish --noop
+          python -m pip install --upgrade pip
+          pip install build python-semantic-release
 
+      # Optional: Dry-run when manually triggered
+      - name: Semantic Release (dry run)
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          SEMANTIC_RELEASE_LOG_LEVEL: DEBUG
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python -m semantic_release publish --noop
 
-
-      - run: pip install build python-semantic-release
-      - name: Semantic Release (publish to PyPI)
+      # Actual publish on push to main
+      - name: Semantic Release (publish)
+        if: ${{ github.event_name != 'workflow_dispatch' }}
         env:
           PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}   # or use trusted publishing
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
@@ -37,4 +51,4 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          semantic-release publish
+          python -m semantic_release publish
