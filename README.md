@@ -1,7 +1,7 @@
 # adafmt — Ada Language Formatter
 
-**Version:** 0.0.0  
-**License:** BSD-3-Clause  
+**Version:** 0.0.0
+**License:** BSD-3-Clause
 **Copyright:** © 2025 Michael Gardner, A Bit of Help, Inc.
 
 `adafmt` is an opinionated Ada 2022 formatter that leverages the Ada Language Server (ALS) to provide consistent, modern formatting while maintaining compatibility with earlier Ada versions. Built with extensibility in mind, it supports custom pattern formatting functions that allow teams to enforce project-specific style rules beyond what GNATFORMAT provides. It delivers a robust, production-ready solution for maintaining consistent code style across Ada projects of any size.
@@ -114,8 +114,25 @@ adafmt --version
 
 - Python 3.8 or higher
 - Ada Language Server (ALS) installed and available in PATH
-- For Alire projects: `alr` command available in PATH
-- For curses UI: Terminal with curses support (most Unix-like systems)
+
+## Requirements
+
+**Ada Language Server (ALS)**
+
+This tool **uses** the Ada Language Server, but does **not** bundle or redistribute it.
+You must have `ada_language_server` available on your `PATH` before running `adafmt`.
+
+### Install ALS
+
+Pick one of the following options:
+
+- **Via Alire (recommended for Ada developers):**
+  ```bash
+  # Install Alire if you don't already have it, then:
+  alr search ada_language_server           # discover the crate
+  alr get ada_language_server              # fetch locally (buildable project)
+  # follow Alire’s instructions to build/install; after install it should be on PATH
+
 
 ### Basic Usage
 
@@ -165,7 +182,7 @@ adafmt --project-path /path/to/project.gpr \
 ### Required Arguments
 
 - `--project-path PATH`: Path to your GNAT project file (.gpr)
-  
+
 ### Optional Arguments
 
 #### File Selection
@@ -220,7 +237,7 @@ adafmt --project-path /path/to/project.gpr \
 adafmt searches for Ada source files using these rules:
 
 1. **File Extensions**: `.ads` (spec), `.adb` (body), `.ada` (either)
-2. **Search Behavior**: 
+2. **Search Behavior**:
    - Recursively searches `--include-path` directories
    - Skips `--exclude-path` directories and their subdirectories
    - Processes explicitly named files regardless of location
@@ -278,22 +295,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Setup Ada
         uses: ada-actions/ada-toolchain@v1
         with:
           target: native
           distrib: community
-          
+
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.x'
-          
+
       - name: Install adafmt
         run: |
           pip install adafmt
-          
+
       - name: Check formatting
         run: |
           adafmt --project-file-path project.gpr \
@@ -396,7 +413,7 @@ adafmt/
 │   └── test_integration.py # Integration tests with ALS
 ├── docs/                # Comprehensive documentation
 │   ├── api/            # API reference documentation
-│   ├── guides/          # User and developer guides  
+│   ├── guides/          # User and developer guides
 │   ├── formal/         # Requirements and design documents
 │   ├── reference/      # Technical references and deep-dives
 │   └── user/           # User guides and troubleshooting
@@ -434,7 +451,7 @@ We welcome contributions! Please see our [Developer Documentation](docs/guides/i
 - **[User Guides](docs/user/index.md)** - Troubleshooting, configuration, and usage guides
 - **[Timeout Configuration](docs/user/timeout-guide.md)** - ALS timeout tuning and optimization
 
-### For Developers  
+### For Developers
 - **[Developer Documentation](docs/guides/index.md)** - Complete development guide
 - **[API Reference](docs/api/index.md)** - Technical API documentation
 - **[Testing Guide](docs/guides/testing-guide.md)** - Comprehensive testing documentation
@@ -448,7 +465,7 @@ We welcome contributions! Please see our [Developer Documentation](docs/guides/i
 
 **BSD-3-Clause** — see [LICENSE](./LICENSE) for the full text.
 
-© 2025 Michael Gardner, A Bit of Help, Inc.  
+© 2025 Michael Gardner, A Bit of Help, Inc.
 SPDX-License-Identifier: BSD-3-Clause
 
 ## Acknowledgments

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=68", "wheel", "build"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -43,6 +43,9 @@ dev = [
 test = [
     "pytest>=7.0",
     "pytest-asyncio",
+]
+patterns = [
+    "regex>=2022.0.0",  # For cross-platform timeout support in pattern processing
 ]
 
 [tool.setuptools]
