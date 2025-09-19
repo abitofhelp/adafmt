@@ -1,16 +1,19 @@
 feat(project)!: initial public release
 
-Establishes the stable 1.x CLI and formatter behavior for adafmt.
+Establishes stable 1.x CLI and formatter behavior for consistent, modern Ada code formatting through the Ada Language Server. Provides robust error handling, comprehensive logging, and both ALS-based formatting and custom pattern transformations for project-specific style enforcement.
 
-- Establish stable 1.x CLI and formatter behavior
-- Integrate Ada Language Server via JSON-RPC; apply LSP TextEdits atomically
-- Provide UI modes: pretty, basic, plain, off with auto TTY detection
-- Harden error handling (retry on transient ALS issues; detect GNATFORMAT false positives)
-- Default to dry-run; require --write for in-place edits
-- Support GPR projects with Alire workspace detection and path filtering
-- Manage ALS lifecycle with preflight lock cleanup and conflict resolution
-- Emit JSONL logs and rich debug output; --check returns non-zero on diffs for CI
-- Requirement: ada_language_server must be on PATH (not bundled)
+- **Core Formatting**: Integrate Ada Language Server via JSON-RPC; apply LSP TextEdits atomically with syntax validation
+- **Pattern System**: Apply post-ALS custom formatting patterns with JSON configuration and regex timeout protection
+- **UI Output**: Plain TTY interface with color-coded status, progress tracking, and comprehensive metrics reporting
+- **Error Handling**: Retry transient ALS issues, validate syntax errors, handle timeouts gracefully with configurable limits
+- **Safe by Default**: Dry-run mode default; require `--write` for changes; `--check` mode for CI/CD (exit 1 if changes needed)
+- **Project Support**: GNAT project files (.gpr) with smart file discovery, include/exclude paths, and configurable file size limits
+- **Process Management**: Preflight checks for stale ALS processes, lock cleanup, and conflict resolution
+- **Comprehensive Logging**: JSONL structured logs, ALS stderr capture, pattern application logs, and debug tracing
+- **Performance Features**: Configurable timeouts (init/format/patterns), memory-bounded processing (100KB default limit)
+- **Cross-Platform**: Works on Linux, macOS, Windows with appropriate ALS installation
+- **Extensibility**: Pre/post hooks for custom workflows, pattern validation mode, metrics collection
+- **Requirement**: `ada_language_server` must be on PATH (not bundled)
 
 BREAKING CHANGE: First stable release; prior pre-1.0 behavior is not guaranteed compatible.
 

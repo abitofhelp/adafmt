@@ -405,3 +405,78 @@ dist-clean:
 	@echo "Cleaning distribution artifacts..."
 	rm -rf dist-exe build-exe dist-zipapp build-zipapp
 	@echo "✓ Distribution artifacts removed"
+
+# ---- Release-body bundle for Claude (adafmt specifics) ---------------------
+# Usage:
+#   make release-body            # prints bundle to stdout
+#   make release-body-file       # writes bundle to ./.tmp/release_body_bundle.txt
+#   make release-body | pbcopy   # macOS: copy to clipboard
+
+.PHONY: release-body release-body-file _release-body-build
+
+BUNDLE_DIR := .tmp
+BUNDLE_FILE := $(BUNDLE_DIR)/release_body_bundle.txt
+
+release-body: _release-body-build
+	@cat $(BUNDLE_FILE)
+
+release-body-file: _release-body-build
+	@echo "Wrote $(BUNDLE_FILE)"
+
+_release-body-build:
+	@mkdir -p $(BUNDLE_DIR)
+	@{ \
+	  set -e; \
+	  NOW="$$(date -u +"%Y-%m-%d %H:%M:%S UTC")"; \
+	  LAST_TAG="$$(git describe --tags --abbrev=0 2>/dev/null || true)"; \
+	  if [ -z "$$LAST_TAG" ]; then RANGE_DESC="(no previous tag; using full history)"; GIT_RANGE=""; else RANGE_DESC="(since $$LAST_TAG)"; GIT_RANGE="$$LAST_TAG..HEAD"; fi; \
+	  echo "### Refresh Pack for Claude — adafmt" > $(BUNDLE_FILE); \
+	  echo "_Generated: $$NOW_" >> $(BUNDLE_FILE); \
+	  echo >> $(BUNDLE_FILE); \
+	  echo "#### How to use" >> $(BUNDLE_FILE); \
+	  echo "Paste into Claude. Return only the **commit body** (overview + bullets) and, if needed, a \`BREAKING CHANGE:\` footer. Do **not** include the subject line." >> $(BUNDLE_FILE); \
+	  echo >> $(BUNDLE_FILE); \
+	  echo "---" >> $(BUNDLE_FILE); \
+	  echo "#### CLI help (adafmt --help)" >> $(BUNDLE_FILE); \
+	  ( $(PY) -m adafmt --help 2>/dev/null || $(PY) -m adafmt.cli --help 2>/dev/null || $(ADAFMT) --help 2>/dev/null || echo "[WARN] Unable to capture CLI help." ) >> $(BUNDLE_FILE); \
+	  echo >> $(BUNDLE_FILE); \
+	  echo "#### CLI version (adafmt --version)" >> $(BUNDLE_FILE); \
+	  ( $(PY) -m adafmt --version 2>/dev/null || $(PY) -m adafmt.cli --version 2>/dev/null || $(ADAFMT) --version 2>/dev/null || echo "[WARN] Unable to capture CLI version." ) >> $(BUNDLE_FILE); \
+	  echo >> $(BUNDLE_FILE); \
+	  echo "#### Recent commits $$RANGE_DESC" >> $(BUNDLE_FILE); \
+	  if [ -z "$$GIT_RANGE" ]; then git log --pretty=format:"%h %ad %s" --date=short -n 200 >> $(BUNDLE_FILE) || true; \
+	  else git log --pretty=format:"%h %ad %s" --date=short $$GIT_RANGE >> $(BUNDLE_FILE) || true; fi; \
+	  echo >> $(BUNDLE_FILE); \
+	  echo "#### Diff stat $$RANGE_DESC" >> $(BUNDLE_FILE); \
+	  if [ -z "$$GIT_RANGE" ]; then git diff --stat HEAD~50..HEAD 2>/dev/null >> $(BUNDLE_FILE) || true; \
+	  else git diff --stat $$GIT_RANGE 2>/dev/null >> $(BUNDLE_FILE) || true; fi; \
+	  echo >> $(BUNDLE_FILE); \
+	  echo "#### README & docs deltas $$RANGE_DESC" >> $(BUNDLE_FILE); \
+	  if [ -z "$$GIT_RANGE" ]; then (git diff HEAD~50..HEAD -- README.md docs/ 2>/dev/null || true) >> $(BUNDLE_FILE); \
+	  else (git diff $$GIT_RANGE -- README.md docs/ 2>/dev/null || true) >> $(BUNDLE_FILE); fi; \
+	  echo >> $(BUNDLE_FILE); \
+	  echo "#### Constraints / operational notes (adafmt specifics)" >> $(BUNDLE_FILE); \
+	  echo "- Requirement: \`ada_language_server\` must be on PATH (not bundled). Override via \`ADAFMT_ALS_PATH\` or \`--als-path\`." >> $(BUNDLE_FILE); \
+	  echo "- Apply changes with \`--write\`; default is dry-run. Use \`--diff\` to preview unified diffs." >> $(BUNDLE_FILE); \
+	  echo "- **Check mode**: \`--check\` returns **0** (no diffs), **1** (diffs), non-zero on errors." >> $(BUNDLE_FILE); \
+	  echo "- **Exit codes (general)**: 0=success; non-zero indicates failure (fatal exceptions exit 1)." >> $(BUNDLE_FILE); \
+	  echo "- **Logging**: JSONL log at \`./adafmt_<timestamp>_log.jsonl\`; pattern log at \`./adafmt_<timestamp>_patterns.log\`." >> $(BUNDLE_FILE); \
+	  echo "- **Stderr mirror**: default \`./adafmt_<timestamp>_stderr.log\`; override with \`--stderr-path\`." >> $(BUNDLE_FILE); \
+	  echo "- **Log file override**: \`--log-path\` sets the JSONL log location." >> $(BUNDLE_FILE); \
+	  echo >> $(BUNDLE_FILE); \
+	  echo "#### TEMPLATE (Claude fills this; return only body + optional footer)" >> $(BUNDLE_FILE); \
+	  echo "<overview, 2–3 sentences summarizing user-visible value>" >> $(BUNDLE_FILE); \
+	  echo "" >> $(BUNDLE_FILE); \
+	  echo "- <bullet 1: capability or improvement>" >> $(BUNDLE_FILE); \
+	  echo "- <bullet 2: key flag/config with brief usage>" >> $(BUNDLE_FILE); \
+	  echo "- <bullet 3: robustness/perf/accuracy note>" >> $(BUNDLE_FILE); \
+	  echo "- <bullet 4: operational behavior (exit codes, --check semantics, etc.)>" >> $(BUNDLE_FILE); \
+	  echo "- <bullet 5: integrations (Alire/GPR detection, path handling)>" >> $(BUNDLE_FILE); \
+	  echo "- <bullet 6+: other top items, 1–2 lines each>" >> $(BUNDLE_FILE); \
+	  echo "- **Requirement:** \`ada_language_server\` must be on PATH" >> $(BUNDLE_FILE); \
+	  echo "" >> $(BUNDLE_FILE); \
+	  echo "[optional tiny example(s)]" >> $(BUNDLE_FILE); \
+	  echo "" >> $(BUNDLE_FILE); \
+	  echo "[If needed, after one blank line:]" >> $(BUNDLE_FILE); \
+	  echo "BREAKING CHANGE: <one short sentence of the breaking surface>" >> $(BUNDLE_FILE) \
+	; }
