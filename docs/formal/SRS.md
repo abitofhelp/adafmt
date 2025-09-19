@@ -1,7 +1,7 @@
 # Software Requirements Specification (SRS)
 # adafmt - Ada Language Formatter
 
-**Document Version:** 0.0.0  
+**Document Version:** 1.0.0  
 **Date:** January 2025  
 **Authors:** Michael Gardner, A Bit of Help, Inc.  
 **Status:** Released
@@ -791,4 +791,4 @@ The project will be considered successful when:
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
-| 0.0.0 | January 2025 | M. Gardner | Initial version |
+| 1.0.0 | January 2025 | M. Gardner | Initial version |

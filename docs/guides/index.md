@@ -1,6 +1,6 @@
 # Developer Resources
 
-**Document Version:** 0.0.0  
+**Document Version:** 1.0.0  
 **Date:** January 2025  
 **Authors:** Michael Gardner, A Bit of Help, Inc.  
 **Status:** Released

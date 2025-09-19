@@ -1,6 +1,6 @@
 # adafmt Documentation
 
-**Version:** 0.0.0
+**Version:** 1.0.0
 **Last Updated:** January 2025
 
 Welcome to the comprehensive documentation for adafmt, the Ada Language Formatter. This documentation is organized into logical sections to help you find what you need quickly.
@@ -93,4 +93,4 @@ Found an error or want to improve the documentation? See our [Contributing Guide
 
 ---
 
-*This documentation is maintained alongside the adafmt codebase. Last updated with version 0.0.0.*
+*This documentation is maintained alongside the adafmt codebase. Last updated with version 1.0.0.*

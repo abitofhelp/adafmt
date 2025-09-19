@@ -1,6 +1,6 @@
 # Getting Started with adafmt
 
-**Version:** 0.0.0
+**Version:** 1.0.0
 **Last Updated:** January 2025
 
 This guide provides step-by-step instructions for getting started with adafmt, including installation, first usage, and common workflow examples with real command combinations.
@@ -23,8 +23,8 @@ adafmt --version  # Verify installation
 ### Option 2: Install from GitHub Releases
 ```bash
 # Download and install wheel
-wget https://github.com/abitofhelp/adafmt/releases/latest/download/adafmt-0.0.0-py3-none-any.whl
-pip install adafmt-0.0.0-py3-none-any.whl
+wget https://github.com/abitofhelp/adafmt/releases/latest/download/adafmt-1.0.0-py3-none-any.whl
+pip install adafmt-1.0.0-py3-none-any.whl
 ```
 
 ### Option 3: Development Installation

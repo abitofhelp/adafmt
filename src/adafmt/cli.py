@@ -264,6 +264,7 @@ async def run_formatter(
     no_patterns: bool, patterns_timeout_ms: int, patterns_max_bytes: int,
     hook_timeout: float, validate_patterns: bool = False,
     metrics_path: Optional[Path] = None, no_als: bool = False,
+    max_file_size: int = 102400,
     using_default_log: bool = False, using_default_stderr: bool = False,
     using_default_patterns: bool = False) -> int:
     """Run the main formatting logic asynchronously."""
@@ -341,7 +342,8 @@ async def run_formatter(
         logger=logger, pattern_logger=pattern_logger,
         ui=ui, metrics=metrics, no_als=no_als,
         write=write, diff=diff, format_timeout=format_timeout,
-        max_consecutive_timeouts=max_consecutive_timeouts)
+        max_consecutive_timeouts=max_consecutive_timeouts,
+        max_file_size=max_file_size)
     
     # Process all files
     await _process_files(
@@ -416,6 +418,7 @@ def format_command(
     metrics_path: Annotated[Optional[Path], typer.Option("--metrics-path", help="Path to cumulative metrics file (default: ~/.adafmt/metrics.jsonl)")] = None,
     no_als: Annotated[bool, typer.Option("--no-als", help="Disable ALS formatting (patterns only)")] = False,
     max_consecutive_timeouts: Annotated[int, typer.Option("--max-consecutive-timeouts", help="Abort after this many timeouts in a row (0 = no limit)")] = 5,
+    max_file_size: Annotated[int, typer.Option("--max-file-size", help="Skip files larger than this size in bytes (default: 102400 = 100KB)")] = 102400,
     write: Annotated[bool, typer.Option("--write", help="Apply changes to files")] = False,
     files: Annotated[Optional[List[str]], typer.Argument(help="Specific Ada files to format")] = None,
 ) -> None:
@@ -478,7 +481,7 @@ def format_command(
         patterns_path=patterns_path, no_patterns=no_patterns,
         patterns_timeout_ms=patterns_timeout_ms, patterns_max_bytes=patterns_max_bytes,
         hook_timeout=hook_timeout, validate_patterns=validate_patterns,
-        metrics_path=metrics_path, no_als=no_als,
+        metrics_path=metrics_path, no_als=no_als, max_file_size=max_file_size,
         using_default_log=using_default_log, using_default_stderr=using_default_stderr,
         using_default_patterns=True))
     

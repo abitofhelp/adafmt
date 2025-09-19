@@ -1,13 +1,16 @@
 feat(project)!: initial public release
 
 Establishes the stable 1.x CLI and formatter behavior for adafmt.
-- Ada Language Server integration via JSON-RPC with LSP TextEdit processing
-- Multiple UI modes (pretty/basic/plain/off) with automatic terminal capability detection
-- Robust error handling with retry logic and GNATFORMAT false positive detection
-- Atomic file operations with dry-run by default and explicit write mode
-- GPR project integration with Alire workspace detection and path filtering
-- ALS process lifecycle management with preflight conflict resolution
-- JSONL structured logging and comprehensive debugging capabilities
-- CI-friendly check mode with unified diff preview
+
+- Establish stable 1.x CLI and formatter behavior
+- Integrate Ada Language Server via JSON-RPC; apply LSP TextEdits atomically
+- Provide UI modes: pretty, basic, plain, off with auto TTY detection
+- Harden error handling (retry on transient ALS issues; detect GNATFORMAT false positives)
+- Default to dry-run; require --write for in-place edits
+- Support GPR projects with Alire workspace detection and path filtering
+- Manage ALS lifecycle with preflight lock cleanup and conflict resolution
+- Emit JSONL logs and rich debug output; --check returns non-zero on diffs for CI
+- Requirement: ada_language_server must be on PATH (not bundled)
 
 BREAKING CHANGE: First stable release; prior pre-1.0 behavior is not guaranteed compatible.
+

@@ -1,6 +1,6 @@
 # Troubleshooting and Debugging Guide
 
-**Version:** 0.0.0  
+**Version:** 1.0.0  
 **Last Updated:** September 2025
 
 This comprehensive guide covers solutions to common adafmt issues, debugging techniques, and development tools.

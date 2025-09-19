@@ -131,7 +131,14 @@ Pick one of the following options:
   # Install Alire if you don't already have it, then:
   alr search ada_language_server           # discover the crate
   alr get ada_language_server              # fetch locally (buildable project)
-  # follow Alire’s instructions to build/install; after install it should be on PATH
+  # follow Alire's instructions to build/install; after install it should be on PATH
+  ```
+
+- **Via GNAT Studio:**
+  If you have GNAT Studio installed, it includes the Ada Language Server.
+
+- **Via GitHub Releases:**
+  Download pre-built binaries from [Ada Language Server releases](https://github.com/AdaCore/ada_language_server/releases).
 
 
 ### Basic Usage
@@ -447,9 +454,9 @@ We welcome contributions! Please see our [Developer Documentation](docs/guides/i
 📚 **Complete documentation is available in the [`docs/`](docs/) directory:**
 
 ### For Users
-- **[Getting Started Guide](docs/user/getting-started.md)** - **New users start here!** Complete examples and workflows
-- **[User Guides](docs/user/index.md)** - Troubleshooting, configuration, and usage guides
-- **[Timeout Configuration](docs/user/timeout-guide.md)** - ALS timeout tuning and optimization
+- **[Getting Started Guide](docs/guides/getting-started-guide.md)** - **New users start here!** Complete examples and workflows
+- **[User Guides](docs/guides/index.md)** - Troubleshooting, configuration, and usage guides
+- **[Timeout Configuration](docs/guides/timeout-guide.md)** - ALS timeout tuning and optimization
 
 ### For Developers
 - **[Developer Documentation](docs/guides/index.md)** - Complete development guide
@@ -459,7 +466,7 @@ We welcome contributions! Please see our [Developer Documentation](docs/guides/i
 ### Technical References
 - **[Software Requirements Specification](docs/formal/SRS.md)** - Formal requirements
 - **[Software Design Document](docs/formal/SDD.md)** - Architecture and design decisions
-- **[Technical Reference](docs/reference/index.md)** - Advanced technical details
+- **[Technical Reference](docs/formal/index.md)** - Advanced technical details
 
 ## License
 

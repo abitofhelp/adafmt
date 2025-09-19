@@ -1,6 +1,6 @@
 # Configuration Guide
 
-**Version:** 0.0.0  
+**Version:** 1.0.0  
 **Last Updated:** September 2025
 
 Complete guide for configuring adafmt, including command-line options, environment variables, ALS tracing, and advanced configuration patterns.
@@ -158,6 +158,26 @@ adafmt --project-path project.gpr --max-consecutive-timeouts 10
 # No timeout limit
 adafmt --project-path project.gpr --max-consecutive-timeouts 0
 ```
+
+#### `--max-file-size`
+**Format**: `--max-file-size BYTES`
+**Default**: 102400 (100KB)
+**Purpose**: Skip files larger than this size in bytes
+**Examples**:
+```bash
+# Default 100KB limit
+adafmt --project-path project.gpr
+
+# Increase to 1MB for larger files
+adafmt --project-path project.gpr --max-file-size 1048576
+
+# Increase to 10MB for very large files
+adafmt --project-path project.gpr --max-file-size 10485760
+
+# Set to 50KB for stricter limit
+adafmt --project-path project.gpr --max-file-size 51200
+```
+**Note**: Files exceeding this size are skipped with a warning message.
 
 ### Process Management
 

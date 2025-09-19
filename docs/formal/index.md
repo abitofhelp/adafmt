@@ -107,8 +107,8 @@ SRS (Requirements) ←→ SDD (Design) ←→ Architecture (Overview)
 
 | Document | Version | Date | Major Changes |
 |----------|---------|------|---------------|
-| SRS | 0.0.0 | Jan 2025 | Initial requirements specification |
-| SDD | 0.0.0 | Jan 2025 | Initial design document |
+| SRS | 1.0.0 | Jan 2025 | Initial requirements specification |
+| SDD | 1.0.0 | Jan 2025 | Initial design document |
 
 ## 🔄 Document Maintenance
 

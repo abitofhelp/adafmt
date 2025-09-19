@@ -1,6 +1,6 @@
 # Output Format Guide
 
-**Version:** 0.0.0  
+**Version:** 1.0.0  
 **Last Updated:** September 2025
 
 This guide explains the comprehensive output format displayed after adafmt completes a formatting run, helping you understand the metrics, performance data, and log file information.

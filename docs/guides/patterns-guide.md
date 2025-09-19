@@ -1,9 +1,9 @@
 # Pattern Formatter Guide
 
-**Document Version:** 0.0.0  
+**Document Version:** 1.0.0  
 **Date:** September 16, 2025  
 **Status:** Released  
-**Applies To:** adafmt ≥ 0.0.0
+**Applies To:** adafmt ≥ 1.0.0
 
 This comprehensive guide covers everything about adafmt's pattern formatter system - from basic usage to advanced development and extensibility.
 

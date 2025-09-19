@@ -1,6 +1,6 @@
 # ALS Timeout Improvements Documentation
 
-**Version:** 0.0.0  
+**Version:** 1.0.0  
 **Date:** January 2025  
 **Authors:** Michael Gardner, A Bit of Help, Inc.  
 
