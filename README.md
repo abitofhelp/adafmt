@@ -1,6 +1,6 @@
 # adafmt — Ada Language Formatter
 
-**Version:** 0.0.0
+**Version:** 1.0.0
 **License:** BSD-3-Clause
 **Copyright:** © 2025 Michael Gardner, A Bit of Help, Inc.
 
