@@ -1,9 +1,11 @@
 # Software Design Document (SDD)
 # adafmt - Ada Language Formatter
 
-**Document Version:** 1.0.0  
-**Date:** January 2025  
-**Authors:** Michael Gardner, A Bit of Help, Inc.  
+**Version:** 1.0.0
+**Date:** January 2025
+**License:** BSD-3-Clause
+**Copyright:** © 2025 Michael Gardner, A Bit of Help, Inc.
+**Authors:** Michael Gardner, A Bit of Help, Inc.
 **Status:** Released
 
 ## 1. Introduction
@@ -96,10 +98,10 @@ This document covers:
 ```python
 def main() -> int:
     """Main entry point returning exit code"""
-    
+
 def parse_args() -> argparse.Namespace:
     """Parse and validate command-line arguments"""
-    
+
 async def process_files(als_client, files, config):
     """Main file processing loop"""
 ```
@@ -131,13 +133,13 @@ async def process_files(als_client, files, config):
 ```python
 class ALSClient:
     """Async client for Ada Language Server communication"""
-    
+
     async def start(self):
         """Start ALS process and initialize"""
-        
+
     async def format_file(self, file_path: str) -> List[TextEdit]:
         """Format a single file"""
-        
+
     async def shutdown(self):
         """Clean shutdown of ALS"""
 ```
@@ -225,10 +227,10 @@ ALS Log: ~/.als/ada_ls_log.*.log (default location)
 ```python
 class OutputFormatter:
     """Handles standardized output formatting across TTY output"""
-    
-    def format_final_summary(self, 
+
+    def format_final_summary(self,
                            als_metrics: ALSMetrics,
-                           pattern_metrics: PatternMetrics, 
+                           pattern_metrics: PatternMetrics,
                            run_summary: RunSummary,
                            log_paths: LogPaths) -> str:
         """Generate standardized output sections"""
@@ -254,13 +256,13 @@ def _format_metrics_table(self, metrics: List[Tuple]) -> str:
     """Fixed-width column formatting with alignment"""
     # Calculate maximum width for each column
     widths = [max(len(str(row[i])) for row in metrics) for i in range(len(metrics[0]))]
-    
+
     # Apply minimum widths and alignment rules
     format_str = " ".join(f"{{:{width}}}" for width in widths)
-    
+
     # Right-align numeric columns, left-align text columns
     aligned_format = self._apply_column_alignment(format_str, metrics)
-    
+
     return "\n".join(aligned_format.format(*row) for row in metrics)
 ```
 
@@ -274,15 +276,15 @@ def _format_metrics_table(self, metrics: List[Tuple]) -> str:
 ```python
 class ColorFormatter:
     """Handles color and visual formatting with fallbacks"""
-    
+
     COLORS = {
         'success': '\033[32m',  # Green
-        'warning': '\033[33m',  # Yellow  
+        'warning': '\033[33m',  # Yellow
         'error': '\033[31m',    # Red
         'header': '\033[1m',    # Bold
         'reset': '\033[0m'      # Reset
     }
-    
+
     def colorize(self, text: str, color: str) -> str:
         """Apply color with NO_COLOR environment variable support"""
         if os.environ.get('NO_COLOR') or not self._supports_color():
@@ -373,7 +375,7 @@ def discover_files(
 ```python
 def apply_text_edits(original: str, edits: List[TextEdit]) -> str:
     """Apply LSP edits to text"""
-    
+
 def unified_diff(a: str, b: str, path: str) -> str:
     """Generate unified diff"""
 ```
@@ -517,17 +519,17 @@ ALS Formatted Buffer
 ```python
 class PatternFormatter:
     """Manages pattern-based post-processing"""
-    
+
     def __init__(self, rules: Tuple[CompiledRule, ...], enabled: bool):
         self.rules = rules
         self.enabled = enabled
         self.files_touched: Dict[str, int] = {}
         self.replacements: Dict[str, int] = {}
-    
+
     @classmethod
     def load_from_json(cls, path: Path, logger, ui) -> PatternFormatter:
         """Load and compile patterns from JSON file"""
-    
+
     def apply(self, path: Path, text: str, logger, ui) -> Tuple[str, FileApplyResult]:
         """Apply patterns to text with timeout protection"""
 
@@ -589,7 +591,7 @@ class WorkItem:
     content: str
     index: int
     total: int
-    
+
 class WorkerContext:
     """Shared context for all workers"""
     metrics: ThreadSafeMetrics
@@ -597,10 +599,10 @@ class WorkerContext:
     ui_queue: asyncio.Queue
     pattern_formatter: PatternFormatter
     write_enabled: bool
-    
+
 class PatternWorker:
     """Worker that processes queued items"""
-    
+
     async def run(self):
         """Main worker loop"""
         while not self.context.shutdown_event.is_set():
@@ -608,33 +610,61 @@ class PatternWorker:
             if item is None:  # Sentinel
                 break
             await self.process_item(item)
-            
+
     async def process_item(self, item: WorkItem):
         """Apply patterns and write file"""
-        
+
 class WorkerPool:
     """Manages a pool of pattern workers"""
-    
-    def __init__(self, num_workers: int = 3):
-        self.queue = asyncio.Queue(maxsize=100)
+
+    def __init__(self, num_workers: int = None):
+        # Default to 0.6 * CPU cores if not specified
+        if num_workers is None:
+            import os
+            num_workers = max(1, int(os.cpu_count() * 0.6))
+        self.queue = asyncio.Queue(maxsize=10)  # Reduced from 100 to prevent memory bloat
         self.workers: List[asyncio.Task] = []
-        
+
     async def start(self):
         """Start all workers"""
-        
+
     async def submit(self, item: WorkItem):
         """Submit work to the queue"""
-        
+
     async def shutdown(self, timeout: float = 30.0):
         """Graceful shutdown with timeout"""
 ```
 
 **Design Decisions**:
-- Fixed-size queue prevents unbounded memory growth
+- Fixed-size queue (10 items) prevents unbounded memory growth
+- Queue memory limit: ~640KB (10 items * 64KB max file size)
+- Worker count calculation: 0.6 * CPU cores (configurable via --num-workers)
 - Sentinel values for clean shutdown
-- Async I/O for file operations
+- Async I/O for file operations with 8KB buffer size
 - Thread-safe metrics collection
 - Graceful degradation on worker failure
+- Out-of-order completion is acceptable for performance
+
+**Error Handling Design**:
+- Comprehensive error handling for all error types:
+  - Regular exceptions (file I/O, permissions, etc.)
+  - Exceptional errors (out of memory, system failures)
+  - OS signals (SIGTERM, SIGINT, etc.)
+- Log all errors with full context
+- Continue processing other files on single file failure
+- Collect error messages in metrics (limit 100)
+- Report errors to UI via queue
+- Graceful degradation where possible
+- Clean resource cleanup on all error paths
+
+**Current Implementation Context**:
+The worker pool is being implemented with the following specific design constraints based on Ada project analysis:
+- Queue size limited to 10 items (down from initial 100) to prevent memory bloat
+- Queue memory footprint: ~640KB maximum (10 items * 64KB typical file size)
+- File size context: Most Ada source files are under 64KB, making 1MB limit excessive
+- Worker count default: 0.6 * CPU cores provides balanced performance without overloading
+- Buffer size: 8KB is optimal for typical Ada source file I/O operations
+- Out-of-order completion is acceptable as UI updates handle this gracefully
 
 ### 3.10 Async File I/O Component (async_file_io.py)
 
@@ -644,19 +674,19 @@ class WorkerPool:
 ```python
 async def buffered_read(
     path: Path,
-    buffer_size: int = 8192,
+    buffer_size: int = 8192,  # 8KB optimal for typical Ada source files
     encoding: str = 'utf-8'
 ) -> str:
     """Read file asynchronously with buffering"""
-    
+
 async def buffered_write(
     path: Path,
     content: str,
-    buffer_size: int = 8192,
+    buffer_size: int = 8192,  # 8KB optimal for typical Ada source files
     encoding: str = 'utf-8'
 ) -> None:
     """Write file asynchronously with buffering"""
-    
+
 async def atomic_write_async(
     path: Path,
     content: str,
@@ -667,9 +697,10 @@ async def atomic_write_async(
 
 **Design Decisions**:
 - Use aiofiles for true async I/O
-- Configurable buffer sizes
+- Buffer size of 8KB optimal for typical Ada source files
 - Preserve file permissions
 - Atomic operations via temp files
+- Consider uvloop for improved async performance (especially for ALS communication)
 
 ### 3.11 Thread-Safe Metrics Component (thread_safe_metrics.py)
 
@@ -679,18 +710,18 @@ async def atomic_write_async(
 ```python
 class ThreadSafeMetrics:
     """Thread-safe metrics collector"""
-    
+
     def __init__(self):
         self._lock = asyncio.Lock()
         self._changed = 0
         self._errors = 0
         self._pattern_time = 0.0
         self._io_time = 0.0
-        
+
     async def increment_changed(self):
         async with self._lock:
             self._changed += 1
-            
+
     async def add_timing(self, category: str, seconds: float):
         async with self._lock:
             if category == 'pattern':
@@ -864,7 +895,7 @@ Determine Error Type
   begin
     Put_Line("Hello")  -- Error: missing semicolon
   end Hello;
-  
+
   -- Unmatched parentheses
   if (X > 5 then  -- Error: missing closing parenthesis
   ```
@@ -881,7 +912,7 @@ Determine Error Type
   begin
     null;
   end Process;
-  
+
   -- Invalid component selection
   Data := Event.Field;  -- Error: invalid prefix in selected component
   ```
@@ -1049,7 +1080,7 @@ Optional:
   --max-attempts N           Retry count (default: 2)
   --max-file-size N          Skip files larger than N bytes (default: 102400)
   --max-consecutive-timeouts N  Abort after N consecutive timeouts (default: 5)
-  --num-workers N            Number of parallel workers (default: 3, 0=sequential)
+  --num-workers N            Number of parallel workers (default: 0.6*CPUs, 0=sequential)
   --worker-stats             Show detailed worker statistics
 ```
 
@@ -1070,13 +1101,13 @@ class ALSClient:
 # File Discovery
 def discover_files(
     include_paths: List[str],
-    exclude_paths: List[str], 
+    exclude_paths: List[str],
     explicit_files: List[str]
 ) -> Tuple[List[str], List[str]]
 
 # Edit Application
 def apply_text_edits(
-    original: str, 
+    original: str,
     edits: List[Dict[str, Any]]
 ) -> str
 
@@ -1208,6 +1239,8 @@ class CursesUI:
 7. **Immediate Flush**: Flush after each write for crash safety without sacrificing performance
 8. **Pattern Compilation**: Compile patterns once at startup, not per file
 9. **Pattern Timeouts**: 100ms default prevents hanging on complex patterns
+10. **Worker Count Optimization**: Default to 0.6 * CPU cores for balanced performance
+11. **uvloop Integration**: Consider for improved async performance, especially for ALS network communication
 
 ### 7.2 Bottlenecks
 
@@ -1216,6 +1249,7 @@ class CursesUI:
 3. **Network Filesystems**: Atomic writes may be slow
 4. **Terminal Output**: TTY output for different needs
 5. **Pattern Complexity**: Mitigated by timeouts and file size limits
+6. **Queue Memory**: Limited to ~640KB with 10-item queue and 64KB max file size
 
 ## 8. Security Considerations
 
@@ -1256,16 +1290,16 @@ def validate_cli_args(args):
     # Flag combination checks
     if args.no_als and args.no_patterns:
         raise ValueError("Cannot use both --no-patterns and --no-als")
-    
+
     if args.validate_patterns and args.no_als:
         raise ValueError("Cannot use --validate-patterns with --no-als")
-    
+
     # Path validation
     for path in args.include_paths + args.exclude_paths:
         error = validate_path(path)
         if error:
             raise ValueError(f"Invalid path: {error}")
-    
+
     # Input requirement check
     if not args.include_paths and not args.files:
         raise ValueError("No input files or directories specified")
@@ -1310,7 +1344,7 @@ This validation ensures:
 def run_hook(hook_cmd: Optional[str], phase: str, logger=None, timeout: int=5) -> bool:
     if not hook_cmd:
         return True
-    
+
     # Parse command safely without shell
     import shlex
     try:
@@ -1318,9 +1352,9 @@ def run_hook(hook_cmd: Optional[str], phase: str, logger=None, timeout: int=5) -
     except ValueError as e:
         logger(f"[{phase}-hook] Invalid command format: {e}")
         return False
-    
+
     # Execute without shell for security
-    result = subprocess.run(cmd_list, capture_output=True, text=True, 
+    result = subprocess.run(cmd_list, capture_output=True, text=True,
                           timeout=timeout, check=False)
 ```
 
@@ -1371,13 +1405,23 @@ def run_hook(hook_cmd: Optional[str], phase: str, logger=None, timeout: int=5) -
 - Adaptive buffer sizing based on file size
 - Worker specialization (large files vs small files)
 
-### 10.2 Incremental Formatting
+### 10.2 Performance Enhancements with uvloop
+
+- **uvloop integration**: Strong candidate for performance improvement
+  - Especially beneficial for ALS network communication bottleneck
+  - Drop-in replacement for asyncio event loop
+  - Significant performance gains for I/O-heavy operations
+  - May need to implement backpressure if queue fills frequently
+  - Could add priority queue for certain file types
+  - Might benefit from connection pooling for ALS
+
+### 10.3 Incremental Formatting
 
 - Cache file hashes
 - Format only changed files
 - LSP incremental sync
 
-### 10.3 Configuration File
+### 10.4 Configuration File
 
 ```toml
 # .adafmt.toml
@@ -1391,7 +1435,7 @@ timeout = 60
 retry_attempts = 5
 ```
 
-### 10.4 Watch Mode
+### 10.5 Watch Mode
 
 ```python
 async def watch_mode(paths: List[str]):

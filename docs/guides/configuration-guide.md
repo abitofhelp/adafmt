@@ -1,7 +1,11 @@
 # Configuration Guide
 
-**Version:** 1.0.0  
-**Last Updated:** September 2025
+**Version:** 1.0.0
+**Date:** January 2025
+**License:** BSD-3-Clause
+**Copyright:** © 2025 Michael Gardner, A Bit of Help, Inc.
+**Authors:** Michael Gardner, A Bit of Help, Inc.
+**Status:** Released
 
 Complete guide for configuring adafmt, including command-line options, environment variables, ALS tracing, and advanced configuration patterns.
 
@@ -30,8 +34,8 @@ Complete guide for configuring adafmt, including command-line options, environme
 ### Required Arguments
 
 #### `--project-path` (Required)
-**Format**: `--project-path PATH`  
-**Purpose**: Specifies the path to the GNAT project file (.gpr)  
+**Format**: `--project-path PATH`
+**Purpose**: Specifies the path to the GNAT project file (.gpr)
 **Examples**:
 ```bash
 adafmt format --project-path project.gpr
@@ -41,9 +45,9 @@ adafmt format --project-path /path/to/my_project.gpr
 ### File Selection
 
 #### `--include-path`
-**Format**: `--include-path PATH` (can be used multiple times)  
-**Purpose**: Directories to search for Ada files  
-**Default**: Current directory  
+**Format**: `--include-path PATH` (can be used multiple times)
+**Purpose**: Directories to search for Ada files
+**Default**: Current directory
 **Examples**:
 ```bash
 # Single directory
@@ -57,8 +61,8 @@ adafmt format --project-path project.gpr \
 ```
 
 #### `--exclude-path`
-**Format**: `--exclude-path PATH` (can be used multiple times)  
-**Purpose**: Directories to exclude from formatting  
+**Format**: `--exclude-path PATH` (can be used multiple times)
+**Purpose**: Directories to exclude from formatting
 **Examples**:
 ```bash
 # Exclude generated code
@@ -391,7 +395,7 @@ When `--als-traces-config-path` is not provided, adafmt automatically:
 5. Displays the ALS log path in the UI
 6. Cleans up the temporary directory on exit
 
-**Before**: "ALS Log: Not configured"  
+**Before**: "ALS Log: Not configured"
 **After**: "ALS Log: /var/folders/.../adafmt_als_xyz/als.log"
 
 ### Custom Traces Configuration

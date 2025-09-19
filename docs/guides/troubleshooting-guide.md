@@ -1,7 +1,11 @@
 # Troubleshooting and Debugging Guide
 
-**Version:** 1.0.0  
-**Last Updated:** September 2025
+**Version:** 1.0.0
+**Date:** January 2025
+**License:** BSD-3-Clause
+**Copyright:** © 2025 Michael Gardner, A Bit of Help, Inc.
+**Authors:** Michael Gardner, A Bit of Help, Inc.
+**Status:** Released
 
 This comprehensive guide covers solutions to common adafmt issues, debugging techniques, and development tools.
 
@@ -67,7 +71,7 @@ This comprehensive guide covers solutions to common adafmt issues, debugging tec
    ```bash
    # Kill stale ALS processes (older than 30 minutes)
    adafmt --project-path project.gpr --preflight kill
-   
+
    # Kill all ALS processes for current user
    adafmt --project-path project.gpr --preflight aggressive
    ```
@@ -76,10 +80,10 @@ This comprehensive guide covers solutions to common adafmt issues, debugging tec
    ```bash
    # Find ALS processes
    ps aux | grep ada_language_server
-   
+
    # Kill specific process
    kill <PID>
-   
+
    # Kill all ALS processes
    pkill ada_language_server
    ```

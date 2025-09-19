@@ -1,7 +1,11 @@
 # adafmt Documentation
 
 **Version:** 1.0.0
-**Last Updated:** January 2025
+**Date:** January 2025
+**License:** BSD-3-Clause
+**Copyright:** © 2025 Michael Gardner, A Bit of Help, Inc.
+**Authors:** Michael Gardner, A Bit of Help, Inc.
+**Status:** Released
 
 Welcome to the comprehensive documentation for adafmt, the Ada Language Formatter. This documentation is organized into logical sections to help you find what you need quickly.
 

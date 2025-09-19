@@ -1,7 +1,11 @@
 # Output Format Guide
 
-**Version:** 1.0.0  
-**Last Updated:** September 2025
+**Version:** 1.0.0
+**Date:** January 2025
+**License:** BSD-3-Clause
+**Copyright:** © 2025 Michael Gardner, A Bit of Help, Inc.
+**Authors:** Michael Gardner, A Bit of Help, Inc.
+**Status:** Released
 
 This guide explains the comprehensive output format displayed after adafmt completes a formatting run, helping you understand the metrics, performance data, and log file information.
 

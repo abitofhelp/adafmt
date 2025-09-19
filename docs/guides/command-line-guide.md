@@ -1,5 +1,12 @@
 # adafmt Command-Line Guide
 
+**Version:** 1.0.0
+**Date:** January 2025
+**License:** BSD-3-Clause
+**Copyright:** © 2025 Michael Gardner, A Bit of Help, Inc.
+**Authors:** Michael Gardner, A Bit of Help, Inc.
+**Status:** Released
+
 This guide explains how to use adafmt effectively, including common use cases, command-line options, and important restrictions.
 
 ## Table of Contents

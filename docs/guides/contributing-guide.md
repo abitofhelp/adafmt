@@ -1,8 +1,10 @@
 # Contributing to adafmt
 
-**Document Version:** 1.0.0  
-**Date:** January 2025  
-**Authors:** Michael Gardner, A Bit of Help, Inc.  
+**Version:** 1.0.0
+**Date:** January 2025
+**License:** BSD-3-Clause
+**Copyright:** © 2025 Michael Gardner, A Bit of Help, Inc.
+**Authors:** Michael Gardner, A Bit of Help, Inc.
 **Status:** Released
 
 This guide covers the development workflow, how to add new features, and the contribution process for adafmt.
@@ -22,10 +24,10 @@ This guide covers the development workflow, how to add new features, and the con
    ```bash
    # Quick unit tests
    make test
-   
+
    # Full test suite
    make test-all
-   
+
    # With coverage
    make coverage
    ```
@@ -178,7 +180,7 @@ CLI Input → File Discovery → ALS Client → Text Edits → File Writing
    ```python
    class NewUI(UserInterface):
        """New UI implementation."""
-       
+
        def start(self): ...
        def update_file(self, path): ...
        def report_result(self, path, changed, error): ...

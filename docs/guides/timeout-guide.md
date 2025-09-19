@@ -1,8 +1,11 @@
 # ALS Timeout Improvements Documentation
 
-**Version:** 1.0.0  
-**Date:** January 2025  
-**Authors:** Michael Gardner, A Bit of Help, Inc.  
+**Version:** 1.0.0
+**Date:** January 2025
+**License:** BSD-3-Clause
+**Copyright:** © 2025 Michael Gardner, A Bit of Help, Inc.
+**Authors:** Michael Gardner, A Bit of Help, Inc.
+**Status:** Released
 
 ## Overview
 
@@ -36,7 +39,7 @@ This document details the comprehensive timeout improvements implemented in adaf
 - **Default**: 5 consecutive timeouts
 - **Purpose**: Prevents endless hanging on consistently failing ALS instances
 - **Usage**: `adafmt --max-consecutive-timeouts 3 --project-path project.gpr`
-- **Behavior**: 
+- **Behavior**:
   - Counts consecutive timeout failures
   - Resets counter on successful operations
   - Aborts execution when limit is reached
@@ -82,14 +85,14 @@ This document details the comprehensive timeout improvements implemented in adaf
 ```python
 async def request_with_timeout(self, msg: JsonDict, timeout: float) -> Any:
     """Send a request and wait for response with timeout.
-    
+
     Args:
         msg: JSON-RPC message to send
         timeout: Maximum seconds to wait for response
-        
+
     Returns:
         Response data from ALS
-        
+
     Raises:
         asyncio.TimeoutError: If no response within timeout
         ALSProtocolError: If response contains error

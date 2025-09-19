@@ -1,9 +1,11 @@
 # Software Requirements Specification (SRS)
 # adafmt - Ada Language Formatter
 
-**Document Version:** 1.0.0  
-**Date:** January 2025  
-**Authors:** Michael Gardner, A Bit of Help, Inc.  
+**Version:** 1.0.0
+**Date:** January 2025
+**License:** BSD-3-Clause
+**Copyright:** © 2025 Michael Gardner, A Bit of Help, Inc.
+**Authors:** Michael Gardner, A Bit of Help, Inc.
 **Status:** Released
 
 ## 1. Introduction
@@ -439,7 +441,7 @@ The system operates as a client to the Ada Language Server, communicating via th
 #### FR-12.1 Comprehensive Output Structure
 - FR-12.1.1: SHALL display output in four distinct sections when processing completes:
   - ALS METRICS section with formatting statistics from Ada Language Server
-  - PATTERN METRICS section with custom pattern application results  
+  - PATTERN METRICS section with custom pattern application results
   - ADAFMT RUN section with overall execution summary
   - LOG FILES section with paths to all generated log files
 - FR-12.1.2: SHALL separate each section with a standardized delimiter (80 equals signs)
@@ -461,7 +463,7 @@ The system operates as a client to the Ada Language Server, communicating via th
 #### FR-12.4 ALS Metrics Display Format
 - FR-12.4.1: SHALL display the following fields in fixed-width columns:
   - Files: total count and 100% reference
-  - Changed: count and percentage of total files  
+  - Changed: count and percentage of total files
   - Unchanged: count and percentage of total files
   - Failed: count and percentage of total files
   - Started: ISO 8601 timestamp
@@ -471,7 +473,7 @@ The system operates as a client to the Ada Language Server, communicating via th
 - FR-12.4.2: SHALL ensure percentages sum to approximately 100% (allowing for rounding)
 - FR-12.4.3: SHALL align field labels and values in consistent columns
 
-#### FR-12.5 Pattern Metrics Display Format  
+#### FR-12.5 Pattern Metrics Display Format
 - FR-12.5.1: SHALL display pattern metrics in tabular format with headers:
   - Pattern: pattern name (left-aligned)
   - Applied: number of files where pattern was applied (right-aligned)
@@ -480,7 +482,7 @@ The system operates as a client to the Ada Language Server, communicating via th
 - FR-12.5.2: SHALL include a totals row with dashes separator line
 - FR-12.5.3: SHALL display pattern timing metrics:
   - Started: ISO 8601 timestamp
-  - Completed: ISO 8601 timestamp  
+  - Completed: ISO 8601 timestamp
   - Elapsed: time in seconds with one decimal
   - Rate (scanned): files scanned per second with one decimal
   - Rate (applied): pattern applications per second with one decimal
@@ -516,7 +518,7 @@ The system operates as a client to the Ada Language Server, communicating via th
 - FR-12.9.1: SHALL use consistent color scheme when terminal supports colors:
   - Section headers: bold/bright formatting
   - Success indicators: green color
-  - Warning indicators: yellow color  
+  - Warning indicators: yellow color
   - Error indicators: red color
   - Normal text: default terminal color
 - FR-12.9.2: SHALL provide ASCII fallbacks when colors are unavailable
@@ -537,7 +539,7 @@ The system operates as a client to the Ada Language Server, communicating via th
 
 **Acceptance Criteria:**
 - Output displays consistently across all supported platforms
-- Numeric formatting remains stable during processing updates  
+- Numeric formatting remains stable during processing updates
 - DateTime stamps follow ISO 8601 UTC standard
 - Column alignment remains consistent regardless of value lengths
 - Color formatting works correctly with various terminal configurations
@@ -559,19 +561,19 @@ The system operates as a client to the Ada Language Server, communicating via th
 - FR-13.3: SHALL create worker pool after ALS initialization but before file processing
 - FR-13.4: SHALL cleanly shutdown all workers on normal termination
 - FR-13.5: SHALL cleanly shutdown all workers on signal reception (SIGTERM, SIGINT)
-- FR-13.6: SHALL limit worker count to reasonable maximum (8 workers)
+- FR-13.6: SHALL limit worker count to 0.6 * CPU cores (maximum)
 
-#### Queue-Based Architecture  
+#### Queue-Based Architecture
 - FR-13.7: SHALL use asynchronous queue to distribute work from ALS to workers
 - FR-13.8: SHALL queue items containing: file path, formatted content, file index, total count
-- FR-13.9: SHALL set queue maximum size to prevent unbounded memory growth (default: 100 items)
+- FR-13.9: SHALL set queue maximum size to prevent unbounded memory growth (default: 10 items)
 - FR-13.10: SHALL handle queue-full conditions by blocking ALS processing until space available
 - FR-13.11: SHALL use sentinel values (None) to signal worker shutdown
 - FR-13.12: SHALL drain queue completely before final shutdown
 
 #### Worker Responsibilities
 - FR-13.13: Workers SHALL apply pattern formatting to files received from queue
-- FR-13.14: Workers SHALL perform file writing using buffered async I/O
+- FR-13.14: Workers SHALL perform file writing using buffered async I/O with 8KB buffer size
 - FR-13.15: Workers SHALL use atomic write operations (temp file + rename)
 - FR-13.16: Workers SHALL report completion status back to main thread
 - FR-13.17: Workers SHALL handle exceptions without crashing the worker pool
@@ -589,17 +591,23 @@ The system operates as a client to the Ada Language Server, communicating via th
 - FR-13.25: SHALL report worker failures in error statistics
 - FR-13.26: SHALL handle partial writes by ensuring atomic operations
 - FR-13.27: SHALL timeout stuck workers after 5 minutes
+- FR-13.28: SHALL implement comprehensive error handling for:
+  - Regular exceptions (file I/O, permissions, validation errors)
+  - Exceptional errors (out of memory, disk full, system failures)
+  - OS signals (SIGTERM, SIGINT, SIGHUP)
+- FR-13.29: SHALL ensure clean resource cleanup on all error paths
+- FR-13.30: SHALL continue processing remaining files after individual file failures
 
 #### Performance Monitoring
-- FR-13.28: SHALL track queue depth and worker utilization
-- FR-13.29: SHALL report worker statistics with `--worker-stats` flag
-- FR-13.30: SHALL measure pattern processing time per worker
-- FR-13.31: SHALL detect and report worker starvation
+- FR-13.31: SHALL track queue depth and worker utilization
+- FR-13.32: SHALL report worker statistics with `--worker-stats` flag
+- FR-13.33: SHALL measure pattern processing time per worker
+- FR-13.34: SHALL detect and report worker starvation
 
 #### Output Ordering
-- FR-13.32: SHALL allow out-of-order file completion display
-- FR-13.33: SHALL maintain accurate progress counting despite out-of-order processing
-- FR-13.34: SHALL preserve file indices in output (e.g., "[  42/100] [changed] file.adb")
+- FR-13.35: SHALL allow out-of-order file completion display
+- FR-13.36: SHALL maintain accurate progress counting despite out-of-order processing
+- FR-13.37: SHALL preserve file indices in output (e.g., "[  42/100] [changed] file.adb")
 
 **Acceptance Criteria:**
 - Worker pool starts and stops cleanly
@@ -624,6 +632,8 @@ The system operates as a client to the Ada Language Server, communicating via th
 - NFR-1.8: SHALL apply patterns without materially increasing ALS formatting time
 - NFR-1.9: SHALL enforce pattern timeout of 100ms per pattern application
 - NFR-1.10: SHALL handle up to 50 patterns without performance degradation
+- NFR-1.11: SHALL use file I/O buffer size of 8KB for optimal performance
+- NFR-1.12: SHALL consider uvloop integration for improved async performance
 
 **Measurement:**
 - Time formatting a large Ada project
@@ -687,7 +697,7 @@ The system operates as a client to the Ada Language Server, communicating via th
 - NFR-5.11: SHALL validate paths to reject URL schemes (http://, https://, etc.)
 - NFR-5.12: SHALL detect and reject URL-encoded paths
 - NFR-5.13: SHALL allow space characters in paths for cross-platform compatibility
-- NFR-5.14: SHALL enforce file size limits (100KB) on Ada source files
+- NFR-5.14: SHALL enforce file size limits (64KB) on Ada source files
 
 **Measurement:**
 - Security testing with malicious inputs
