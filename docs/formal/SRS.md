@@ -547,6 +547,68 @@ The system operates as a client to the Ada Language Server, communicating via th
 - Error conditions don't break overall output structure
 - Output remains readable in 80-column terminal windows
 
+### 2.13 Parallel Post-Processing Workers (FR-13)
+
+**Description:** The system SHALL support parallel processing of post-ALS operations (pattern application and file writing) using a configurable worker pool to improve performance on multi-core systems.
+
+**Requirements:**
+
+#### Worker Pool Management
+- FR-13.1: SHALL support configurable number of workers via `--num-workers N` flag (default: 3)
+- FR-13.2: SHALL support disabling parallel processing with `--num-workers 0`
+- FR-13.3: SHALL create worker pool after ALS initialization but before file processing
+- FR-13.4: SHALL cleanly shutdown all workers on normal termination
+- FR-13.5: SHALL cleanly shutdown all workers on signal reception (SIGTERM, SIGINT)
+- FR-13.6: SHALL limit worker count to reasonable maximum (8 workers)
+
+#### Queue-Based Architecture  
+- FR-13.7: SHALL use asynchronous queue to distribute work from ALS to workers
+- FR-13.8: SHALL queue items containing: file path, formatted content, file index, total count
+- FR-13.9: SHALL set queue maximum size to prevent unbounded memory growth (default: 100 items)
+- FR-13.10: SHALL handle queue-full conditions by blocking ALS processing until space available
+- FR-13.11: SHALL use sentinel values (None) to signal worker shutdown
+- FR-13.12: SHALL drain queue completely before final shutdown
+
+#### Worker Responsibilities
+- FR-13.13: Workers SHALL apply pattern formatting to files received from queue
+- FR-13.14: Workers SHALL perform file writing using buffered async I/O
+- FR-13.15: Workers SHALL use atomic write operations (temp file + rename)
+- FR-13.16: Workers SHALL report completion status back to main thread
+- FR-13.17: Workers SHALL handle exceptions without crashing the worker pool
+- FR-13.18: Workers SHALL respect all timeout configurations
+
+#### Thread Safety
+- FR-13.19: SHALL use thread-safe metrics collection for statistics
+- FR-13.20: SHALL serialize UI output to prevent interleaving
+- FR-13.21: SHALL protect shared state with appropriate synchronization
+- FR-13.22: SHALL ensure pattern formatter is safe for concurrent use
+
+#### Error Handling
+- FR-13.23: SHALL restart failed workers automatically (up to 3 attempts)
+- FR-13.24: SHALL fall back to sequential processing if worker pool fails
+- FR-13.25: SHALL report worker failures in error statistics
+- FR-13.26: SHALL handle partial writes by ensuring atomic operations
+- FR-13.27: SHALL timeout stuck workers after 5 minutes
+
+#### Performance Monitoring
+- FR-13.28: SHALL track queue depth and worker utilization
+- FR-13.29: SHALL report worker statistics with `--worker-stats` flag
+- FR-13.30: SHALL measure pattern processing time per worker
+- FR-13.31: SHALL detect and report worker starvation
+
+#### Output Ordering
+- FR-13.32: SHALL allow out-of-order file completion display
+- FR-13.33: SHALL maintain accurate progress counting despite out-of-order processing
+- FR-13.34: SHALL preserve file indices in output (e.g., "[  42/100] [changed] file.adb")
+
+**Acceptance Criteria:**
+- Worker pool starts and stops cleanly
+- Files are never corrupted by parallel processing
+- Performance improves with multiple workers on multi-core systems
+- All errors are handled gracefully
+- Progress reporting remains accurate
+- Signal handling works correctly with workers active
+
 ## 3. Non-Functional Requirements
 
 ### 3.1 Performance (NFR-1)
@@ -556,7 +618,7 @@ The system operates as a client to the Ada Language Server, communicating via th
 - NFR-1.2: SHALL start up in <1 second (excluding ALS warmup)
 - NFR-1.3: SHALL use <100MB RAM for typical operations
 - NFR-1.4: SHALL handle projects with >1000 source files
-- NFR-1.5: SHALL process files in parallel where possible
+- NFR-1.5: SHALL process post-ALS operations (patterns and file I/O) in parallel with configurable workers
 - NFR-1.6: SHALL minimize file I/O operations by keeping log files open for the session duration
 - NFR-1.7: SHALL maintain data integrity through immediate flushing without compromising performance
 - NFR-1.8: SHALL apply patterns without materially increasing ALS formatting time

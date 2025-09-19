@@ -577,10 +577,139 @@ Pattern Output → ALS Format Check → Report Conflicts
 - Separate pattern log for debugging
 - Integration with existing UI/logging
 
+### 3.9 Worker Pool Component (worker_pool.py)
+
+**Purpose**: Manage parallel post-ALS processing using worker threads
+
+**Key Classes**:
+```python
+class WorkItem:
+    """Item queued for worker processing"""
+    path: Path
+    content: str
+    index: int
+    total: int
+    
+class WorkerContext:
+    """Shared context for all workers"""
+    metrics: ThreadSafeMetrics
+    shutdown_event: asyncio.Event
+    ui_queue: asyncio.Queue
+    pattern_formatter: PatternFormatter
+    write_enabled: bool
+    
+class PatternWorker:
+    """Worker that processes queued items"""
+    
+    async def run(self):
+        """Main worker loop"""
+        while not self.context.shutdown_event.is_set():
+            item = await self.queue.get()
+            if item is None:  # Sentinel
+                break
+            await self.process_item(item)
+            
+    async def process_item(self, item: WorkItem):
+        """Apply patterns and write file"""
+        
+class WorkerPool:
+    """Manages a pool of pattern workers"""
+    
+    def __init__(self, num_workers: int = 3):
+        self.queue = asyncio.Queue(maxsize=100)
+        self.workers: List[asyncio.Task] = []
+        
+    async def start(self):
+        """Start all workers"""
+        
+    async def submit(self, item: WorkItem):
+        """Submit work to the queue"""
+        
+    async def shutdown(self, timeout: float = 30.0):
+        """Graceful shutdown with timeout"""
+```
+
+**Design Decisions**:
+- Fixed-size queue prevents unbounded memory growth
+- Sentinel values for clean shutdown
+- Async I/O for file operations
+- Thread-safe metrics collection
+- Graceful degradation on worker failure
+
+### 3.10 Async File I/O Component (async_file_io.py)
+
+**Purpose**: Provide buffered asynchronous file I/O operations
+
+**Key Functions**:
+```python
+async def buffered_read(
+    path: Path,
+    buffer_size: int = 8192,
+    encoding: str = 'utf-8'
+) -> str:
+    """Read file asynchronously with buffering"""
+    
+async def buffered_write(
+    path: Path,
+    content: str,
+    buffer_size: int = 8192,
+    encoding: str = 'utf-8'
+) -> None:
+    """Write file asynchronously with buffering"""
+    
+async def atomic_write_async(
+    path: Path,
+    content: str,
+    mode: int = 0o644
+) -> None:
+    """Atomic write using temp file + rename"""
+```
+
+**Design Decisions**:
+- Use aiofiles for true async I/O
+- Configurable buffer sizes
+- Preserve file permissions
+- Atomic operations via temp files
+
+### 3.11 Thread-Safe Metrics Component (thread_safe_metrics.py)
+
+**Purpose**: Provide thread-safe metric collection for parallel workers
+
+**Key Classes**:
+```python
+class ThreadSafeMetrics:
+    """Thread-safe metrics collector"""
+    
+    def __init__(self):
+        self._lock = asyncio.Lock()
+        self._changed = 0
+        self._errors = 0
+        self._pattern_time = 0.0
+        self._io_time = 0.0
+        
+    async def increment_changed(self):
+        async with self._lock:
+            self._changed += 1
+            
+    async def add_timing(self, category: str, seconds: float):
+        async with self._lock:
+            if category == 'pattern':
+                self._pattern_time += seconds
+            elif category == 'io':
+                self._io_time += seconds
+```
+
+**Design Decisions**:
+- Use asyncio.Lock for synchronization
+- Aggregate timings by category
+- Minimal lock contention
+- Read-only snapshots for reporting
+
 ## 4. Data Flow
 
 ### 4.1 File Processing Flow
 
+**Sequential Mode (--num-workers 0):**
 ```
 File Path
     │
@@ -606,6 +735,39 @@ Show Diff          Original
     ▼
 Write File
 (if --write)
+```
+
+**Parallel Mode (--num-workers N):**
+```
+File Path
+    │
+    ▼
+Read Content
+    │
+    ▼
+Send to ALS
+    │
+    ▼
+Receive Edits
+    │
+    ▼
+Apply Edits
+    │
+    ▼
+Queue Work Item ──────────────┐
+    │                         │
+    │                         ▼
+[Continue with              Worker Pool
+ next file]                   │
+                             ├─ Worker 1 ─┐
+                             ├─ Worker 2 ─┤─▶ Pattern Formatter
+                             └─ Worker 3 ─┘   │
+                                             ▼
+                                         Async Write
+                                             │
+                                             ▼
+                                         UI Update
+                                         (out of order)
 ```
 
 ### 4.2 LSP Message Flow
@@ -795,6 +957,72 @@ ALS Would Make Changes?
 Pattern Valid
 ```
 
+### 4.8 Worker Pool Lifecycle
+
+**Startup Sequence:**
+```
+CLI Initialization
+    │
+    ▼
+Parse --num-workers
+    │
+    ├─ 0 → Sequential Mode
+    │
+    └─ N → Create Worker Pool
+            │
+            ▼
+        Initialize Queue
+            │
+            ▼
+        Create Workers
+            │
+            ├─ Worker 1 → Start Loop
+            ├─ Worker 2 → Start Loop
+            └─ Worker N → Start Loop
+```
+
+**Shutdown Sequence:**
+```
+Signal/Completion
+    │
+    ▼
+Set Shutdown Event
+    │
+    ▼
+Stop Accepting New Items
+    │
+    ▼
+Send Sentinels (N × None)
+    │
+    ▼
+Wait for Workers (30s timeout)
+    │
+    ├─ Success → Clean Exit
+    │
+    └─ Timeout → Force Cancel
+                    │
+                    ▼
+                Report Errors
+```
+
+**Error Recovery:**
+```
+Worker Exception
+    │
+    ▼
+Log Error
+    │
+    ▼
+Mark Item Failed
+    │
+    ▼
+Check Restart Count
+    │
+    ├─ < 3 → Restart Worker
+    │
+    └─ ≥ 3 → Degrade to Sequential
+```
+
 ## 5. Interface Specifications
 
 ### 5.1 CLI Interface
@@ -821,6 +1049,8 @@ Optional:
   --max-attempts N           Retry count (default: 2)
   --max-file-size N          Skip files larger than N bytes (default: 102400)
   --max-consecutive-timeouts N  Abort after N consecutive timeouts (default: 5)
+  --num-workers N            Number of parallel workers (default: 3, 0=sequential)
+  --worker-stats             Show detailed worker statistics
 ```
 
 ### 5.2 Python API
@@ -1134,12 +1364,12 @@ def run_hook(hook_cmd: Optional[str], phase: str, logger=None, timeout: int=5) -
 
 ## 10. Future Enhancements
 
-### 10.1 Parallel Processing
+### 10.1 Advanced Worker Optimizations
 
-```python
-async def format_files_parallel(files: List[str], workers: int = 4):
-    """Format multiple files concurrently"""
-```
+- Dynamic worker scaling based on queue depth
+- NUMA-aware worker pinning
+- Adaptive buffer sizing based on file size
+- Worker specialization (large files vs small files)
 
 ### 10.2 Incremental Formatting
 
