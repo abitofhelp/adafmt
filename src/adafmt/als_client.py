@@ -355,8 +355,19 @@ class ALSClient:
         """
         # Try a clean shutdown; tolerate any errors.
         with contextlib.suppress(Exception):
-            await self._send({"jsonrpc": "2.0", "id": self._next_id(), "method": "shutdown", "params": None})
-            await self._notify("exit", {})
+            try:
+                # Give shutdown commands 2 seconds to complete
+                await asyncio.wait_for(
+                    self._send({"jsonrpc": "2.0", "id": self._next_id(), "method": "shutdown", "params": None}),
+                    timeout=2
+                )
+                await asyncio.wait_for(
+                    self._notify("exit", {}),
+                    timeout=1
+                )
+            except asyncio.TimeoutError:
+                # ALS not responding, proceed with force shutdown
+                pass
 
         if self._reader_task:
             self._reader_task.cancel()
@@ -462,7 +473,11 @@ class ALSClient:
         data = json.dumps(msg).encode("utf-8")
         header = f"Content-Length: {len(data)}\r\n\r\n".encode("ascii")
         self.process.stdin.write(header + data)
-        await self.process.stdin.drain()
+        # Add timeout to drain operation to prevent hanging if ALS stops reading
+        try:
+            await asyncio.wait_for(self.process.stdin.drain(), timeout=30)
+        except asyncio.TimeoutError:
+            raise ALSCommunicationError("Timeout writing to ALS stdin - process may be hung")
 
     async def _reader_loop(self) -> None:
         """Background task that reads responses from ALS stdout.
@@ -575,7 +590,19 @@ class ALSClient:
             - Should be called instead of process.wait() to ensure
               proper cleanup and metric collection
         """
-        rc = await self.process.wait() if self.process else 0
+        # Wait for process with timeout to prevent hanging on stubborn processes
+        if self.process:
+            try:
+                rc = await asyncio.wait_for(self.process.wait(), timeout=60)
+            except asyncio.TimeoutError:
+                if self.logger:
+                    self.logger("[als] Process failed to exit after 60s timeout")
+                # Force kill if still running
+                with contextlib.suppress(ProcessLookupError):
+                    self.process.kill()
+                rc = await self.process.wait()  # Should return immediately after kill
+        else:
+            rc = 0
         if self._stderr_task:
             try:
                 await asyncio.wait_for(self._stderr_task, timeout=2)

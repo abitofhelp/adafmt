@@ -54,9 +54,7 @@ def load_patterns(
                 ui.close()
             else:
                 print(f"[error] Patterns file not found: {patterns_path}")
-            if client:
-                import asyncio
-                asyncio.create_task(client.shutdown())
+            # Don't try to shutdown client here - let the caller handle it
             raise SystemExit(2)
         
         # For default path, it's OK if it doesn't exist
