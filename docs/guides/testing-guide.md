@@ -328,6 +328,212 @@ def test_format_many_files(tmp_path):
     assert all(r.success for r in results)
 ```
 
+## Worker Pool Testing
+
+### Integration Tests for Parallel Processing
+
+```python
+# tests/integration/test_worker_pool.py
+import asyncio
+import pytest
+from pathlib import Path
+from unittest.mock import Mock, AsyncMock
+
+from adafmt.worker_pool import WorkerPool, WorkItem
+from adafmt.thread_safe_metrics import ThreadSafeMetrics
+
+
+class TestWorkerPoolIntegration:
+    """Integration tests for the worker pool functionality."""
+    
+    @pytest.mark.asyncio
+    async def test_worker_pool_processes_items(self, tmp_path):
+        """Test that worker pool processes all queued items."""
+        # Create test files
+        files = []
+        for i in range(10):
+            file = tmp_path / f"test_{i}.adb"
+            file.write_text(f"procedure Test_{i} is\nbegin null; end;")
+            files.append(file)
+        
+        # Create worker pool
+        pool = WorkerPool(num_workers=3)
+        metrics = ThreadSafeMetrics()
+        
+        # Mock pattern formatter
+        pattern_formatter = Mock()
+        pattern_formatter.format.return_value = Mock(
+            content="formatted content",
+            replacements=5
+        )
+        
+        # Start pool
+        await pool.start(metrics, pattern_formatter, write_enabled=True)
+        
+        # Queue items
+        for i, file in enumerate(files):
+            item = WorkItem(
+                path=file,
+                content="original content",
+                index=i+1,
+                total=len(files)
+            )
+            await pool.submit(item)
+        
+        # Shutdown and wait
+        await pool.shutdown()
+        
+        # Verify all files processed
+        assert await metrics.get_changed() == 10
+        assert all(f.read_text() == "formatted content" for f in files)
+    
+    @pytest.mark.asyncio
+    async def test_worker_pool_handles_errors(self):
+        """Test that worker pool handles worker errors gracefully."""
+        pool = WorkerPool(num_workers=2)
+        metrics = ThreadSafeMetrics()
+        
+        # Mock pattern formatter that fails
+        pattern_formatter = Mock()
+        pattern_formatter.format.side_effect = Exception("Pattern error")
+        
+        await pool.start(metrics, pattern_formatter, write_enabled=False)
+        
+        # Queue items
+        for i in range(5):
+            item = WorkItem(
+                path=Path(f"test_{i}.adb"),
+                content="content",
+                index=i+1,
+                total=5
+            )
+            await pool.submit(item)
+        
+        await pool.shutdown()
+        
+        # Verify errors recorded
+        assert await metrics.get_errors() == 5
+    
+    @pytest.mark.asyncio
+    async def test_worker_pool_shutdown_timeout(self):
+        """Test worker pool shutdown with timeout."""
+        pool = WorkerPool(num_workers=1)
+        
+        # Mock a stuck worker
+        async def stuck_worker():
+            await asyncio.sleep(60)  # Longer than timeout
+        
+        pool._worker_func = stuck_worker
+        await pool.start(Mock(), Mock(), False)
+        
+        # Shutdown with short timeout
+        with pytest.raises(asyncio.TimeoutError):
+            await pool.shutdown(timeout=0.1)
+    
+    @pytest.mark.asyncio
+    async def test_queue_full_handling(self):
+        """Test behavior when queue is full."""
+        # Small queue for testing
+        pool = WorkerPool(num_workers=1, queue_size=2)
+        
+        # Slow pattern formatter
+        pattern_formatter = AsyncMock()
+        pattern_formatter.format.side_effect = lambda *args: asyncio.sleep(0.1)
+        
+        await pool.start(Mock(), pattern_formatter, False)
+        
+        # Fill queue
+        items = []
+        for i in range(3):
+            item = WorkItem(
+                path=Path(f"test_{i}.adb"),
+                content="content",
+                index=i+1,
+                total=3
+            )
+            items.append(item)
+        
+        # First two should queue immediately
+        await pool.submit(items[0])
+        await pool.submit(items[1])
+        
+        # Third should block until space available
+        submit_task = asyncio.create_task(pool.submit(items[2]))
+        
+        # Should not complete immediately
+        await asyncio.sleep(0.05)
+        assert not submit_task.done()
+        
+        # After processing starts, should complete
+        await asyncio.sleep(0.2)
+        assert submit_task.done()
+        
+        await pool.shutdown()
+```
+
+### Performance Benchmarking
+
+```python
+@pytest.mark.benchmark
+@pytest.mark.asyncio
+async def test_worker_pool_performance(benchmark, large_project_files):
+    """Benchmark worker pool performance vs sequential."""
+    
+    async def process_sequential():
+        for file in large_project_files:
+            # Simulate pattern processing
+            await asyncio.sleep(0.01)
+    
+    async def process_parallel():
+        pool = WorkerPool(num_workers=3)
+        await pool.start(Mock(), Mock(), False)
+        
+        for i, file in enumerate(large_project_files):
+            item = WorkItem(file, "content", i+1, len(large_project_files))
+            await pool.submit(item)
+        
+        await pool.shutdown()
+    
+    # Benchmark both approaches
+    seq_time = benchmark(process_sequential)
+    par_time = benchmark(process_parallel)
+    
+    # Parallel should be faster
+    assert par_time < seq_time * 0.7  # At least 30% faster
+```
+
+### Stress Testing
+
+```python
+@pytest.mark.stress
+@pytest.mark.asyncio
+async def test_worker_pool_stress(tmp_path):
+    """Stress test with many files and workers."""
+    # Create 1000 files
+    files = []
+    for i in range(1000):
+        file = tmp_path / f"stress_{i}.adb"
+        file.write_text(f"procedure Stress_{i} is begin null; end;")
+        files.append(file)
+    
+    # Process with various worker counts
+    for num_workers in [1, 2, 4, 8]:
+        pool = WorkerPool(num_workers=num_workers)
+        metrics = ThreadSafeMetrics()
+        
+        start = asyncio.get_event_loop().time()
+        await pool.start(metrics, Mock(), True)
+        
+        for i, file in enumerate(files):
+            await pool.submit(WorkItem(file, "content", i+1, len(files)))
+        
+        await pool.shutdown()
+        duration = asyncio.get_event_loop().time() - start
+        
+        print(f"Workers: {num_workers}, Time: {duration:.2f}s")
+        assert await metrics.get_changed() == 1000
+```
+
 ## Debugging Tests
 
 ### Debug Mode
