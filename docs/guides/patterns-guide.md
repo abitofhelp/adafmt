@@ -1,9 +1,11 @@
 # Pattern Formatter Guide
 
-**Document Version:** 1.0.0  
-**Date:** September 16, 2025  
-**Status:** Released  
-**Applies To:** adafmt ≥ 1.0.0
+**Version:** 1.0.0
+**Date:** January 2025
+**License:** BSD-3-Clause
+**Copyright:** © 2025 Michael Gardner, A Bit of Help, Inc.
+**Authors:** Michael Gardner, A Bit of Help, Inc.
+**Status:** Released
 
 This comprehensive guide covers everything about adafmt's pattern formatter system - from basic usage to advanced development and extensibility.
 
@@ -324,7 +326,7 @@ patterns = PatternFormatter.load_from_json(path)
 # 2. Pattern Application (per file)
 if als_success:
     text, stats = patterns.apply(file_path, formatted_text)
-    
+
 # 3. Pattern Logging
 logger.log_file_patterns(file_path, stats)
 
@@ -361,14 +363,14 @@ def load_from_json(cls, path: Path, logger=None, ui=None) -> 'PatternFormatter':
     try:
         with open(path, 'r', encoding='utf-8') as f:
             rules_data = json.load(f)
-        
+
         # Validate and compile each rule
         compiled_rules = []
         for rule in rules_data:
             if cls._validate_rule(rule):
                 compiled = cls._compile_rule(rule)
                 compiled_rules.append(compiled)
-        
+
         return cls(tuple(compiled_rules))
     except Exception as e:
         # Log error and return disabled formatter
@@ -380,12 +382,12 @@ def load_from_json(cls, path: Path, logger=None, ui=None) -> 'PatternFormatter':
 Patterns are applied sequentially with timeout protection:
 
 ```python
-def apply(self, path: Path, text: str, timeout_ms: int = 100, 
+def apply(self, path: Path, text: str, timeout_ms: int = 100,
           logger=None, ui=None) -> Tuple[str, FileApplyResult]:
     """Apply all patterns to text."""
     result = text
     metrics = FileApplyResult()
-    
+
     for rule in self.rules:
         try:
             with timeout_context(timeout_ms / 1000):
@@ -398,7 +400,7 @@ def apply(self, path: Path, text: str, timeout_ms: int = 100,
         except TimeoutError:
             # Log timeout and continue
             logger.log({'ev': 'pattern_timeout', 'name': rule.name})
-    
+
     return result, metrics
 ```
 
@@ -409,25 +411,25 @@ def apply(self, path: Path, text: str, timeout_ms: int = 100,
 ```python
 class PatternFormatter:
     """Manages pattern-based text transformations."""
-    
+
     def __init__(self, rules: Tuple[CompiledRule, ...]):
         """Initialize with compiled rules."""
-    
+
     @classmethod
     def load_from_json(cls, path: Path, logger=None, ui=None) -> 'PatternFormatter':
         """Load patterns from JSON file."""
-    
+
     def apply(self, path: Path, text: str, timeout_ms: int = 50,
               logger=None, ui=None) -> Tuple[str, FileApplyResult]:
         """Apply all patterns to text."""
-    
+
     def get_summary(self) -> Dict[str, Dict[str, int]]:
         """Get summary statistics for all patterns."""
-    
+
     @property
     def enabled(self) -> bool:
         """Check if formatter has patterns and is enabled."""
-    
+
     @property
     def loaded_count(self) -> int:
         """Number of loaded patterns."""
@@ -441,7 +443,7 @@ class FileApplyResult:
     """Results from applying patterns to a single file."""
     applied_names: List[str]     # Patterns that made changes
     replacements_sum: int        # Total replacements
-    
+
     def record_application(self, name: str, count: int):
         """Record that a pattern was applied."""
 ```
@@ -464,13 +466,13 @@ def test_comment_normalization():
             "replace": " --  "
         }
     ]
-    
+
     formatter = PatternFormatter.load_from_test_data(patterns)
     result, stats = formatter.apply(
         Path("test.adb"),
         "X : Integer; -- Comment"
     )
-    
+
     assert result == "X : Integer; --  Comment"
     assert stats.replacements_sum == 1
     assert "comment-norm" in stats.applied_names
@@ -487,14 +489,14 @@ def test_patterns_with_als(temp_project):
     # Create test file
     test_file = temp_project / "test.adb"
     test_file.write_text("procedure Test is begin null; end Test;")
-    
+
     # Run adafmt with patterns
     result = subprocess.run(
         ["adafmt", "--project-path", str(temp_project / "test.gpr"),
          "--patterns-path", "patterns.json"],
         capture_output=True
     )
-    
+
     assert result.returncode == 0
 ```
 
@@ -511,10 +513,10 @@ def test_validate_patterns_flag(temp_project):
         "find": " := ",
         "replace": ":="  # ALS will add spaces back
     }]
-    
+
     # Run validation
     result = run_adafmt(["--validate-patterns", "--patterns-path", "bad.json"])
-    
+
     assert result.returncode == 1
     assert "patterns conflict with ALS" in result.stdout
 ```
@@ -559,7 +561,7 @@ with timeout_context(0.05):
 ```bash
 # Extract pattern performance data
 cat adafmt_*_patterns.log | \
-  jq -r 'select(.ev == "pattern_applied") | 
+  jq -r 'select(.ev == "pattern_applied") |
          "\(.name): \(.elapsed_ms)ms on \(.path)"' | \
   sort -k2 -nr | head -20
 ```
@@ -871,7 +873,7 @@ For large codebases:
 3. **Monitor pattern performance**:
    ```bash
    cat adafmt_*_patterns.log | \
-     jq -r 'select(.ev == "pattern_applied") | 
+     jq -r 'select(.ev == "pattern_applied") |
             "\(.name): \(.elapsed_ms)ms"' | \
      sort -k2 -nr
    ```

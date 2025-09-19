@@ -1,5 +1,12 @@
 # logging_jsonl Module
 
+**Version:** 1.0.0
+**Date:** January 2025
+**License:** BSD-3-Clause
+**Copyright:** © 2025 Michael Gardner, A Bit of Help, Inc.
+**Authors:** Michael Gardner, A Bit of Help, Inc.
+**Status:** Released
+
 The `logging_jsonl` module provides structured logging in JSON Lines format for debugging and analysis.
 
 ## Overview
@@ -19,22 +26,22 @@ This module implements:
 ```python
 class JsonlLogger:
     """Thread-safe logger that writes JSON Lines format.
-    
+
     JSONL format writes one JSON object per line, making it easy to
     process with standard tools like jq, grep, and Python.
-    
+
     Attributes:
         file_path: Path to the log file
         file_handle: Open file handle
         lock: Threading lock for concurrent access
         start_time: Logger creation timestamp
-        
+
     Example:
         >>> logger = JsonlLogger("debug.jsonl")
         >>> logger.info("Starting formatting", file="main.adb")
         >>> logger.error("Format failed", file="utils.ads", reason="Syntax error")
         >>> logger.close()
-        
+
     Output:
         {"timestamp":"2025-01-14T10:30:45.123Z","level":"INFO","message":"Starting formatting","file":"main.adb"}
         {"timestamp":"2025-01-14T10:30:45.234Z","level":"ERROR","message":"Format failed","file":"utils.ads","reason":"Syntax error"}
@@ -75,7 +82,7 @@ Log a message with arbitrary fields.
 
 **Example:**
 ```python
-logger.log("INFO", "Processing file", 
+logger.log("INFO", "Processing file",
     file="main.adb",
     size=1024,
     edits=5
@@ -151,7 +158,7 @@ Log an exception with traceback.
 try:
     result = process_file(path)
 except Exception as e:
-    logger.exception("File processing failed", 
+    logger.exception("File processing failed",
         exc_info=e,
         file=str(path)
     )
@@ -250,22 +257,22 @@ def analyze_logs(log_path: Path):
     """Analyze JSONL logs."""
     errors = []
     metrics = []
-    
+
     with open(log_path) as f:
         for line in f:
             entry = json.loads(line)
-            
+
             if entry['level'] == 'ERROR':
                 errors.append(entry)
-            
+
             if 'metric' in entry:
                 metrics.append(entry)
-    
+
     print(f"Found {len(errors)} errors")
     print(f"Collected {len(metrics)} metrics")
-    
+
     # Calculate average formatting time
-    format_times = [m['value'] for m in metrics 
+    format_times = [m['value'] for m in metrics
                     if m.get('metric') == 'format_duration']
     if format_times:
         avg_time = sum(format_times) / len(format_times)
@@ -295,12 +302,12 @@ For high-performance async logging:
 ```python
 class AsyncJsonlLogger:
     """Asynchronous JSONL logger using asyncio."""
-    
+
     def __init__(self, file_path: Path):
         self.queue = asyncio.Queue()
         self.file_path = file_path
         self.writer_task = asyncio.create_task(self._writer())
-    
+
     async def log(self, level: str, message: str, **kwargs):
         """Queue a log entry."""
         entry = {
@@ -310,7 +317,7 @@ class AsyncJsonlLogger:
             **kwargs
         }
         await self.queue.put(entry)
-    
+
     async def _writer(self):
         """Background writer task."""
         async with aiofiles.open(self.file_path, 'a') as f:
@@ -328,22 +335,22 @@ class AsyncJsonlLogger:
 ```python
 class RotatingJsonlLogger(JsonlLogger):
     """JSONL logger with size-based rotation."""
-    
+
     def __init__(self, file_path: Path, max_bytes: int = 10_000_000):
         self.max_bytes = max_bytes
         super().__init__(file_path)
-    
+
     def _check_rotation(self):
         """Check if rotation is needed."""
         if self.file_path.stat().st_size > self.max_bytes:
             self._rotate()
-    
+
     def _rotate(self):
         """Rotate the log file."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         rotated_path = self.file_path.with_suffix(f".{timestamp}.jsonl")
         self.file_path.rename(rotated_path)
-        
+
         # Optionally compress
         import gzip
         with open(rotated_path, 'rb') as f_in:
@@ -373,12 +380,12 @@ Stream logs as they're written:
 def stream_logs(log_path: Path, follow: bool = True):
     """Stream log entries in real-time."""
     import time
-    
+
     with open(log_path, 'r') as f:
         if follow:
             # Go to end of file
             f.seek(0, 2)
-        
+
         while True:
             line = f.readline()
             if line:
@@ -403,23 +410,23 @@ Export metrics for monitoring:
 def export_prometheus_metrics(log_path: Path):
     """Export metrics in Prometheus format."""
     from prometheus_client import Counter, Histogram, start_http_server
-    
+
     # Define metrics
-    files_processed = Counter('adafmt_files_processed_total', 
+    files_processed = Counter('adafmt_files_processed_total',
                              'Total files processed')
     format_duration = Histogram('adafmt_format_duration_seconds',
                                'Time to format file')
-    
+
     # Process logs
     with open(log_path) as f:
         for line in f:
             entry = json.loads(line)
-            
+
             if entry.get('event') == 'file_formatted':
                 files_processed.inc()
                 if 'duration_ms' in entry:
                     format_duration.observe(entry['duration_ms'] / 1000)
-    
+
     # Start metrics server
     start_http_server(8000)
 ```
@@ -434,7 +441,7 @@ Avoid logging sensitive information:
 def sanitize_log_data(data: dict) -> dict:
     """Remove sensitive fields from log data."""
     sensitive_keys = {'password', 'token', 'api_key', 'secret'}
-    
+
     sanitized = {}
     for key, value in data.items():
         if key.lower() in sensitive_keys:
@@ -443,7 +450,7 @@ def sanitize_log_data(data: dict) -> dict:
             sanitized[key] = sanitize_log_data(value)
         else:
             sanitized[key] = value
-    
+
     return sanitized
 ```
 
@@ -478,16 +485,16 @@ For testing without file I/O:
 ```python
 class MockJsonlLogger(JsonlLogger):
     """In-memory logger for testing."""
-    
+
     def __init__(self):
         self.entries = []
         self.lock = threading.Lock()
-    
+
     def _write_entry(self, entry: dict):
         """Store entry in memory instead of file."""
         with self.lock:
             self.entries.append(entry)
-    
+
     def get_entries(self, level: str = None) -> List[dict]:
         """Get logged entries, optionally filtered by level."""
         if level:

@@ -1,7 +1,11 @@
 # Getting Started with adafmt
 
 **Version:** 1.0.0
-**Last Updated:** January 2025
+**Date:** January 2025
+**License:** BSD-3-Clause
+**Copyright:** © 2025 Michael Gardner, A Bit of Help, Inc.
+**Authors:** Michael Gardner, A Bit of Help, Inc.
+**Status:** Released
 
 This guide provides step-by-step instructions for getting started with adafmt, including installation, first usage, and common workflow examples with real command combinations.
 
@@ -153,7 +157,7 @@ adafmt --project-path project.gpr \
 adafmt --project-path project.gpr \
     --include-path src/ \
     --check \
-   
+
 
 # Returns exit code 1 if formatting is needed
 ```
@@ -525,7 +529,7 @@ adafmt/
    ```bash
    # Install package in editable mode with dev dependencies
    make dev
-   
+
    # Or manually:
    pip install -e ".[dev]"
    ```
@@ -534,10 +538,10 @@ adafmt/
    ```bash
    # Test basic functionality
    adafmt --version
-   
+
    # Run basic checks
    make check
-   
+
    # Run the full test suite
    make test-all
    ```

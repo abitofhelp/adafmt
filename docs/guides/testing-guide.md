@@ -1,8 +1,10 @@
 # Testing Guidelines for adafmt
 
-**Document Version:** 1.0.0  
-**Date:** January 2025  
-**Authors:** Michael Gardner, A Bit of Help, Inc.  
+**Version:** 1.0.0
+**Date:** January 2025
+**License:** BSD-3-Clause
+**Copyright:** © 2025 Michael Gardner, A Bit of Help, Inc.
+**Authors:** Michael Gardner, A Bit of Help, Inc.
 **Status:** Released
 
 This guide covers testing best practices, test organization, and how to write effective tests for adafmt.
@@ -100,20 +102,20 @@ pytest -m requires_als
 ```python
 class TestComponentFeature:
     """Test suite for specific component feature."""
-    
+
     def test_normal_case(self):
         """Test normal operation.
-        
+
         Given: Normal input conditions
         When: Operation is performed
         Then: Expected result is produced
         """
         # Arrange
         input_data = create_test_data()
-        
+
         # Act
         result = component.operation(input_data)
-        
+
         # Assert
         assert result == expected_result
 ```
@@ -148,36 +150,36 @@ from adafmt.module import function_under_test
 
 class TestComponentX:
     """Test suite for ComponentX functionality.
-    
+
     Tests are organized by feature/behavior rather than by method,
     focusing on what the component should do rather than how it's implemented.
     """
-    
+
     @pytest.fixture
     def component(self):
         """Create a ComponentX instance for testing."""
         return ComponentX(test_param="value")
-    
+
     def test_normal_operation(self, component):
         """Test that component handles normal input correctly.
-        
+
         Given: Valid input parameters
         When: Operation is performed
         Then: Expected output is produced
         """
         result = component.process("input")
         assert result == "expected output"
-    
+
     def test_edge_case_empty_input(self, component):
         """Test handling of empty input.
-        
+
         Given: Empty string input
         When: Operation is performed
         Then: Component returns None without error
         """
         result = component.process("")
         assert result is None
-    
+
     @pytest.mark.parametrize("invalid_input,expected_error", [
         (None, ValueError),
         (123, TypeError),
@@ -185,7 +187,7 @@ class TestComponentX:
     ])
     def test_invalid_input_raises_error(self, component, invalid_input, expected_error):
         """Test that invalid inputs raise appropriate errors.
-        
+
         Given: Various invalid input types
         When: Operation is attempted
         Then: Appropriate exception is raised
@@ -206,11 +208,11 @@ def test_als_start(mock_popen):
     mock_process = Mock()
     mock_process.poll.return_value = None
     mock_popen.return_value = mock_process
-    
+
     # Test
     client = ALSClient(Path("test.gpr"))
     client.start()
-    
+
     # Verify
     mock_popen.assert_called_once()
     assert client.process == mock_process
@@ -226,10 +228,10 @@ def test_file_discovery(tmp_path):
     (tmp_path / "src" / "main.adb").touch()
     (tmp_path / "src" / "package.ads").touch()
     (tmp_path / "doc.txt").touch()
-    
+
     # Test discovery
     files = collect_files([tmp_path])
-    
+
     # Verify only Ada files found
     assert len(files) == 2
     assert all(f.suffix in ['.adb', '.ads'] for f in files)
@@ -300,10 +302,10 @@ pytest --cov=adafmt --cov-report=term-missing
 def test_format_performance(benchmark, large_ada_file):
     """Benchmark file formatting performance."""
     client = ALSClient(Path("test.gpr"))
-    
+
     def format_file():
         return client.format_file(large_ada_file)
-    
+
     result = benchmark(format_file)
     assert benchmark.stats['mean'] < 1.0  # Under 1 second
 ```
@@ -318,11 +320,11 @@ def test_format_many_files(tmp_path):
     for i in range(100):
         file_path = tmp_path / f"test_{i}.adb"
         file_path.write_text(f"procedure Test_{i} is\nbegin\n   null;\nend Test_{i};")
-    
+
     # Format all files
     files = collect_files([tmp_path])
     results = format_all_files(files)
-    
+
     # Verify
     assert len(results) == 100
     assert all(r.success for r in results)
@@ -345,7 +347,7 @@ from adafmt.thread_safe_metrics import ThreadSafeMetrics
 
 class TestWorkerPoolIntegration:
     """Integration tests for the worker pool functionality."""
-    
+
     @pytest.mark.asyncio
     async def test_worker_pool_processes_items(self, tmp_path):
         """Test that worker pool processes all queued items."""
@@ -355,21 +357,21 @@ class TestWorkerPoolIntegration:
             file = tmp_path / f"test_{i}.adb"
             file.write_text(f"procedure Test_{i} is\nbegin null; end;")
             files.append(file)
-        
+
         # Create worker pool
         pool = WorkerPool(num_workers=3)
         metrics = ThreadSafeMetrics()
-        
+
         # Mock pattern formatter
         pattern_formatter = Mock()
         pattern_formatter.format.return_value = Mock(
             content="formatted content",
             replacements=5
         )
-        
+
         # Start pool
         await pool.start(metrics, pattern_formatter, write_enabled=True)
-        
+
         # Queue items
         for i, file in enumerate(files):
             item = WorkItem(
@@ -379,26 +381,26 @@ class TestWorkerPoolIntegration:
                 total=len(files)
             )
             await pool.submit(item)
-        
+
         # Shutdown and wait
         await pool.shutdown()
-        
+
         # Verify all files processed
         assert await metrics.get_changed() == 10
         assert all(f.read_text() == "formatted content" for f in files)
-    
+
     @pytest.mark.asyncio
     async def test_worker_pool_handles_errors(self):
         """Test that worker pool handles worker errors gracefully."""
         pool = WorkerPool(num_workers=2)
         metrics = ThreadSafeMetrics()
-        
+
         # Mock pattern formatter that fails
         pattern_formatter = Mock()
         pattern_formatter.format.side_effect = Exception("Pattern error")
-        
+
         await pool.start(metrics, pattern_formatter, write_enabled=False)
-        
+
         # Queue items
         for i in range(5):
             item = WorkItem(
@@ -408,40 +410,40 @@ class TestWorkerPoolIntegration:
                 total=5
             )
             await pool.submit(item)
-        
+
         await pool.shutdown()
-        
+
         # Verify errors recorded
         assert await metrics.get_errors() == 5
-    
+
     @pytest.mark.asyncio
     async def test_worker_pool_shutdown_timeout(self):
         """Test worker pool shutdown with timeout."""
         pool = WorkerPool(num_workers=1)
-        
+
         # Mock a stuck worker
         async def stuck_worker():
             await asyncio.sleep(60)  # Longer than timeout
-        
+
         pool._worker_func = stuck_worker
         await pool.start(Mock(), Mock(), False)
-        
+
         # Shutdown with short timeout
         with pytest.raises(asyncio.TimeoutError):
             await pool.shutdown(timeout=0.1)
-    
+
     @pytest.mark.asyncio
     async def test_queue_full_handling(self):
         """Test behavior when queue is full."""
         # Small queue for testing
         pool = WorkerPool(num_workers=1, queue_size=2)
-        
+
         # Slow pattern formatter
         pattern_formatter = AsyncMock()
         pattern_formatter.format.side_effect = lambda *args: asyncio.sleep(0.1)
-        
+
         await pool.start(Mock(), pattern_formatter, False)
-        
+
         # Fill queue
         items = []
         for i in range(3):
@@ -452,22 +454,22 @@ class TestWorkerPoolIntegration:
                 total=3
             )
             items.append(item)
-        
+
         # First two should queue immediately
         await pool.submit(items[0])
         await pool.submit(items[1])
-        
+
         # Third should block until space available
         submit_task = asyncio.create_task(pool.submit(items[2]))
-        
+
         # Should not complete immediately
         await asyncio.sleep(0.05)
         assert not submit_task.done()
-        
+
         # After processing starts, should complete
         await asyncio.sleep(0.2)
         assert submit_task.done()
-        
+
         await pool.shutdown()
 ```
 
@@ -478,26 +480,26 @@ class TestWorkerPoolIntegration:
 @pytest.mark.asyncio
 async def test_worker_pool_performance(benchmark, large_project_files):
     """Benchmark worker pool performance vs sequential."""
-    
+
     async def process_sequential():
         for file in large_project_files:
             # Simulate pattern processing
             await asyncio.sleep(0.01)
-    
+
     async def process_parallel():
         pool = WorkerPool(num_workers=3)
         await pool.start(Mock(), Mock(), False)
-        
+
         for i, file in enumerate(large_project_files):
             item = WorkItem(file, "content", i+1, len(large_project_files))
             await pool.submit(item)
-        
+
         await pool.shutdown()
-    
+
     # Benchmark both approaches
     seq_time = benchmark(process_sequential)
     par_time = benchmark(process_parallel)
-    
+
     # Parallel should be faster
     assert par_time < seq_time * 0.7  # At least 30% faster
 ```
@@ -515,21 +517,21 @@ async def test_worker_pool_stress(tmp_path):
         file = tmp_path / f"stress_{i}.adb"
         file.write_text(f"procedure Stress_{i} is begin null; end;")
         files.append(file)
-    
+
     # Process with various worker counts
     for num_workers in [1, 2, 4, 8]:
         pool = WorkerPool(num_workers=num_workers)
         metrics = ThreadSafeMetrics()
-        
+
         start = asyncio.get_event_loop().time()
         await pool.start(metrics, Mock(), True)
-        
+
         for i, file in enumerate(files):
             await pool.submit(WorkItem(file, "content", i+1, len(files)))
-        
+
         await pool.shutdown()
         duration = asyncio.get_event_loop().time() - start
-        
+
         print(f"Workers: {num_workers}, Time: {duration:.2f}s")
         assert await metrics.get_changed() == 1000
 ```

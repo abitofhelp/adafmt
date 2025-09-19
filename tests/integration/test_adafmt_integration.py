@@ -430,7 +430,7 @@ class TestCLIIntegration:
         - Version information is properly formatted
         """
         result = subprocess.run(
-            [sys.executable, "-m", "adafmt", "format", "--version"],
+            [sys.executable, "-m", "adafmt", "--version"],
             capture_output=True,
             text=True
         )

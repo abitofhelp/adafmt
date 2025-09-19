@@ -1,8 +1,10 @@
 # Developer Resources
 
-**Document Version:** 1.0.0  
-**Date:** January 2025  
-**Authors:** Michael Gardner, A Bit of Help, Inc.  
+**Version:** 1.0.0
+**Date:** January 2025
+**License:** BSD-3-Clause
+**Copyright:** © 2025 Michael Gardner, A Bit of Help, Inc.
+**Authors:** Michael Gardner, A Bit of Help, Inc.
 **Status:** Released
 
 Welcome to the comprehensive developer documentation for adafmt! This serves as your central hub for all development resources, whether you're making your first contribution, building integrations, or maintaining the project.
@@ -57,7 +59,7 @@ Comprehensive issue resolution guide:
 ### [⚙️ Configuration Guide](configuration-guide.md)
 Complete configuration reference:
 - **Command-Line Options**: All flags and parameters
-- **Environment Variables**: ALS, development, UI configuration  
+- **Environment Variables**: ALS, development, UI configuration
 - **ALS Traces**: Debugging and performance analysis
 - **Configuration Patterns**: Development, CI/CD, large projects
 - **Best Practices**: Security, performance, troubleshooting
@@ -201,7 +203,7 @@ make test-all coverage lint typecheck format
 3. **Practice**: Pick up "good first issue" from GitHub
 4. **Contribute**: Follow [Contributing Guide](contributing-guide.md)
 
-### **Regular Contributors**  
+### **Regular Contributors**
 1. **Efficiency**: Master the Make targets and development workflow
 2. **Quality**: Deep dive into [Testing Guide](testing-guide.md) for advanced patterns
 3. **Debug**: Use [Troubleshooting Guide](troubleshooting-guide.md) for complex issues
@@ -209,12 +211,12 @@ make test-all coverage lint typecheck format
 
 ### **Maintainers**
 1. **Architecture**: Review [Formal Documentation](../formal/index.md) for design decisions
-2. **Process**: Ensure [Contributing Guide](contributing-guide.md) standards are maintained  
+2. **Process**: Ensure [Contributing Guide](contributing-guide.md) standards are maintained
 3. **Quality**: Monitor test coverage and performance metrics
 4. **Community**: Guide new contributors and review complex PRs
 
 ### **Integration Developers**
-1. **API**: Deep dive into [API Reference](../api/index.md) 
+1. **API**: Deep dive into [API Reference](../api/index.md)
 2. **Configuration**: Study [Configuration Guide](configuration-guide.md) for integration options
 3. **Examples**: Reference existing integrations and tools
 4. **Testing**: Create comprehensive integration tests
@@ -252,7 +254,7 @@ make test-all coverage lint typecheck format
 export DEBUG=1
 export PYTHONPATH=/path/to/adafmt/src
 
-# ALS Configuration  
+# ALS Configuration
 export ALS_HOME=/path/to/als
 export GPR_PROJECT_PATH=/path/to/projects
 

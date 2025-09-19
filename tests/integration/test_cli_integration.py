@@ -91,7 +91,7 @@ class TestCLIBasicCommands:
         - Command completes within reasonable timeout
         """
         result = subprocess.run(
-            [sys.executable, '-m', 'adafmt', 'format', '--version'],
+            [sys.executable, '-m', 'adafmt', '--version'],
             capture_output=True,
             text=True,
             timeout=10

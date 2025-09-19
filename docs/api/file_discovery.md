@@ -1,5 +1,12 @@
 # file_discovery Module
 
+**Version:** 1.0.0
+**Date:** January 2025
+**License:** BSD-3-Clause
+**Copyright:** © 2025 Michael Gardner, A Bit of Help, Inc.
+**Authors:** Michael Gardner, A Bit of Help, Inc.
+**Status:** Released
+
 The `file_discovery` module provides functionality for discovering and filtering Ada source files.
 
 ## Overview
@@ -24,30 +31,30 @@ def collect_files(
     max_depth: Optional[int] = None
 ) -> List[Path]:
     """Collect all Ada source files from specified paths.
-    
+
     This function recursively searches directories for Ada files,
     applying inclusion and exclusion filters.
-    
+
     Args:
         include_paths: List of paths to search (files or directories)
         exclude_paths: List of paths to exclude from search
         follow_symlinks: Whether to follow symbolic links
         max_depth: Maximum directory depth to search
-        
+
     Returns:
         List of Path objects for discovered Ada files
-        
+
     Raises:
         ValueError: If no include paths are provided
         PermissionError: If a directory can't be accessed
-        
+
     Example:
         >>> files = collect_files(
         ...     include_paths=[Path("src/"), Path("lib/")],
         ...     exclude_paths=[Path("src/generated/")]
         ... )
         >>> print(f"Found {len(files)} Ada files")
-        
+
     Note:
         - Files are returned in sorted order for consistency
         - Hidden directories (starting with .) are skipped by default
@@ -60,24 +67,24 @@ def collect_files(
 ```python
 def is_ada_file(path: Path) -> bool:
     """Check if a file is an Ada source file.
-    
+
     Recognizes the following extensions:
     - .ads (Ada specification)
     - .adb (Ada body)
     - .ada (Generic Ada file)
-    
+
     Args:
         path: File path to check
-        
+
     Returns:
         True if the file is an Ada source file
-        
+
     Example:
         >>> is_ada_file(Path("main.adb"))
         True
         >>> is_ada_file(Path("README.md"))
         False
-        
+
     Note:
         The check is case-insensitive on case-insensitive filesystems.
     """
@@ -92,15 +99,15 @@ def should_exclude(
     exclude_patterns: Optional[List[str]] = None
 ) -> bool:
     """Check if a path should be excluded from processing.
-    
+
     Args:
         path: Path to check
         exclude_paths: List of paths to exclude
         exclude_patterns: List of glob patterns to exclude
-        
+
     Returns:
         True if the path should be excluded
-        
+
     Example:
         >>> should_exclude(
         ...     Path("src/generated/bindings.ads"),
@@ -116,18 +123,18 @@ def should_exclude(
 ```python
 def find_project_root(start_path: Path) -> Optional[Path]:
     """Find the project root by looking for marker files.
-    
+
     Searches upward from start_path for:
     - .git directory
     - alire.toml file
     - *.gpr files
-    
+
     Args:
         start_path: Starting directory for search
-        
+
     Returns:
         Path to project root or None if not found
-        
+
     Example:
         >>> root = find_project_root(Path("src/nested/deep/"))
         >>> print(root)
@@ -178,15 +185,15 @@ async def collect_files_async(
     max_workers: int = 4
 ) -> List[Path]:
     """Collect files using parallel directory traversal.
-    
+
     Args:
         include_paths: Paths to search
         exclude_paths: Paths to exclude
         max_workers: Number of concurrent workers
-        
+
     Returns:
         List of discovered Ada files
-        
+
     Example:
         >>> files = await collect_files_async(
         ...     include_paths=[Path("large_project/")],
@@ -202,11 +209,11 @@ Cache discovered files for repeated runs:
 ```python
 class FileCache:
     """Cache for discovered files with modification tracking."""
-    
+
     def __init__(self, cache_file: Path):
         self.cache_file = cache_file
         self._cache = self._load_cache()
-    
+
     def get_files(
         self,
         include_paths: List[Path],
@@ -233,19 +240,19 @@ def collect_files_with_filter(
     filter_func: Callable[[Path], bool]
 ) -> List[Path]:
     """Collect files with custom filter function.
-    
+
     Args:
         include_paths: Paths to search
         filter_func: Function to filter files
-        
+
     Example:
         >>> # Only files modified in last 24 hours
         >>> import time
         >>> cutoff = time.time() - 86400
-        >>> 
+        >>>
         >>> def recently_modified(path: Path) -> bool:
         ...     return path.stat().st_mtime > cutoff
-        >>> 
+        >>>
         >>> files = collect_files_with_filter(
         ...     include_paths=[Path("src/")],
         ...     filter_func=recently_modified
@@ -260,18 +267,18 @@ Discover files based on project configuration:
 ```python
 def collect_project_files(project_file: Path) -> List[Path]:
     """Collect files referenced by a GNAT project file.
-    
+
     Parses the .gpr file and discovers:
     - Source directories
     - Excluded directories
     - Source file patterns
-    
+
     Args:
         project_file: Path to .gpr file
-        
+
     Returns:
         List of Ada files in the project
-        
+
     Example:
         >>> files = collect_project_files(Path("my_project.gpr"))
         >>> # Automatically uses project's source dirs
@@ -285,15 +292,15 @@ def collect_project_files(project_file: Path) -> List[Path]:
 ```python
 def collect_alire_files(crate_dir: Path) -> List[Path]:
     """Collect files from an Alire crate.
-    
+
     Reads alire.toml and discovers:
     - Source directories
     - Dependencies' source files
     - Generated code locations
-    
+
     Args:
         crate_dir: Path to Alire crate
-        
+
     Returns:
         List of Ada files in the crate
     """
@@ -307,11 +314,11 @@ def collect_gprbuild_files(
     scenario_variables: Optional[Dict[str, str]] = None
 ) -> List[Path]:
     """Collect files using GPRbuild's source resolution.
-    
+
     Args:
         project_file: Path to .gpr file
         scenario_variables: Project scenario variables
-        
+
     Example:
         >>> files = collect_gprbuild_files(
         ...     Path("project.gpr"),
@@ -332,15 +339,15 @@ def collect_files_safe(
     on_error: Callable[[Path, Exception], None] = None
 ) -> List[Path]:
     """Collect files with error handling.
-    
+
     Args:
         include_paths: Paths to search
         on_error: Callback for handling errors
-        
+
     Example:
         >>> def log_error(path: Path, error: Exception):
         ...     print(f"Warning: Can't read {path}: {error}")
-        >>> 
+        >>>
         >>> files = collect_files_safe(
         ...     include_paths=[Path("/")],
         ...     on_error=log_error
@@ -358,10 +365,10 @@ def collect_files_chunked(
     chunk_size: int = 1000
 ) -> Iterator[List[Path]]:
     """Collect files in chunks to avoid memory issues.
-    
+
     Yields:
         Chunks of discovered files
-        
+
     Example:
         >>> for chunk in collect_files_chunked(Path("huge_project/")):
         ...     process_files(chunk)  # Process chunk
@@ -378,7 +385,7 @@ Handle Windows-specific issues:
 ```python
 def normalize_path(path: Path) -> Path:
     """Normalize path for cross-platform compatibility.
-    
+
     Handles:
     - Drive letters
     - UNC paths
@@ -422,10 +429,10 @@ def test_collect_files_basic(tmp_path):
     (tmp_path / "src" / "main.adb").touch()
     (tmp_path / "src" / "utils.ads").touch()
     (tmp_path / "README.md").touch()
-    
+
     # Collect files
     files = collect_files(include_paths=[tmp_path])
-    
+
     # Verify
     assert len(files) == 2
     assert all(is_ada_file(f) for f in files)

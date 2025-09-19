@@ -1,8 +1,11 @@
 # adafmt API Documentation
 
-**Version:** 1.0.0  
-**License:** BSD-3-Clause  
+**Version:** 1.0.0
+**Date:** January 2025
+**License:** BSD-3-Clause
 **Copyright:** © 2025 Michael Gardner, A Bit of Help, Inc.
+**Authors:** Michael Gardner, A Bit of Help, Inc.
+**Status:** Released
 
 ## Overview
 
@@ -107,7 +110,7 @@ async with ALSClient(project_path="project.gpr") as client:
         include_paths=["src/"],
         exclude_paths=["tests/"]
     )
-    
+
     # Format each file
     for file in files:
         edits = await client.format_file(file)

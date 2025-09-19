@@ -1,5 +1,12 @@
 # cli Module
 
+**Version:** 1.0.0
+**Date:** January 2025
+**License:** BSD-3-Clause
+**Copyright:** © 2025 Michael Gardner, A Bit of Help, Inc.
+**Authors:** Michael Gardner, A Bit of Help, Inc.
+**Status:** Released
+
 The `cli` module provides the main command-line interface for adafmt using the Typer framework.
 
 ## Overview
@@ -30,10 +37,10 @@ def main(
     version: bool = typer.Option(False)
 ) -> None:
     """Format Ada source files using the Ada Language Server.
-    
+
     This is the main entry point for the adafmt command-line tool.
     It discovers Ada files, connects to ALS, and applies formatting.
-    
+
     Args:
         project_path: Path to GNAT project file (.gpr)
         include_paths: Directories to search for Ada files
@@ -46,15 +53,15 @@ def main(
         fail_on_error: Exit with error code on any formatting failure
         workers: Number of concurrent workers (currently limited to 1)
         version: Show version and exit
-        
+
     Returns:
         None (exits with appropriate code)
-        
+
     Exit Codes:
         0: Success - all files formatted
         1: Check mode - files need formatting
         2: Error - formatting failed
-        
+
     Example:
         $ adafmt --project-path project.gpr --include-path src/ --write
         $ adafmt --project-path project.gpr --check --no-diff
@@ -70,22 +77,22 @@ async def run_formatting(
     logger: JsonlLogger
 ) -> FormattingResult:
     """Execute the main formatting workflow.
-    
+
     This function orchestrates the entire formatting process:
     1. Discover Ada files
     2. Start ALS client
     3. Format each file
     4. Apply edits if requested
     5. Report results
-    
+
     Args:
         config: Formatting configuration
         ui: User interface instance
         logger: Logger for debugging
-        
+
     Returns:
         FormattingResult with statistics and exit code
-        
+
     Raises:
         ALSStartupError: If ALS fails to start
         Exception: For unexpected errors
@@ -100,7 +107,7 @@ async def run_formatting(
 @dataclass
 class FormattingConfig:
     """Configuration for formatting operation.
-    
+
     Attributes:
         project_path: Path to GNAT project file
         include_paths: Directories to include
@@ -212,11 +219,11 @@ hooks:
 ```python
 def run_hook(name: str, context: Dict[str, Any]) -> None:
     """Execute a configured hook command.
-    
+
     Args:
         name: Hook name (pre-format, post-format, etc.)
         context: Variables available to the hook
-        
+
     Example:
         run_hook("pre-format", {"file": "src/main.adb"})
     """

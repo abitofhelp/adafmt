@@ -1,5 +1,12 @@
 # Formal Documentation
 
+**Version:** 1.0.0
+**Date:** January 2025
+**License:** BSD-3-Clause
+**Copyright:** © 2025 Michael Gardner, A Bit of Help, Inc.
+**Authors:** Michael Gardner, A Bit of Help, Inc.
+**Status:** Released
+
 This section contains the official project specifications, requirements, and design documents for adafmt. These documents serve as the authoritative source for project requirements, architectural decisions, and compliance information.
 
 ## 📋 Formal Documents

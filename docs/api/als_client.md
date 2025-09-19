@@ -1,5 +1,12 @@
 # als_client Module
 
+**Version:** 1.0.0
+**Date:** January 2025
+**License:** BSD-3-Clause
+**Copyright:** © 2025 Michael Gardner, A Bit of Help, Inc.
+**Authors:** Michael Gardner, A Bit of Help, Inc.
+**Status:** Released
+
 The `als_client` module provides the core functionality for communicating with the Ada Language Server (ALS) using the Language Server Protocol (LSP).
 
 ## Overview
@@ -18,17 +25,17 @@ This module implements a robust client for the Ada Language Server that handles:
 ```python
 class ALSClient:
     """Asynchronous client for communicating with the Ada Language Server.
-    
+
     This client manages the lifecycle of an ALS process and provides methods
     for formatting Ada source files using the Language Server Protocol.
-    
+
     Attributes:
         project_path (Path): Path to the GNAT project file
         logger (JsonlLogger): Logger instance for debugging
         process (subprocess.Popen): ALS process handle
         reader (asyncio.StreamReader): Async reader for ALS stdout
         writer (asyncio.StreamWriter): Async writer for ALS stdin
-        
+
     Example:
         >>> async with ALSClient(project_path="project.gpr") as client:
         ...     edits = await client.format_file("src/main.adb")
@@ -101,7 +108,7 @@ Gracefully shut down the ALS process.
 ```python
 class ALSProtocolError(Exception):
     """Raised when LSP protocol communication fails.
-    
+
     Attributes:
         message (str): Error description
         code (int): LSP error code if available
@@ -114,7 +121,7 @@ class ALSProtocolError(Exception):
 ```python
 class ALSStartupError(Exception):
     """Raised when ALS process fails to start.
-    
+
     Attributes:
         command (List[str]): The command that failed
         stderr (str): Captured stderr output
