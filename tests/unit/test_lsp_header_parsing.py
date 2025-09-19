@@ -184,16 +184,17 @@ class TestLSPHeaderParsing:
             b'{"some": "data"}'  # This won't be read
         ]
         
-        client = ALSClient(project_file=Path("test.gpr"))
+        logged_messages = []
+        
+        client = ALSClient(project_file=Path("test.gpr"), logger=logged_messages.append)
         client.process = MagicMock()
         client.process.stdout = MockStreamReader(mock_data)
-        client._stderr_lines = []
         
         reader_task = asyncio.create_task(client._reader_loop())
         await asyncio.sleep(0.1)
         
         # Should log the missing header
-        assert any("Missing Content-Length" in line for line in client._stderr_lines)
+        assert any("Missing Content-Length" in msg for msg in logged_messages)
         
         reader_task.cancel()
         try:
@@ -209,16 +210,17 @@ class TestLSPHeaderParsing:
             b'\r\n'
         ]
         
-        client = ALSClient(project_file=Path("test.gpr"))
+        logged_messages = []
+        
+        client = ALSClient(project_file=Path("test.gpr"), logger=logged_messages.append)
         client.process = MagicMock()
         client.process.stdout = MockStreamReader(mock_data)
-        client._stderr_lines = []
         
         reader_task = asyncio.create_task(client._reader_loop())
         await asyncio.sleep(0.1)
         
         # Should log the invalid content length
-        assert any("Invalid Content-Length" in line for line in client._stderr_lines)
+        assert any("Invalid Content-Length" in msg for msg in logged_messages)
         
         reader_task.cancel()
         try:

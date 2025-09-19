@@ -32,10 +32,13 @@ def cleanup_handler(signum=None, frame=None):
         if cleanup_client:
             # Force sync shutdown of ALS client
             try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
+                try:
+                    # Try to get the running loop
+                    loop = asyncio.get_running_loop()
+                    # Schedule shutdown task
                     loop.create_task(cleanup_client.shutdown())
-                else:
+                except RuntimeError:
+                    # No running loop, create new one for shutdown
                     asyncio.run(cleanup_client.shutdown())
             except Exception:
                 # Force kill the process if graceful shutdown fails

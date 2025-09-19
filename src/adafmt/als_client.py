@@ -205,22 +205,37 @@ class ALSClient:
             - Lines are flushed immediately for real-time monitoring
             - Increments _stderr_lines counter for metrics
         """
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        with log_path.open("a", encoding="utf-8") as f:
-            while not stream.at_eof():
-                chunk = await stream.readline()
-                if not chunk:
-                    break
-                line = chunk.decode(errors="replace").rstrip("\n")
-                stamped = f"{_timestamp()} | {line}\n"
-                f.write(stamped)
-                f.flush()
-                
-                # Filter out ALS progress indicators that look like "##O=#" or similar patterns
-                if self.logger and not (line.strip() and all(c in "#=-O " for c in line)):
-                    self.logger(f"[als][stderr] {line}")
-                
-                self._stderr_lines += 1
+        try:
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            with log_path.open("a", encoding="utf-8") as f:
+                while not stream.at_eof():
+                    try:
+                        chunk = await stream.readline()
+                        if not chunk:
+                            break
+                        line = chunk.decode(errors="replace").rstrip("\n")
+                        stamped = f"{_timestamp()} | {line}\n"
+                        f.write(stamped)
+                        f.flush()
+                        
+                        # Filter out ALS progress indicators that look like "##O=#" or similar patterns
+                        if self.logger and not (line.strip() and all(c in "#=-O " for c in line)):
+                            self.logger(f"[als][stderr] {line}")
+                        
+                        self._stderr_lines += 1
+                    except asyncio.CancelledError:
+                        # Task cancelled, exit cleanly
+                        raise
+                    except Exception as e:
+                        if self.logger:
+                            self.logger(f"[als][stderr] Error reading stream: {e}")
+                        # Continue trying to read
+        except asyncio.CancelledError:
+            # Normal cancellation during shutdown
+            pass
+        except Exception as e:
+            if self.logger:
+                self.logger(f"[als][stderr] Fatal error in pump_stderr: {e}")
 
     async def start(self) -> None:
         """Start the Ada Language Server process.
@@ -467,60 +482,82 @@ class ALSClient:
         """
         if not self.process or not self.process.stdout:
             raise RuntimeError("ALS process is not running (stdout unavailable)")
-        r = self.process.stdout
-        while True:
-            # Read LSP headers until blank line
-            headers = {}
+        
+        try:
+            r = self.process.stdout
             while True:
-                line = await r.readline()
-                if not line:
-                    # EOF - process died
-                    return
-                    
-                # Handle both CRLF and LF line endings
-                line = line.rstrip(b'\r\n')
-                if not line:
-                    # Empty line signals end of headers
-                    break
-                    
-                # Parse header
-                try:
-                    if b':' in line:
-                        key, value = line.split(b':', 1)
-                        # Case-insensitive header names per LSP spec
-                        headers[key.strip().lower()] = value.strip()
-                except ValueError:
-                    # Malformed header, skip it
-                    self._stderr_lines.append(f"[als] Malformed header: {line}")
-                    continue
-            
-            # Extract content length
-            content_length = headers.get(b'content-length')
-            if not content_length:
-                self._stderr_lines.append("[als] Missing Content-Length header")
-                continue
+                # Read LSP headers until blank line
+                headers = {}
+                while True:
+                    line = await r.readline()
+                    if not line:
+                        # EOF - process died
+                        return
+                        
+                    # Handle both CRLF and LF line endings
+                    line = line.rstrip(b'\r\n')
+                    if not line:
+                        # Empty line signals end of headers
+                        break
+                        
+                    # Parse header
+                    try:
+                        if b':' in line:
+                            key, value = line.split(b':', 1)
+                            # Case-insensitive header names per LSP spec
+                            headers[key.strip().lower()] = value.strip()
+                    except ValueError:
+                        # Malformed header, skip it
+                        if self.logger:
+                            self.logger(f"[als] Malformed header: {line}")
+                        continue
                 
-            try:
-                length = int(content_length)
-            except ValueError:
-                self._stderr_lines.append(f"[als] Invalid Content-Length: {content_length}")
-                continue
-            
-            # Read the JSON payload
-            try:
-                payload = await r.readexactly(length)
-                msg = json.loads(payload.decode("utf-8"))
-            except Exception as e:
-                self._stderr_lines.append(f"[als] Failed to read/parse message: {e}")
-                continue
-            if "id" in msg and ("result" in msg or "error" in msg):
-                mid = str(msg["id"])
-                fut = self._pending.pop(mid, None)
-                if fut and not fut.done():
-                    if "error" in msg:
-                        fut.set_exception(ALSProtocolError(msg["error"]))
-                    else:
-                        fut.set_result(msg["result"])
+                # Extract content length
+                content_length = headers.get(b'content-length')
+                if not content_length:
+                    if self.logger:
+                        self.logger("[als] Missing Content-Length header")
+                    continue
+                    
+                try:
+                    length = int(content_length)
+                except ValueError:
+                    if self.logger:
+                        self.logger(f"[als] Invalid Content-Length: {content_length}")
+                    continue
+                
+                # Read the JSON payload
+                try:
+                    payload = await r.readexactly(length)
+                    msg = json.loads(payload.decode("utf-8"))
+                except Exception as e:
+                    if self.logger:
+                        self.logger(f"[als] Failed to read/parse message: {e}")
+                    continue
+                if "id" in msg and ("result" in msg or "error" in msg):
+                    mid = str(msg["id"])
+                    fut = self._pending.pop(mid, None)
+                    if fut and not fut.done():
+                        if "error" in msg:
+                            fut.set_exception(ALSProtocolError(msg["error"]))
+                        else:
+                            fut.set_result(msg["result"])
+        except asyncio.CancelledError:
+            # Normal cancellation during shutdown
+            raise
+        except Exception as e:
+            if self.logger:
+                self.logger(f"[als] Fatal error in reader loop: {e}")
+            # Re-raise to ensure task failure is noticed
+            raise
+        finally:
+            # Clean up any pending futures
+            for future in self._pending.values():
+                if not future.done():
+                    future.set_exception(
+                        ALSProtocolError({"message": "ALS connection lost"})
+                    )
+            self._pending.clear()
         # end reader
 
     async def wait(self) -> int:
