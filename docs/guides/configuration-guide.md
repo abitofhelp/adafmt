@@ -34,8 +34,8 @@ Complete guide for configuring adafmt, including command-line options, environme
 **Purpose**: Specifies the path to the GNAT project file (.gpr)  
 **Examples**:
 ```bash
-adafmt --project-path project.gpr
-adafmt --project-path /path/to/my_project.gpr
+adafmt format --project-path project.gpr
+adafmt format --project-path /path/to/my_project.gpr
 ```
 
 ### File Selection
@@ -47,10 +47,10 @@ adafmt --project-path /path/to/my_project.gpr
 **Examples**:
 ```bash
 # Single directory
-adafmt --project-path project.gpr --include-path src/
+adafmt format --project-path project.gpr --include-path src/
 
 # Multiple directories
-adafmt --project-path project.gpr \
+adafmt format --project-path project.gpr \
     --include-path src/ \
     --include-path lib/ \
     --include-path tests/
@@ -62,12 +62,12 @@ adafmt --project-path project.gpr \
 **Examples**:
 ```bash
 # Exclude generated code
-adafmt --project-path project.gpr \
+adafmt format --project-path project.gpr \
     --include-path src/ \
     --exclude-path src/generated/
 
 # Exclude multiple directories
-adafmt --project-path project.gpr \
+adafmt format --project-path project.gpr \
     --exclude-path build/ \
     --exclude-path .git/ \
     --exclude-path tmp/
@@ -80,10 +80,10 @@ adafmt --project-path project.gpr \
 **Example**:
 ```bash
 # Preview changes (default)
-adafmt --project-path project.gpr
+adafmt format --project-path project.gpr
 
 # Apply changes
-adafmt --project-path project.gpr --write
+adafmt format --project-path project.gpr --write
 ```
 
 #### `--check`
@@ -91,7 +91,7 @@ adafmt --project-path project.gpr --write
 **Example**:
 ```bash
 # CI/CD usage
-adafmt --project-path project.gpr --check
+adafmt format --project-path project.gpr --check
 if [ $? -ne 0 ]; then
     echo "Files need formatting"
     exit 1
@@ -102,7 +102,7 @@ fi
 **Purpose**: Show unified diff of changes
 **Example**:
 ```bash
-adafmt --project-path project.gpr --diff
+adafmt format --project-path project.gpr --diff
 ```
 
 ### User Interface
@@ -124,10 +124,10 @@ The UI automatically adapts to terminal capabilities and respects standard color
 **Examples**:
 ```bash
 # Large project
-adafmt --project-path large_project.gpr --init-timeout 300
+adafmt format --project-path large_project.gpr --init-timeout 300
 
 # Fast CI environment
-adafmt --project-path project.gpr --init-timeout 60
+adafmt format --project-path project.gpr --init-timeout 60
 ```
 
 #### `--format-timeout`
@@ -137,10 +137,10 @@ adafmt --project-path project.gpr --init-timeout 60
 **Examples**:
 ```bash
 # Complex files
-adafmt --project-path project.gpr --format-timeout 120
+adafmt format --project-path project.gpr --format-timeout 120
 
 # Quick formatting
-adafmt --project-path project.gpr --format-timeout 30
+adafmt format --project-path project.gpr --format-timeout 30
 ```
 
 #### `--max-consecutive-timeouts`
@@ -150,13 +150,13 @@ adafmt --project-path project.gpr --format-timeout 30
 **Examples**:
 ```bash
 # Strict timeout handling
-adafmt --project-path project.gpr --max-consecutive-timeouts 2
+adafmt format --project-path project.gpr --max-consecutive-timeouts 2
 
 # Lenient timeout handling
-adafmt --project-path project.gpr --max-consecutive-timeouts 10
+adafmt format --project-path project.gpr --max-consecutive-timeouts 10
 
 # No timeout limit
-adafmt --project-path project.gpr --max-consecutive-timeouts 0
+adafmt format --project-path project.gpr --max-consecutive-timeouts 0
 ```
 
 #### `--max-file-size`
@@ -166,16 +166,16 @@ adafmt --project-path project.gpr --max-consecutive-timeouts 0
 **Examples**:
 ```bash
 # Default 100KB limit
-adafmt --project-path project.gpr
+adafmt format --project-path project.gpr
 
 # Increase to 1MB for larger files
-adafmt --project-path project.gpr --max-file-size 1048576
+adafmt format --project-path project.gpr --max-file-size 1048576
 
 # Increase to 10MB for very large files
-adafmt --project-path project.gpr --max-file-size 10485760
+adafmt format --project-path project.gpr --max-file-size 10485760
 
 # Set to 50KB for stricter limit
-adafmt --project-path project.gpr --max-file-size 51200
+adafmt format --project-path project.gpr --max-file-size 51200
 ```
 **Note**: Files exceeding this size are skipped with a warning message.
 
@@ -196,10 +196,10 @@ adafmt --project-path project.gpr --max-file-size 51200
 **Examples**:
 ```bash
 # Normal cleanup
-adafmt --project-path project.gpr --preflight kill
+adafmt format --project-path project.gpr --preflight kill
 
 # Force cleanup of all ALS processes
-adafmt --project-path project.gpr --preflight aggressive
+adafmt format --project-path project.gpr --preflight aggressive
 ```
 
 ### Logging and Debugging
@@ -210,10 +210,10 @@ adafmt --project-path project.gpr --preflight aggressive
 **Examples**:
 ```bash
 # Basic logging
-adafmt --project-path project.gpr --log-path debug.jsonl
+adafmt format --project-path project.gpr --log-path debug.jsonl
 
 # Timestamped logs
-adafmt --project-path project.gpr --log-path "adafmt_$(date +%Y%m%d_%H%M%S).jsonl"
+adafmt format --project-path project.gpr --log-path "adafmt_$(date +%Y%m%d_%H%M%S).jsonl"
 ```
 
 #### `--stderr-path`
@@ -222,10 +222,10 @@ adafmt --project-path project.gpr --log-path "adafmt_$(date +%Y%m%d_%H%M%S).json
 **Examples**:
 ```bash
 # Capture ALS errors
-adafmt --project-path project.gpr --stderr-path als_errors.log
+adafmt format --project-path project.gpr --stderr-path als_errors.log
 
 # Debug ALS issues
-adafmt --project-path project.gpr \
+adafmt format --project-path project.gpr \
     --stderr-path als_debug.log \
     --log-path debug.jsonl
 ```
@@ -239,10 +239,10 @@ adafmt --project-path project.gpr \
 **Examples**:
 ```bash
 # Custom pattern file
-adafmt --project-path project.gpr --patterns-path custom_patterns.json
+adafmt format --project-path project.gpr --patterns-path custom_patterns.json
 
 # Disable patterns
-adafmt --project-path project.gpr --no-patterns
+adafmt format --project-path project.gpr --no-patterns
 ```
 
 #### `--patterns-timeout-ms`
@@ -252,7 +252,7 @@ adafmt --project-path project.gpr --no-patterns
 **Examples**:
 ```bash
 # Increase pattern timeout
-adafmt --project-path project.gpr --patterns-timeout-ms 100
+adafmt format --project-path project.gpr --patterns-timeout-ms 100
 ```
 
 #### `--validate-patterns`
@@ -260,7 +260,7 @@ adafmt --project-path project.gpr --patterns-timeout-ms 100
 **Examples**:
 ```bash
 # Validate patterns before commit
-adafmt --project-path project.gpr --validate-patterns
+adafmt format --project-path project.gpr --validate-patterns
 ```
 
 ### Hooks
@@ -272,10 +272,10 @@ adafmt --project-path project.gpr --validate-patterns
 **Examples**:
 ```bash
 # Git status check
-adafmt --project-path project.gpr --pre-hook "git status --porcelain"
+adafmt format --project-path project.gpr --pre-hook "git status --porcelain"
 
 # Build verification
-adafmt --project-path project.gpr --pre-hook "gprbuild -P project.gpr -c"
+adafmt format --project-path project.gpr --pre-hook "gprbuild -P project.gpr -c"
 ```
 
 #### `--post-hook`
@@ -285,10 +285,10 @@ adafmt --project-path project.gpr --pre-hook "gprbuild -P project.gpr -c"
 **Examples**:
 ```bash
 # Git add changes
-adafmt --project-path project.gpr --post-hook "git add -A" --write
+adafmt format --project-path project.gpr --post-hook "git add -A" --write
 
 # Run tests
-adafmt --project-path project.gpr --post-hook "make test" --write
+adafmt format --project-path project.gpr --post-hook "make test" --write
 ```
 
 ## 2. Environment Variables
@@ -300,7 +300,7 @@ adafmt --project-path project.gpr --post-hook "make test" --write
 **Example**:
 ```bash
 export ALS_HOME=/opt/ada_language_server
-adafmt --project-path project.gpr
+adafmt format --project-path project.gpr
 ```
 
 #### `GPR_PROJECT_PATH`
@@ -308,7 +308,7 @@ adafmt --project-path project.gpr
 **Example**:
 ```bash
 export GPR_PROJECT_PATH=/usr/local/lib/gnat:/opt/ada/lib/gnat
-adafmt --project-path project.gpr
+adafmt format --project-path project.gpr
 ```
 
 ### Development Environment
@@ -318,7 +318,7 @@ adafmt --project-path project.gpr
 **Example**:
 ```bash
 export DEBUG=1
-adafmt --project-path project.gpr
+adafmt format --project-path project.gpr
 ```
 
 #### `CI`
@@ -327,7 +327,7 @@ adafmt --project-path project.gpr
 **Example**:
 ```bash
 export CI=true
-adafmt --project-path project.gpr  # Uses plain UI automatically
+adafmt format --project-path project.gpr  # Uses plain output automatically
 ```
 
 ## 3. Configuration Patterns
@@ -336,8 +336,7 @@ adafmt --project-path project.gpr  # Uses plain UI automatically
 
 ```bash
 # Interactive development
-adafmt --project-path project.gpr \
-    --ui pretty \
+adafmt format --project-path project.gpr \
     --diff \
     --log-path "dev_$(date +%Y%m%d_%H%M%S).jsonl"
 ```
@@ -346,9 +345,8 @@ adafmt --project-path project.gpr \
 
 ```bash
 # Fast CI check
-adafmt --project-path project.gpr \
+adafmt format --project-path project.gpr \
     --check \
-    --ui plain \
     --init-timeout 60 \
     --format-timeout 30 \
     --max-consecutive-timeouts 2 \
@@ -359,11 +357,10 @@ adafmt --project-path project.gpr \
 
 ```bash
 # Optimized for large codebases
-adafmt --project-path large_project.gpr \
+adafmt format --project-path large_project.gpr \
     --init-timeout 300 \
     --format-timeout 120 \
     --max-consecutive-timeouts 10 \
-    --ui json \
     --write
 ```
 
@@ -371,10 +368,9 @@ adafmt --project-path large_project.gpr \
 
 ```bash
 # Maximum debugging
-adafmt --project-path project.gpr \
+adafmt format --project-path project.gpr \
     --log-path debug.jsonl \
     --stderr-path als_stderr.log \
-    --ui plain \
     --preflight aggressive
 ```
 
@@ -405,7 +401,7 @@ When `--als-traces-config-path` is not provided, adafmt automatically:
 **Purpose**: Path to custom GNATCOLL traces configuration file
 **Example**:
 ```bash
-adafmt --project-path project.gpr --als-traces-config-path my_traces.conf
+adafmt format --project-path project.gpr --als-traces-config-path my_traces.conf
 ```
 
 ### Traces Configuration File Format
@@ -474,7 +470,7 @@ ALS.LSP=yes
 >als_protocol.log
 EOF
 
-adafmt --project-path project.gpr --als-traces-config-path debug_traces.conf
+adafmt format --project-path project.gpr --als-traces-config-path debug_traces.conf
 ```
 
 #### Performance Problems
@@ -486,7 +482,7 @@ ALS.TIMING=yes
 >als_timing.log
 EOF
 
-adafmt --project-path project.gpr --als-traces-config-path perf_traces.conf
+adafmt format --project-path project.gpr --als-traces-config-path perf_traces.conf
 ```
 
 #### Analyzing Trace Output
@@ -509,18 +505,18 @@ For different environments:
 
 ```bash
 # Development (generous timeouts)
-adafmt --project-path project.gpr \
+adafmt format --project-path project.gpr \
     --init-timeout 300 \
     --format-timeout 120
 
 # CI/CD (strict timeouts)
-adafmt --project-path project.gpr \
+adafmt format --project-path project.gpr \
     --init-timeout 60 \
     --format-timeout 30 \
     --max-consecutive-timeouts 2
 
 # Large files (extended timeouts)
-adafmt --project-path project.gpr \
+adafmt format --project-path project.gpr \
     --format-timeout 180 \
     --max-consecutive-timeouts 0
 ```
@@ -529,17 +525,17 @@ adafmt --project-path project.gpr \
 
 ```bash
 # Clean environment
-adafmt --project-path project.gpr --preflight aggressive
+adafmt format --project-path project.gpr --preflight aggressive
 
 # Minimal cleanup
-adafmt --project-path project.gpr --preflight warn
+adafmt format --project-path project.gpr --preflight warn
 ```
 
 ### Pattern Performance
 
 ```bash
 # Faster pattern processing
-adafmt --project-path project.gpr \
+adafmt format --project-path project.gpr \
     --patterns-timeout-ms 25 \
     --patterns-max-bytes 1048576
 ```
@@ -554,7 +550,7 @@ export DEBUG=1
 export ALS_HOME=/usr/local/ada_language_server
 
 # Development alias
-alias adafmt-dev='adafmt --ui pretty --diff --log-path dev.jsonl'
+alias adafmt-dev='adafmt format --diff --log-path dev.jsonl'
 ```
 
 ### CI/CD Environment
@@ -563,9 +559,8 @@ alias adafmt-dev='adafmt --ui pretty --diff --log-path dev.jsonl'
 # GitHub Actions
 - name: Format Ada code
   run: |
-    adafmt --project-path project.gpr \
+    adafmt format --project-path project.gpr \
            --check \
-           --ui plain \
            --init-timeout 60 \
            --format-timeout 30 \
            --preflight aggressive
@@ -578,7 +573,7 @@ alias adafmt-dev='adafmt --ui pretty --diff --log-path dev.jsonl'
 FROM ada-base
 RUN pip install adafmt
 ENV CI=true
-CMD ["adafmt", "--project-path", "project.gpr", "--ui", "plain"]
+CMD ["adafmt", "format", "--project-path", "project.gpr"]
 ```
 
 ## 7. Common Configuration Issues
@@ -591,7 +586,7 @@ CMD ["adafmt", "--project-path", "project.gpr", "--ui", "plain"]
 ls -la project.gpr
 
 # Use absolute path
-adafmt --project-path "$(pwd)/project.gpr"
+adafmt format --project-path "$(pwd)/project.gpr"
 ```
 
 ### "Timeouts still occurring"
@@ -599,13 +594,13 @@ adafmt --project-path "$(pwd)/project.gpr"
 **Progressive timeout increases:**
 ```bash
 # Step 1: Increase init timeout
-adafmt --project-path project.gpr --init-timeout 300
+adafmt format --project-path project.gpr --init-timeout 300
 
 # Step 2: Increase format timeout
-adafmt --project-path project.gpr --format-timeout 120
+adafmt format --project-path project.gpr --format-timeout 120
 
 # Step 3: Remove consecutive limit
-adafmt --project-path project.gpr --max-consecutive-timeouts 0
+adafmt format --project-path project.gpr --max-consecutive-timeouts 0
 ```
 
 ### "ALS not found"
@@ -617,7 +612,7 @@ which ada_language_server
 
 # Set custom ALS location
 export ALS_HOME=/path/to/als
-adafmt --project-path project.gpr
+adafmt format --project-path project.gpr
 ```
 
 ### "Patterns not working"
@@ -628,10 +623,10 @@ adafmt --project-path project.gpr
 jq . adafmt_patterns.json
 
 # Validate patterns
-adafmt --project-path project.gpr --validate-patterns
+adafmt format --project-path project.gpr --validate-patterns
 
 # Disable patterns temporarily
-adafmt --project-path project.gpr --no-patterns
+adafmt format --project-path project.gpr --no-patterns
 ```
 
 ## 8. Debugging Configuration
@@ -641,11 +636,10 @@ adafmt --project-path project.gpr --no-patterns
 ```bash
 # Maximum debug information
 export DEBUG=1
-adafmt --project-path project.gpr \
+adafmt format --project-path project.gpr \
     --log-path debug.jsonl \
     --stderr-path als_stderr.log \
-    --als-traces-config-path debug_traces.conf \
-    --ui plain
+    --als-traces-config-path debug_traces.conf
 ```
 
 ### Analyze Configuration Issues
@@ -667,7 +661,7 @@ cat debug.jsonl | jq 'select(.status == "timeout")'
 # Test with minimal project
 echo 'project Test is end Test;' > test.gpr
 echo 'procedure Main is begin null; end Main;' > main.adb
-adafmt --project-path test.gpr main.adb
+adafmt format --project-path test.gpr main.adb
 ```
 
 ## Best Practices

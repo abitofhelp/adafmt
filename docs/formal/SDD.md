@@ -800,27 +800,27 @@ Pattern Valid
 ### 5.1 CLI Interface
 
 ```bash
-adafmt [OPTIONS] [FILES...]
+adafmt format [OPTIONS] [FILES...]
 
 Required:
-  --project-file-path PATH     Absolute path to .gpr file
+  --project-path PATH         Path to .gpr file
 
 Optional:
   --include-path PATH         Include directory (multiple allowed)
   --exclude-path PATH         Exclude directory (multiple allowed)
   --write                     Apply changes (default: dry-run)
   --check                     Exit 1 if changes needed
-  --diff/--no-diff           Show unified diffs (default: on)
-  --diff/--no-diff           Show unified diffs (default: on)
-  --alr-mode MODE            Alire mode: auto|yes|no
-  --crate-dir PATH           Override Alire crate directory
+  --diff                      Show unified diffs (default)
+  --no-diff                   Hide diffs, show only status
   --log-path PATH            Override JSONL log location (default: ./adafmt_<timestamp>_log.jsonl)
   --stderr-path PATH         Override stderr capture location (default: ./adafmt_<timestamp>_stderr.log)
-  --preflight-mode MODE      Handle existing ALS: warn|kill|fail
-  --process-timeout N        Overall timeout (default: 300)
-  --warmup-seconds N         ALS warmup time (default: 5.0)
-  --format-timeout N         Per-file timeout (default: 30.0)
-  --max-retry-attempts N     Retry count (default: 3)
+  --preflight MODE           Handle existing ALS: off|warn|safe|kill|aggressive|fail
+  --warmup-seconds N         ALS warmup time (default: 10)
+  --format-timeout N         Per-file timeout (default: 60)
+  --init-timeout N           ALS initialization timeout (default: 180)
+  --max-attempts N           Retry count (default: 2)
+  --max-file-size N          Skip files larger than N bytes (default: 102400)
+  --max-consecutive-timeouts N  Abort after N consecutive timeouts (default: 5)
 ```
 
 ### 5.2 Python API
