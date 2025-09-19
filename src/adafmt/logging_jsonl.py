@@ -1,7 +1,8 @@
 # =============================================================================
 # adafmt - Ada Language Formatter
+# SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2025 Michael Gardner, A Bit of Help, Inc.
-# Licensed under the MIT License. See LICENSE file in the project root.
+# See LICENSE file in the project root.
 # =============================================================================
 
 """JSON Lines (JSONL) logging for adafmt operations.
@@ -26,7 +27,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 class JsonlLogger:
     """Logger that writes JSON objects to a file, one per line.

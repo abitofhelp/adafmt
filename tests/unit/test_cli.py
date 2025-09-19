@@ -1,3 +1,10 @@
+# =============================================================================
+# adafmt - Ada Language Formatter
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2025 Michael Gardner, A Bit of Help, Inc.
+# See LICENSE file in the project root.
+# =============================================================================
+
 """Unit tests for the CLI module.
 
 This module contains comprehensive unit tests for the command-line interface
@@ -21,10 +28,15 @@ from unittest.mock import MagicMock, patch, AsyncMock
 import pytest
 
 from adafmt import cli
+from adafmt.file_discovery_new import is_ada_file
+from adafmt.stderr_handler import Tee
+from adafmt import cleanup_handler
+from adafmt.error_writer import write_stderr_error
+from adafmt.cli_helpers import abs_path
 
 
 class TestTeeClass:
-    """Test suite for the _Tee class used for stderr capture.
+    """Test suite for the Tee class used for stderr capture.
     
     Tests the Tee implementation that allows capturing stderr output
     to a file while optionally echoing to the terminal. This is used
@@ -42,7 +54,7 @@ class TestTeeClass:
         file_stream = io.StringIO()
         
         # Create tee with single stream (GPT-5 fix behavior)
-        tee = cli._Tee(file_stream)
+        tee = Tee(file_stream)
         
         # Write test data
         test_data = "Test stderr output\n"
@@ -60,7 +72,7 @@ class TestTeeClass:
         Then: Method executes without error (required for stderr compatibility)
         """
         file_stream = io.StringIO()
-        tee = cli._Tee(file_stream)
+        tee = Tee(file_stream)
         
         # Should not raise
         tee.flush()
@@ -76,7 +88,7 @@ class TestTeeClass:
         file_stream = io.StringIO()
         
         try:
-            sys.stderr = cli._Tee(file_stream)
+            sys.stderr = Tee(file_stream)
             print("Test message", file=sys.stderr)
             assert "Test message\n" in file_stream.getvalue()
         finally:
@@ -93,15 +105,16 @@ class TestErrorWriting:
     
     @patch('sys.stderr')
     def test_write_stderr_error(self, mock_stderr):
-        """Test _write_stderr_error formats error messages with all components.
+        """Test write_stderr_error formats error messages with all components.
         
         Given: Error details including path, type, message, and line/column info
-        When: _write_stderr_error is called
+        When: write_stderr_error is called
         Then: Outputs formatted error with all components and separator
         """
         mock_stderr.write = MagicMock()
+        mock_stderr._streams = [mock_stderr]  # Mock the Tee behavior
         
-        cli._write_stderr_error(
+        write_stderr_error(
             path=Path("/test/file.adb"),
             error_type="SYNTAX_ERROR",
             error_msg="Missing semicolon",
@@ -131,40 +144,40 @@ class TestPathValidation:
     """
     
     def test_abs_expands_user(self):
-        """Test _abs expands tilde to user's home directory.
+        """Test abs_path expands tilde to user's home directory.
         
         Given: A path starting with ~ (tilde)
-        When: _abs is called with the path
+        When: abs_path is called with the path
         Then: Returns absolute path with home directory expanded
         """
-        result = cli._abs("~/test")
+        result = abs_path("~/test")
         assert result.startswith("/")
         assert "~" not in result
     
     def test_abs_resolves_relative(self):
-        """Test _abs converts relative paths to absolute paths.
+        """Test abs_path converts relative paths to absolute paths.
         
         Given: A relative path starting with ./
-        When: _abs is called with the path
+        When: abs_path is called with the path
         Then: Returns absolute path resolved from current directory
         """
-        result = cli._abs("./test")
+        result = abs_path("./test")
         assert result.startswith("/")
         assert "./" not in result
     
     def test_is_ada_file(self):
-        """Test _is_ada_file correctly identifies Ada source files.
+        """Test is_ada_file correctly identifies Ada source files.
         
         Given: Various file paths with different extensions
-        When: _is_ada_file is called with each path
+        When: is_ada_file is called with each path
         Then: Returns True for .ads/.adb/.ada files (case-insensitive), False otherwise
         """
-        assert cli._is_ada_file(Path("test.ads"))
-        assert cli._is_ada_file(Path("test.adb"))
-        assert cli._is_ada_file(Path("test.ada"))
-        assert cli._is_ada_file(Path("TEST.ADS"))  # Case insensitive
-        assert not cli._is_ada_file(Path("test.txt"))
-        assert not cli._is_ada_file(Path("test.py"))
+        assert is_ada_file(Path("test.ads"))
+        assert is_ada_file(Path("test.adb"))
+        assert is_ada_file(Path("test.ada"))
+        assert is_ada_file(Path("TEST.ADS"))  # Case insensitive
+        assert not is_ada_file(Path("test.txt"))
+        assert not is_ada_file(Path("test.py"))
 
 
 class TestUIMode:
@@ -178,7 +191,7 @@ class TestUIMode:
     def test_ui_mode_selection(self, mock_make_ui):
         """Test UI mode parameter is correctly passed to UI factory.
         
-        Given: A specific UI mode string ("pretty", "simple", etc.)
+        Given: UI mode "plain"
         When: make_ui is called with the mode
         Then: UI factory is called with the correct mode parameter
         """
@@ -186,9 +199,9 @@ class TestUIMode:
         mock_make_ui.return_value = mock_ui
         
         # This would be called within run_formatter
-        ui = cli.make_ui("pretty")
+        ui = cli.make_ui("plain")
         
-        mock_make_ui.assert_called_once_with("pretty")
+        mock_make_ui.assert_called_once_with("plain")
 
 
 class TestCleanupHandler:
@@ -199,54 +212,50 @@ class TestCleanupHandler:
     application exits or receives termination signals.
     """
     
-    @patch('adafmt.cli._cleanup_state')
-    def test_cleanup_handler_basic(self, mock_state):
+    def test_cleanup_handler_basic(self):
         """Test _cleanup_handler properly closes UI and logger resources.
         
         Given: Active UI and logger instances in cleanup state
         When: _cleanup_handler is called
         Then: Both UI and logger close methods are called
         """
-        # Setup mock state
-        mock_client = AsyncMock()
+        # Setup mock instances
         mock_ui = MagicMock()
         mock_logger = MagicMock()
         
-        mock_state.als_client = mock_client
-        mock_state.ui = mock_ui
-        mock_state.logger = mock_logger
-        mock_state.original_stderr = sys.stderr
+        # Set global cleanup variables
+        cleanup_handler.set_cleanup_ui(mock_ui)
+        cleanup_handler.set_cleanup_logger(mock_logger)
         
         # Call cleanup
-        cli._cleanup_handler()
+        cleanup_handler.cleanup_handler()
         
         # Verify UI and logger were closed
         mock_ui.close.assert_called_once()
         mock_logger.close.assert_called_once()
+        
+        # Cleanup
+        cleanup_handler.set_cleanup_ui(None)
+        cleanup_handler.set_cleanup_logger(None)
     
-    @patch('adafmt.cli._cleanup_state')
-    def test_cleanup_handler_restores_stderr(self, mock_state):
+    def test_cleanup_handler_restores_stderr(self):
         """Test cleanup handler restores original stderr stream.
         
-        Given: Modified sys.stderr and saved original stderr
+        Given: Modified sys.stderr and saved restore function
         When: _cleanup_handler is called
-        Then: sys.stderr is restored to its original value
+        Then: The restore function is called
         """
-        original = sys.stderr
-        mock_file = MagicMock()
+        # Setup mock restore function
+        mock_restore = MagicMock()
         
-        mock_state.als_client = None
-        mock_state.ui = None
-        mock_state.logger = None
-        mock_state.original_stderr = original
+        # Set global cleanup variable
+        cleanup_handler.set_cleanup_restore_stderr(mock_restore)
         
-        # Temporarily change stderr
-        sys.stderr = mock_file
+        # Call cleanup
+        cleanup_handler.cleanup_handler()
         
-        try:
-            cli._cleanup_handler()
-            # Stderr should be restored
-            assert sys.stderr == original
-        finally:
-            # Ensure we restore it for other tests
-            sys.stderr = original
+        # Verify restore was called
+        mock_restore.assert_called_once()
+        
+        # Cleanup
+        cleanup_handler.set_cleanup_restore_stderr(None)

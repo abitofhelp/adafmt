@@ -1,10 +1,37 @@
 # adafmt — Ada Language Formatter
 
-**Version:** 1.0.0  
-**License:** MIT  
+**Version:** 0.0.0  
+**License:** BSD-3-Clause  
 **Copyright:** © 2025 Michael Gardner, A Bit of Help, Inc.
 
 `adafmt` is an opinionated Ada 2022 formatter that leverages the Ada Language Server (ALS) to provide consistent, modern formatting while maintaining compatibility with earlier Ada versions. Built with extensibility in mind, it supports custom pattern formatting functions that allow teams to enforce project-specific style rules beyond what GNATFORMAT provides. It delivers a robust, production-ready solution for maintaining consistent code style across Ada projects of any size.
+
+## Why Use AdaFmt?
+
+### 🚀 Single-Pass Formatting
+Unlike tools that require multiple passes to converge on a stable format, adafmt achieves consistent results in a single run. No need to run it three times hoping for convergence.
+
+### 📊 Comprehensive Logging
+Every formatting transformation is logged in structured JSON Lines format, providing complete visibility into what changed and why. Perfect for auditing and debugging formatting decisions.
+
+### ✨ Modern Architecture
+Built on the Ada Language Server (ALS) using the Language Server Protocol, avoiding known issues with chaining gnatformat and gnatpp. Get reliable, consistent results every time.
+
+### 🎯 Extensible Pattern System
+Configure custom formatting patterns in a simple JSON file. Override defaults, add project-specific transformations, or enforce team style guides beyond what standard tools provide.
+
+### 🛡️ Safe by Default
+- Dry-run mode shows changes before applying them
+- Atomic file updates prevent partial writes
+- Automatic validation catches syntax errors before writing
+- Comprehensive error reporting for troubleshooting
+
+### 🔧 Additional Benefits
+- **CI/CD Integration**: Check mode with proper exit codes for automated pipelines
+- **Performance Metrics**: Detailed statistics on processing time and throughput
+- **Cross-Platform**: Works on Linux, macOS, and Windows with appropriate ALS
+- **Project-Aware**: Understands GNAT project files (.gpr) for accurate formatting
+- **Flexible Discovery**: Smart file finding with include/exclude path support
 
 ## Features
 
@@ -37,7 +64,7 @@ Download the appropriate package from the [latest release](https://github.com/ab
 **Python Wheel (All Platforms)**
 ```bash
 # Download the wheel file, then:
-pip install adafmt-1.0.0-py3-none-any.whl
+pip install adafmt-0.0.0-py3-none-any.whl
 ```
 
 **Python Zipapp (Portable, No Installation)**
@@ -369,7 +396,7 @@ adafmt/
 │   └── test_integration.py # Integration tests with ALS
 ├── docs/                # Comprehensive documentation
 │   ├── api/            # API reference documentation
-│   ├── developer/      # Developer guides and resources  
+│   ├── guides/          # User and developer guides  
 │   ├── formal/         # Requirements and design documents
 │   ├── reference/      # Technical references and deep-dives
 │   └── user/           # User guides and troubleshooting
@@ -391,7 +418,7 @@ adafmt/
 
 ## Contributing
 
-We welcome contributions! Please see our [Developer Documentation](docs/developer/index.md) for:
+We welcome contributions! Please see our [Developer Documentation](docs/guides/index.md) for:
 
 - Setting up a development environment
 - Code style guidelines
@@ -408,9 +435,9 @@ We welcome contributions! Please see our [Developer Documentation](docs/develope
 - **[Timeout Configuration](docs/user/timeout-guide.md)** - ALS timeout tuning and optimization
 
 ### For Developers  
-- **[Developer Documentation](docs/developer/index.md)** - Complete development guide
+- **[Developer Documentation](docs/guides/index.md)** - Complete development guide
 - **[API Reference](docs/api/index.md)** - Technical API documentation
-- **[Testing Guide](docs/developer/testing.md)** - Comprehensive testing documentation
+- **[Testing Guide](docs/guides/testing-guide.md)** - Comprehensive testing documentation
 
 ### Technical References
 - **[Software Requirements Specification](docs/formal/SRS.md)** - Formal requirements
@@ -419,9 +446,10 @@ We welcome contributions! Please see our [Developer Documentation](docs/develope
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+**BSD-3-Clause** — see [LICENSE](./LICENSE) for the full text.
 
-Copyright © 2025 Michael Gardner, A Bit of Help, Inc.
+© 2025 Michael Gardner, A Bit of Help, Inc.  
+SPDX-License-Identifier: BSD-3-Clause
 
 ## Acknowledgments
 

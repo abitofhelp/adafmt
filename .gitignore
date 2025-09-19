@@ -187,7 +187,6 @@ config.local.json
 
 # Generated documentation
 docs/generated/
-docs/api/
 
 # Performance profiling
 *.prof

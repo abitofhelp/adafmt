@@ -1,7 +1,8 @@
 # =============================================================================
 # adafmt - Ada Language Formatter
+# SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2025 Michael Gardner, A Bit of Help, Inc.
-# Licensed under the MIT License. See LICENSE file in the project root.
+# See LICENSE file in the project root.
 # =============================================================================
 
 """Language Server Protocol (LSP) text edit utilities.
@@ -23,7 +24,6 @@ LSP position coordinates:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import List, Dict, Any
 import difflib
 

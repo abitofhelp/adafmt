@@ -1,7 +1,8 @@
 # =============================================================================
 # adafmt - Ada Language Formatter
+# SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2025 Michael Gardner, A Bit of Help, Inc.
-# Licensed under the MIT License. See LICENSE file in the project root.
+# See LICENSE file in the project root.
 # =============================================================================
 
 """Ada Language Server (ALS) client implementation.
@@ -33,10 +34,8 @@ import datetime as dt
 import json
 import os
 import shlex
-import sys
 import time
 from dataclasses import dataclass, field
-from enum import Enum
 from pathlib import Path
 from shutil import which
 from typing import Any, Dict, Optional, Tuple
@@ -440,10 +439,11 @@ class ALSClient:
             msg: JSON-RPC message to send
             
         Note:
-            The assert ensures we don't try to write to a dead process.
-            In production, this should be a proper check with error handling.
+            Checks that the process is alive before writing to prevent
+            writing to a dead process.
         """
-        assert self.process and self.process.stdin
+        if not self.process or not self.process.stdin:
+            raise RuntimeError("ALS process is not running (stdin unavailable)")
         data = json.dumps(msg).encode("utf-8")
         header = f"Content-Length: {len(data)}\r\n\r\n".encode("ascii")
         self.process.stdin.write(header + data)
@@ -465,19 +465,54 @@ class ALSClient:
         - If it has a 'result', the waiting Future gets the result value
         - Notifications (no 'id') are currently ignored
         """
-        assert self.process and self.process.stdout
+        if not self.process or not self.process.stdout:
+            raise RuntimeError("ALS process is not running (stdout unavailable)")
         r = self.process.stdout
         while True:
-            # Read LSP header
-            header = await r.readline()
-            if not header:
-                break
-            if not header.startswith(b"Content-Length:"):
+            # Read LSP headers until blank line
+            headers = {}
+            while True:
+                line = await r.readline()
+                if not line:
+                    # EOF - process died
+                    return
+                    
+                # Handle both CRLF and LF line endings
+                line = line.rstrip(b'\r\n')
+                if not line:
+                    # Empty line signals end of headers
+                    break
+                    
+                # Parse header
+                try:
+                    if b':' in line:
+                        key, value = line.split(b':', 1)
+                        # Case-insensitive header names per LSP spec
+                        headers[key.strip().lower()] = value.strip()
+                except ValueError:
+                    # Malformed header, skip it
+                    self._stderr_lines.append(f"[als] Malformed header: {line}")
+                    continue
+            
+            # Extract content length
+            content_length = headers.get(b'content-length')
+            if not content_length:
+                self._stderr_lines.append("[als] Missing Content-Length header")
                 continue
-            length = int(header.split(b":")[1].strip())
-            await r.readline()  # CRLF
-            payload = await r.readexactly(length)
-            msg = json.loads(payload.decode("utf-8"))
+                
+            try:
+                length = int(content_length)
+            except ValueError:
+                self._stderr_lines.append(f"[als] Invalid Content-Length: {content_length}")
+                continue
+            
+            # Read the JSON payload
+            try:
+                payload = await r.readexactly(length)
+                msg = json.loads(payload.decode("utf-8"))
+            except Exception as e:
+                self._stderr_lines.append(f"[als] Failed to read/parse message: {e}")
+                continue
             if "id" in msg and ("result" in msg or "error" in msg):
                 mid = str(msg["id"])
                 fut = self._pending.pop(mid, None)

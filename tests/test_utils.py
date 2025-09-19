@@ -1,3 +1,10 @@
+# =============================================================================
+# adafmt - Ada Language Formatter
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2025 Michael Gardner, A Bit of Help, Inc.
+# See LICENSE file in the project root.
+# =============================================================================
+
 """Unit tests for the utils module.
 
 This module contains comprehensive unit tests for utility functions that support
@@ -199,7 +206,8 @@ class TestListAlsPids:
         assert pids == [12345, 67890]
         mock_check_output.assert_called_once_with(
             ["pgrep", "-f", "ada_language_server"], 
-            text=True
+            text=True,
+            timeout=5
         )
     
     @patch('subprocess.check_output')

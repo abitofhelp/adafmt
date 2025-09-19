@@ -62,6 +62,7 @@ help:
 	@echo "  make docs        - Check documentation files exist"
 	@echo "  make clean       - Remove build artifacts and caches"
 	@echo "  make distclean   - Remove venv, build artifacts, and caches"
+	@echo "  make kill-als    - Kill all ALS processes and clean stale locks (aggressive)"
 
 # Create virtual environment
 .PHONY: venv
@@ -326,6 +327,13 @@ check-git:
 		echo "Error: Git working directory is not clean"; \
 		exit 1; \
 	fi
+
+# Kill all ALS processes and clean stale locks (aggressive mode)
+.PHONY: kill-als
+kill-als:
+	@echo "Killing all ALS processes and cleaning stale locks..."
+	@$(PY) $(SCRIPTS_DIR)/kill_als.py
+	@echo "✓ ALS cleanup completed"
 
 # === Distribution Targets ===
 

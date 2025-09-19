@@ -1,3 +1,10 @@
+# =============================================================================
+# adafmt - Ada Language Formatter
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2025 Michael Gardner, A Bit of Help, Inc.
+# See LICENSE file in the project root.
+# =============================================================================
+
 """Integration tests for adafmt with the Ada Language Server.
 
 This module contains comprehensive integration tests that verify the complete adafmt
@@ -21,6 +28,7 @@ Note:
 """
 import asyncio
 import os
+import sys
 import tempfile
 from pathlib import Path
 import pytest
@@ -28,6 +36,23 @@ import shutil
 import subprocess
 
 from adafmt.cli import run_formatter
+from adafmt.utils import kill_als_processes
+
+
+async def run_formatter_with_defaults(**kwargs):
+    """Helper to run formatter with default pattern parameters."""
+    defaults = {
+        'patterns_path': None,
+        'no_patterns': True,  # Disable patterns for basic tests
+        'patterns_timeout_ms': 100,
+        'patterns_max_bytes': 1_000_000,
+        'hook_timeout': 30.0,  # Default hook timeout
+        'using_default_log': False,
+        'using_default_stderr': False,
+        'using_default_patterns': False
+    }
+    defaults.update(kwargs)
+    return await run_formatter(**defaults)
 
 
 @pytest.mark.integration
@@ -44,7 +69,31 @@ class TestALSIntegration:
     
     All tests in this class require ALS to be installed and will be skipped if it's
     not available in the system PATH.
+    
+    Note: All tests use preflight_mode="aggressive" to ensure clean state by killing
+    all ALS processes before each test. This prevents test interference and hangs
+    caused by lingering ALS processes from previous test runs.
     """
+    
+    @pytest.fixture(autouse=True)
+    def ensure_clean_als_state(self):
+        """Ensure clean ALS state before and after each test.
+        
+        This fixture emulates adafmt's preflight and cleanup behavior:
+        1. Kill all ALS processes before test (preflight)
+        2. Run the test
+        3. Kill all ALS processes after test (cleanup)
+        
+        This ensures tests are completely isolated and prevents hangs
+        from lingering ALS processes.
+        """
+        # Preflight: Kill any existing ALS processes
+        kill_als_processes(mode="aggressive", dry_run=False)
+        
+        yield  # Run the test
+        
+        # Cleanup: Kill any ALS processes created by the test
+        kill_als_processes(mode="aggressive", dry_run=False)
     
     @pytest.fixture
     def temp_project(self, tmp_path):
@@ -100,15 +149,14 @@ Put_Line("Hello, World!");
 end Hello;""")
         
         # Run formatter
-        result = await run_formatter(
+        result = await run_formatter_with_defaults(
             project_path=temp_project / "test_project.gpr",
             include_paths=[src_dir],
             exclude_paths=[],
             write=True,  # Actually write the changes
             diff=False,
             check=False,
-            ui_mode="off",
-            preflight_mode="safe",
+            preflight_mode="aggressive",
             als_stale_minutes=30,
             pre_hook=None,
             post_hook=None,
@@ -158,15 +206,14 @@ begin
     Put_Line("Error")
 end Bad;""")
         
-        result = await run_formatter(
+        result = await run_formatter_with_defaults(
             project_path=temp_project / "test_project.gpr",
             include_paths=[src_dir],
             exclude_paths=[],
             write=False,
             diff=False,
             check=True,
-            ui_mode="off",
-            preflight_mode="safe",
+            preflight_mode="aggressive",
             als_stale_minutes=30,
             pre_hook=None,
             post_hook=None,
@@ -211,15 +258,14 @@ end File{i};""")
         
         # Run with extremely short timeout to trigger timeouts
         with pytest.raises(RuntimeError, match="Too many consecutive timeouts"):
-            await run_formatter(
+            await run_formatter_with_defaults(
                 project_path=temp_project / "test_project.gpr",
                 include_paths=[src_dir],
                 exclude_paths=[],
                 write=False,
                 diff=False,
                 check=False,
-                ui_mode="off",
-                preflight_mode="safe",
+                    preflight_mode="aggressive",
                 als_stale_minutes=30,
                 pre_hook=None,
                 post_hook=None,
@@ -247,15 +293,14 @@ end File{i};""")
         - Appropriate success status is returned
         - No unnecessary processing occurs
         """
-        result = await run_formatter(
+        result = await run_formatter_with_defaults(
             project_path=temp_project / "test_project.gpr",
             include_paths=[temp_project / "src"],
             exclude_paths=[],
             write=False,
             diff=False,
             check=False,
-            ui_mode="off",
-            preflight_mode="safe",
+            preflight_mode="aggressive",
             als_stale_minutes=30,
             pre_hook=None,
             post_hook=None,
@@ -357,24 +402,25 @@ class TestCLIIntegration:
         This test verifies that:
         - Help command returns success status
         - Application name and description are shown
-        - Key command-line parameters are documented
+        - Available commands are documented
         - Help output is properly formatted
         """
         result = subprocess.run(
-            ["python", "-m", "adafmt", "--help"],
+            [sys.executable, "-m", "adafmt", "--help"],
             capture_output=True,
             text=True
         )
         
         assert result.returncode == 0
-        assert ("Ada Language Formatter" in result.stdout or "Format Ada source code" in result.stdout)
-        assert "--project-path" in result.stdout
+        assert "Ada Language Formatter" in result.stdout
+        assert "format" in result.stdout
+        assert "license" in result.stdout
     
     def test_cli_version(self):
         """Test that CLI displays version information correctly.
         
         Given: The adafmt CLI is available
-        When: The --version flag is used
+        When: The --version flag is used with format
         Then: Version information is displayed in the expected format
         
         This test verifies that:
@@ -384,7 +430,7 @@ class TestCLIIntegration:
         - Version information is properly formatted
         """
         result = subprocess.run(
-            ["python", "-m", "adafmt", "--version"],
+            [sys.executable, "-m", "adafmt", "format", "--version"],
             capture_output=True,
             text=True
         )
