@@ -5,44 +5,27 @@
 # See LICENSE file in the project root.
 # =============================================================================
 
-"""Command-line interface for adafmt using Typer.
-
-This module provides the main entry point for the adafmt tool, which formats
-Ada source code using the Ada Language Server (ALS). It supports various UI
-modes, Alire integration, and comprehensive error handling with retry logic.
-"""
+"""Command-line interface for adafmt."""
 
 from __future__ import annotations
 
 import asyncio
-import atexit
-import contextlib
 import os
-import signal
 import sys
 import time
-from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 from enum import Enum
 
-# Python 3.9+: importlib.resources.files
-try:
-    from importlib.resources import files as pkg_files
-except ImportError:
-    pkg_files = None
-
 import typer
 from typing_extensions import Annotated
-from tabulate import tabulate
 
-from .als_client import ALSClient, ALSProtocolError
+from .als_client import ALSClient
 from .file_discovery_new import discover_files
 from .file_processor import FileProcessor
 from .logging_jsonl import JsonlLogger
-from .pattern_formatter import PatternFormatter, PatternLogger
+from .pattern_formatter import PatternFormatter
 from .metrics import MetricsCollector
-from .metrics_reporter import MetricsReporter
 from .pattern_validator import PatternValidator
 from .argument_validator import ArgumentValidator
 from .pattern_loader import load_patterns
@@ -50,75 +33,19 @@ from .als_initializer import initialize_als_client
 from .logging_setup import setup_loggers
 from .final_reporter import finalize_and_report
 from .stderr_handler import setup_stderr_redirect
+from .run_setup import execute_pre_hook, run_preflight_checks
+from .default_paths import get_default_paths
+from .cleanup_handler import (
+    cleanup_handler, setup_cleanup_handlers,
+    set_cleanup_client, set_cleanup_ui, set_cleanup_logger,
+    set_cleanup_pattern_logger, set_cleanup_restore_stderr
+)
+from .cli_helpers import APP_VERSION, read_license_text, version_callback
 from .tui import make_ui
-from .utils import preflight, run_hook
+from .utils import preflight
 
-# Version is dynamically read from package metadata
-try:
-    from importlib.metadata import version
-    APP_VERSION = version("adafmt")
-except Exception:
-    # Fallback for development/editable installs
-    APP_VERSION = "0.0.0"
-
-# Global cleanup state
-_cleanup_client: Optional[ALSClient] = None
-_cleanup_ui = None
-_cleanup_logger: Optional[JsonlLogger] = None
-_cleanup_pattern_logger: Optional[JsonlLogger] = None
-_cleanup_restore_stderr = None
-
-
-
-def _cleanup_handler(signum=None, frame=None):
-    """Clean up resources on exit or signal."""
-    try:
-        if _cleanup_client:
-            # Force sync shutdown of ALS client
-            import asyncio
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    loop.create_task(_cleanup_client.shutdown())
-                else:
-                    asyncio.run(_cleanup_client.shutdown())
-            except Exception:
-                # Force kill the process if graceful shutdown fails
-                if hasattr(_cleanup_client, '_proc') and _cleanup_client._proc:
-                    try:
-                        _cleanup_client._proc.terminate()
-                    except Exception:
-                        pass
-        
-        if _cleanup_ui:
-            with contextlib.suppress(Exception):
-                _cleanup_ui.close()
-        
-        if _cleanup_logger:
-            with contextlib.suppress(Exception):
-                _cleanup_logger.close()
-        
-        if _cleanup_pattern_logger:
-            with contextlib.suppress(Exception):
-                _cleanup_pattern_logger.close()
-                
-        if _cleanup_restore_stderr:
-            with contextlib.suppress(Exception):
-                _cleanup_restore_stderr()
-                
-    except Exception:
-        pass  # Don't let cleanup errors crash the cleanup
-        
-    if signum:
-        sys.exit(1)
-
-# Register signal handlers
-signal.signal(signal.SIGINT, _cleanup_handler)
-signal.signal(signal.SIGTERM, _cleanup_handler)
-
-# Also register atexit for normal exit
-atexit.register(_cleanup_handler)
-
+# Setup signal and cleanup handlers
+setup_cleanup_handlers()
 # Define enums for choice fields
 class PreflightMode(str, Enum):
     off = "off"
@@ -145,122 +72,153 @@ def main_callback():
     print(f"Ada Formatter  {APP_VERSION}")
     print("=" * 80)
 
-
-def _read_license_text() -> str:
-    """Read the LICENSE file from package data or filesystem."""
-    # 1) Prefer a bundled copy inside the package: adafmt/LICENSE
-    if pkg_files:
-        try:
-            return pkg_files("adafmt").joinpath("LICENSE").read_text(encoding="utf-8")
-        except Exception:
-            pass
-
-    # 2) Fallbacks for dev runs from a source checkout
-    here = Path(__file__).resolve()
-    for candidate in (
-        here.parent / "LICENSE",
-        here.parent.parent / "LICENSE",
-        here.parent.parent.parent / "LICENSE",  # src/adafmt -> src -> repo root
-        Path.cwd() / "LICENSE",
-    ):
-        if candidate.exists():
-            return candidate.read_text(encoding="utf-8")
-
-    raise FileNotFoundError("LICENSE not found. Bundle it as package data or run from repo root.")
-
-
-def _version_callback(value: bool):
-    """Show version and exit."""
-    if value:
-        typer.echo(f"adafmt version {APP_VERSION}")
-        raise typer.Exit()
-
-
-
-def _abs(p: str) -> str:
-    """Convert a path string to an absolute path."""
-    return str(Path(p).expanduser().resolve())
-
-
-def _write_stderr_error(path: Path, error_type: str, error_msg: str, details: Optional[dict] = None) -> None:
-    """Write detailed error information to stderr with timestamp.
-    
-    Args:
-        path: The file that failed
-        error_type: Type of error (e.g., "ALS_SYNTAX_ERROR", "TIMEOUT", etc.)
-        error_msg: The error message
-        details: Optional additional details as a dictionary
-    """
-    # Only write to stderr if it has been properly redirected to a file
-    # This prevents error details from appearing in the UI output
-    if hasattr(sys.stderr, '_streams') and sys.stderr._streams:
-        timestamp = datetime.now().isoformat()
-        stderr_msg = f"{timestamp} | ERROR | {error_type} | {path}\n"
-        stderr_msg += f"{timestamp} | ERROR | Message: {error_msg}\n"
+async def _handle_pattern_validation(
+    validate_patterns: bool, pattern_formatter: Optional[PatternFormatter],
+    pattern_logger: JsonlLogger, client: Optional[ALSClient],
+    file_paths: List[Path], format_timeout: int, ui: Optional[Any]
+) -> Optional[int]:
+    """Handle pattern validation mode if requested."""
+    if not validate_patterns:
+        return None
         
-        if details:
-            for key, value in details.items():
-                stderr_msg += f"{timestamp} | ERROR | {key}: {value}\n"
+    if not pattern_formatter or not pattern_formatter.enabled:
+        if ui:
+            ui.log_line("[error] No patterns loaded for validation")
+            ui.close()
+        else:
+            print("[error] No patterns loaded for validation")
+        if client:
+            await client.shutdown()
+        return 1
+    
+    # Use PatternValidator for validation
+    validator = PatternValidator(client, pattern_formatter, pattern_logger, ui)
+    error_count, validation_errors = await validator.validate_patterns(file_paths, format_timeout)
+    # Log validation results
+    pattern_logger.write({
+        'ev': 'validation_complete',
+        'errors': validation_errors[:100],  # Limit to first 100 errors in log
+        'total_files': len(file_paths),
+        'files_with_errors': error_count})
+    if client:
+        await client.shutdown()
+    return 1 if error_count > 0 else 0
+
+def _build_status_line(
+    idx: int, total: int, path: Path, status: str,
+    note: Optional[str], no_als: bool,
+    pattern_formatter: Optional[PatternFormatter]
+) -> str:
+    """Build status line for file processing output."""
+    prefix = f"[{idx:>4}/{total}]"
+    line = f"{prefix} [{status:^7}] {path}"
+    
+    # Add ALS info if not in patterns-only mode
+    if not no_als and status == "changed":
+        line += " | ALS: ✓"
+    
+    # Add pattern info if patterns were applied
+    if pattern_formatter and pattern_formatter.enabled:
+        pattern_result = pattern_formatter.files_touched.get(str(path))
+        if pattern_result:
+            patterns_applied = len(pattern_result.applied_names)
+            replacements = pattern_result.replacements_sum
+            if patterns_applied > 0:
+                line += f" | Patterns: applied={patterns_applied} ({replacements})"
+    
+    if status == "failed":
+        line += "  (details in the stderr log)"
+    elif note:
+        line += f"  ({note})"
         
-        stderr_msg += f"{timestamp} | ERROR | {'=' * 60}\n"
-        sys.stderr.write(stderr_msg)
-        sys.stderr.flush()
+    return line
+
+def _print_colored_line(line: str) -> None:
+    """Print status line with terminal colors."""
+    if sys.stdout.isatty():
+        colored_line = line
+        # Color [failed ] in bright red
+        if "[failed ]" in line:
+            start_idx = line.find("[failed ]")
+            end_idx = start_idx + len("[failed ]")
+            colored_line = line[:start_idx] + "\033[91m\033[1m[failed ]\033[0m" + line[end_idx:]
+        # Color [changed] in bright yellow
+        elif "[changed]" in line:
+            start_idx = line.find("[changed]")
+            end_idx = start_idx + len("[changed]")
+            colored_line = line[:start_idx] + "\033[93m\033[1m[changed]\033[0m" + line[end_idx:]
+        print(colored_line)
+    else:
+        print(line)
+
+async def _process_files(
+    file_paths: List[Path], file_processor: FileProcessor,
+    run_start_time: float, ui: Optional[Any],
+    pattern_formatter: Optional[PatternFormatter], no_als: bool,
+    log_path: Optional[Path], stderr_path: Optional[Path],
+    pattern_log_path: Path, using_default_log: bool,
+    using_default_stderr: bool, using_default_patterns: bool,
+    client: Optional[ALSClient]
+) -> None:
+    """Process all files and report progress."""
+    total = len(file_paths)
+    
+    for idx, path in enumerate(file_paths, start=1):
+        # Log first file to debug hanging
+        if idx == 1:
+            if ui:
+                ui.log_line(f"[formatter] Processing first file: {path}")
+            else:
+                print(f"[formatter] Processing first file: {path}")
+        
+        # Process the file
+        file_start_time = time.time()
+        status, note = await file_processor.process_file(path, idx, total, run_start_time)
+        # Build status line
+        line = _build_status_line(
+            idx, total, path, status, note, no_als, pattern_formatter)
+        if ui:
+            ui.log_line(line)
+            ui.set_progress(idx, len(file_paths))
+            # Update footer stats
+            current_time = time.time()
+            elapsed = current_time - run_start_time
+            # Get current stats from processor
+            total_changed = file_processor.als_changed + file_processor.pattern_files_changed
+            total_failed = file_processor.als_failed
+            total_done = idx
+            total_unchanged = total_done - total_changed - total_failed
+            rate = total_done / elapsed if elapsed > 0 else 0
+            
+            ui.update_footer_stats(
+                total=len(file_paths), changed=total_changed,
+                unchanged=total_unchanged, failed=total_failed,
+                elapsed=elapsed, rate=rate,
+                jsonl_log=f"./{log_path} (default location)" if using_default_log else str(log_path) if log_path else "Not configured",
+                als_log=((client.als_log_path if client else None) or "~/.als/ada_ls_log.*.log (default location)") if not no_als else "N/A (ALS disabled)",
+                stderr_log=f"./{stderr_path} (default location)" if using_default_stderr else str(stderr_path) if stderr_path else "Not configured",
+                pattern_log=f"./{pattern_log_path} (default location)" if using_default_patterns else str(pattern_log_path)
+            )
+        else:
+            _print_colored_line(line)
 
 
-
-async def run_formatter(
-    project_path: Path,
-    include_paths: List[Path],
-    exclude_paths: List[Path],
-    write: bool,
-    diff: bool,
-    check: bool,
-    preflight_mode: str,
-    als_stale_minutes: int,
-    pre_hook: Optional[str],
-    post_hook: Optional[str],
-    init_timeout: int,
-    warmup_seconds: int,
-    format_timeout: int,
-    max_attempts: int,
-    log_path: Optional[Path],
-    stderr_path: Optional[Path],
-    files: List[str],
-    max_consecutive_timeouts: int,
-    patterns_path: Optional[Path],
-    no_patterns: bool,
-    patterns_timeout_ms: int,
-    patterns_max_bytes: int,
-    hook_timeout: float,
-    validate_patterns: bool = False,
-    metrics_path: Optional[Path] = None,
-    no_als: bool = False,
-    using_default_log: bool = False,
-    using_default_stderr: bool = False,
-    using_default_patterns: bool = False) -> int:
-    """Run the main formatting logic asynchronously."""
-    # Import path validator (imported here to avoid circular imports)
-    from .path_validator import validate_path
-    
-    run_start_time = time.time()
-    
-    proj = project_path
-    includes = include_paths  # No fallback - already validated in format_command
-    excludes = exclude_paths
-    
+async def _setup_formatter_environment(
+    stderr_path: Optional[Path], log_path: Path, preflight_mode: str,
+    als_stale_minutes: int, pre_hook: Optional[str], hook_timeout: float,
+    project_path: Path, no_als: bool, init_timeout: int,
+    warmup_seconds: int, validate_patterns: bool, write: bool
+) -> Tuple[Any, Any, Any, Any, JsonlLogger, JsonlLogger, Path, MetricsCollector, Optional[ALSClient]]:
+    """Set up the formatter environment including UI, loggers, and ALS client."""
     # UI - always use plain TTY UI
     ui = make_ui("plain")
-    global _cleanup_ui
-    _cleanup_ui = ui
+    set_cleanup_ui(ui)
     
     # Setup stderr redirection
     _orig_stderr, _tee_fp, _restore_stderr = setup_stderr_redirect(stderr_path)
-    global _cleanup_restore_stderr
-    _cleanup_restore_stderr = _restore_stderr
-
+    set_cleanup_restore_stderr(_restore_stderr)
     
-    # Discover files to process
-    file_paths = discover_files(files, includes, excludes, ui)
+    # Setup UI mode display
     if ui:
         if validate_patterns:
             mode = "VALIDATE PATTERNS"
@@ -272,48 +230,60 @@ async def run_formatter(
 
     # Setup loggers
     logger, pattern_logger, pattern_log_path = setup_loggers(log_path)
-    global _cleanup_logger, _cleanup_pattern_logger
-    _cleanup_logger = logger
-    _cleanup_pattern_logger = pattern_logger
+    set_cleanup_logger(logger)
+    set_cleanup_pattern_logger(pattern_logger)
     
     # Initialize metrics collector
-    metrics = MetricsCollector(str(metrics_path) if metrics_path else None)
-    metrics_start_time = time.time()
-
-    # Hooks
-    if pre_hook:
-        ok = run_hook(pre_hook, "pre", logger=(ui.log_line if ui else print), timeout=hook_timeout, dry_run=False)
-        if not ok:
-            if ui:
-                ui.log_line("[error] pre-hook failed; aborting.")
-            else:
-                print("[error] pre-hook failed; aborting.")
-            return 1
-
-    # Preflight
-    project_root = proj.parent
-    if preflight_mode not in ("off", "none"):
-        pf_result = preflight(
-            mode=preflight_mode.replace("+", ""),  # Handle kill+clean
-            als_stale_minutes=als_stale_minutes,
-            lock_ttl_minutes=10,  # default
-            search_paths=[project_root],
-            logger=(ui.log_line if ui else print),
-            dry_run=False,
-        )
-        if pf_result != 0:
-            return int(pf_result)
-
+    metrics = MetricsCollector(None)  # metrics_path will be set later if provided
+    
+    # Execute pre-hook
+    if not execute_pre_hook(pre_hook, hook_timeout, ui):
+        raise SystemExit(1)
+    
+    # Run preflight checks
+    pf_result = run_preflight_checks(project_path, preflight_mode, als_stale_minutes, ui)
+    if pf_result != 0:
+        raise SystemExit(int(pf_result))
 
     # Initialize Ada Language Server client
     client = await initialize_als_client(
-        proj, no_als, stderr_path, init_timeout, 
-        warmup_seconds, metrics, ui
-    )
+        project_path, no_als, stderr_path, init_timeout, 
+        warmup_seconds, metrics, ui)
     if client:
-        global _cleanup_client
-        _cleanup_client = client
+        set_cleanup_client(client)
+        
+    return ui, _orig_stderr, _tee_fp, _restore_stderr, logger, pattern_logger, pattern_log_path, metrics, client
+
+async def run_formatter(
+    project_path: Path, include_paths: List[Path], exclude_paths: List[Path],
+    write: bool, diff: bool, check: bool, preflight_mode: str,
+    als_stale_minutes: int, pre_hook: Optional[str], post_hook: Optional[str],
+    init_timeout: int, warmup_seconds: int, format_timeout: int,
+    max_attempts: int, log_path: Optional[Path], stderr_path: Optional[Path],
+    files: List[str], max_consecutive_timeouts: int, patterns_path: Optional[Path],
+    no_patterns: bool, patterns_timeout_ms: int, patterns_max_bytes: int,
+    hook_timeout: float, validate_patterns: bool = False,
+    metrics_path: Optional[Path] = None, no_als: bool = False,
+    using_default_log: bool = False, using_default_stderr: bool = False,
+    using_default_patterns: bool = False) -> int:
+    """Run the main formatting logic asynchronously."""
+    run_start_time = time.time()
     
+    # Set up formatter environment
+    try:
+        ui, _orig_stderr, _tee_fp, _restore_stderr, logger, pattern_logger, pattern_log_path, metrics, client = await _setup_formatter_environment(
+            stderr_path, log_path, preflight_mode, als_stale_minutes,
+            pre_hook, hook_timeout, project_path, no_als, init_timeout,
+            warmup_seconds, validate_patterns, write
+        )
+    except SystemExit as e:
+        return e.code
+    # Update metrics with the path if provided
+    if metrics_path:
+        metrics._metrics_path = str(metrics_path)
+    metrics_start_time = time.time()
+    # Discover files to process
+    file_paths = discover_files(files, include_paths, exclude_paths, ui)
     # Log discovered files
     if ui:
         ui.log_line(f"[discovery] Found {len(file_paths)} Ada files to format")
@@ -337,39 +307,16 @@ async def run_formatter(
         'patterns_path': str(patterns_path) if patterns_path else None,
         'patterns_loaded': pattern_formatter.loaded_count if pattern_formatter else 0,
         'mode': 'VALIDATE' if validate_patterns else ('WRITE' if write else 'DRY'),
-        'timeout_ms': patterns_timeout_ms,
-        'max_bytes': patterns_max_bytes,
-        'validate_patterns': validate_patterns
-    })
+        'timeout_ms': patterns_timeout_ms, 'max_bytes': patterns_max_bytes,
+        'validate_patterns': validate_patterns})
     
-    # Validation mode - verify patterns don't break ALS formatting
-    if validate_patterns:
-        if not pattern_formatter or not pattern_formatter.enabled:
-            if ui:
-                ui.log_line("[error] No patterns loaded for validation")
-                ui.close()
-            else:
-                print("[error] No patterns loaded for validation")
-            if client:
-                await client.shutdown()
-            return 1
-        
-        # Use PatternValidator for validation
-        validator = PatternValidator(client, pattern_formatter, pattern_logger, ui)
-        error_count, validation_errors = await validator.validate_patterns(file_paths, format_timeout)
-        
-        # Log validation results
-        pattern_logger.write({
-            'ev': 'validation_complete',
-            'errors': validation_errors[:100],  # Limit to first 100 errors in log
-            'total_files': len(file_paths),
-            'files_with_errors': error_count
-        })
-        
-        if client:
-            await client.shutdown()
-        
-        return 1 if error_count > 0 else 0
+    # Handle pattern validation if requested
+    validation_result = await _handle_pattern_validation(
+        validate_patterns, pattern_formatter, pattern_logger,
+        client, file_paths, format_timeout, ui
+    )
+    if validation_result is not None:
+        return validation_result
     
     # Exit early if no files found
     if not file_paths:
@@ -379,7 +326,7 @@ async def run_formatter(
         else:
             print("[warning] No Ada files found in the specified paths")
         if client:
-                await client.shutdown()
+            await client.shutdown()
         return 0
     
     # Log that we're starting formatting
@@ -390,124 +337,30 @@ async def run_formatter(
     
     # Initialize file processor
     file_processor = FileProcessor(
-        client=client,
-        pattern_formatter=pattern_formatter,
-        logger=logger,
-        pattern_logger=pattern_logger,
-        ui=ui,
-        metrics=metrics,
-        no_als=no_als,
-        write=write,
-        diff=diff,
-        format_timeout=format_timeout,
-        max_consecutive_timeouts=max_consecutive_timeouts
-    )
+        client=client, pattern_formatter=pattern_formatter,
+        logger=logger, pattern_logger=pattern_logger,
+        ui=ui, metrics=metrics, no_als=no_als,
+        write=write, diff=diff, format_timeout=format_timeout,
+        max_consecutive_timeouts=max_consecutive_timeouts)
     
-    # Process each file
-    total = len(file_paths)
+    # Process all files
+    await _process_files(
+        file_paths, file_processor, run_start_time, ui,
+        pattern_formatter, no_als, log_path, stderr_path,
+        pattern_log_path, using_default_log, using_default_stderr,
+        using_default_patterns, client)
     
-    for idx, path in enumerate(file_paths, start=1):
-        # Log first file to debug hanging
-        if idx == 1:
-            if ui:
-                ui.log_line(f"[formatter] Processing first file: {path}")
-            else:
-                print(f"[formatter] Processing first file: {path}")
-        
-        # Process the file
-        file_start_time = time.time()
-        status, note = await file_processor.process_file(path, idx, total, run_start_time)
-        
-        # Update UI/console with progress
-        prefix = f"[{idx:>4}/{total}]"
-        
-        # Build status line
-        line = f"{prefix} [{status:^7}] {path}"
-        
-        # Add ALS info if not in patterns-only mode
-        if not no_als and status == "changed":
-            line += " | ALS: ✓"
-        
-        # Add pattern info if patterns were applied
-        if pattern_formatter and pattern_formatter.enabled:
-            pattern_result = pattern_formatter.files_touched.get(str(path))
-            if pattern_result:
-                patterns_applied = len(pattern_result.applied_names)
-                replacements = pattern_result.replacements_sum
-                if patterns_applied > 0:
-                    line += f" | Patterns: applied={patterns_applied} ({replacements})"
-        
-        if status == "failed":
-            line += "  (details in the stderr log)"
-        elif note:
-            line += f"  ({note})"
-            
-        if ui:
-            ui.log_line(line)
-            ui.set_progress(idx, len(file_paths))
-            
-            # Update footer stats
-            current_time = time.time()
-            elapsed = current_time - run_start_time
-            
-            # Get current stats from processor
-            total_changed = file_processor.als_changed + file_processor.pattern_files_changed
-            total_failed = file_processor.als_failed
-            total_done = idx
-            total_unchanged = total_done - total_changed - total_failed
-            rate = total_done / elapsed if elapsed > 0 else 0
-            
-            ui.update_footer_stats(
-                total=len(file_paths),
-                changed=total_changed,
-                unchanged=total_unchanged,
-                failed=total_failed,
-                elapsed=elapsed,
-                rate=rate,
-                jsonl_log=f"./{log_path} (default location)" if using_default_log else str(log_path) if log_path else "Not configured",
-                als_log=((client.als_log_path if client else None) or "~/.als/ada_ls_log.*.log (default location)") if not no_als else "N/A (ALS disabled)",
-                stderr_log=f"./{stderr_path} (default location)" if using_default_stderr else str(stderr_path) if stderr_path else "Not configured",
-                pattern_log=f"./{pattern_log_path} (default location)" if using_default_patterns else str(pattern_log_path)
-            )
-        else:
-            # Apply colors in terminal
-            if sys.stdout.isatty():
-                colored_line = line
-                # Color [failed ] in bright red
-                if "[failed ]" in line:
-                    start_idx = line.find("[failed ]")
-                    end_idx = start_idx + len("[failed ]")
-                    colored_line = line[:start_idx] + "\033[91m\033[1m[failed ]\033[0m" + line[end_idx:]
-                # Color [changed] in bright yellow
-                elif "[changed]" in line:
-                    start_idx = line.find("[changed]")
-                    end_idx = start_idx + len("[changed]")
-                    colored_line = line[:start_idx] + "\033[93m\033[1m[changed]\033[0m" + line[end_idx:]
-                print(colored_line)
-            else:
-                print(line)
-    
-    # Get final statistics from processor
     # Finalize and generate reports
     exit_code = await finalize_and_report(
-        file_processor=file_processor,
-        file_paths=file_paths,
-        run_start_time=run_start_time,
-        warmup_seconds=warmup_seconds,
-        log_path=log_path,
-        stderr_path=stderr_path,
-        pattern_log_path=pattern_log_path,
-        using_default_log=using_default_log,
-        using_default_stderr=using_default_stderr,
-        using_default_patterns=using_default_patterns,
-        pattern_logger=pattern_logger,
-        client=client,
-        pattern_formatter=pattern_formatter,
-        ui=ui,
-        no_als=no_als,
-        check=check,
-        post_hook=post_hook,
-        hook_timeout=hook_timeout
+        file_processor=file_processor, file_paths=file_paths,
+        run_start_time=run_start_time, warmup_seconds=warmup_seconds,
+        log_path=log_path, stderr_path=stderr_path,
+        pattern_log_path=pattern_log_path, using_default_log=using_default_log,
+        using_default_stderr=using_default_stderr, using_default_patterns=using_default_patterns,
+        pattern_logger=pattern_logger, client=client,
+        pattern_formatter=pattern_formatter, ui=ui,
+        no_als=no_als, check=check,
+        post_hook=post_hook, hook_timeout=hook_timeout
     )
     
     # Record run summary metrics
@@ -517,13 +370,11 @@ async def run_formatter(
         als_succeeded=file_processor.als_changed + (len(file_paths) - file_processor.als_changed - file_processor.als_failed),
         als_failed=file_processor.als_failed,
         patterns_changed=file_processor.pattern_files_changed,
-        total_duration=total_duration
-    )
+        total_duration=total_duration)
     
     # Close logger to ensure all data is written
     if logger:
         logger.close()
-    
     _restore_stderr()
     return exit_code
 
@@ -532,17 +383,16 @@ async def run_formatter(
 def license_command():
     """Show the BSD-3-Clause license text."""
     try:
-        license_text = _read_license_text()
+        license_text = read_license_text()
         typer.echo(license_text, color=False)
     except FileNotFoundError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
 
-
 @app.command(name="format")
 def format_command(
     project_path: Annotated[Path, typer.Option("--project-path", help="Path to your GNAT project file (.gpr)")],
-    version: Annotated[Optional[bool], typer.Option("--version", "-v", callback=_version_callback, help="Show version and exit")] = None,
+    version: Annotated[Optional[bool], typer.Option("--version", "-v", callback=version_callback, help="Show version and exit")] = None,
     als_stale_minutes: Annotated[int, typer.Option("--als-stale-minutes", help="Age threshold in minutes for considering ALS processes stale")] = 30,
     check: Annotated[bool, typer.Option("--check", help="Exit with code 1 if any files need formatting")] = False,
     diff: Annotated[bool, typer.Option("--diff", help="Show unified diffs of changes")] = False,
@@ -557,9 +407,6 @@ def format_command(
     hook_timeout: Annotated[int, typer.Option("--hook-timeout", help="Timeout for hook commands in seconds")] = 5,
     preflight: Annotated[PreflightMode, typer.Option("--preflight", help="Handle existing ALS processes and .als-alire locks")] = PreflightMode.safe,
     stderr_path: Annotated[Optional[Path], typer.Option("--stderr-path", help="Override stderr capture location (default: ./adafmt_<timestamp>_stderr.log)")] = None,
-    # UI option disabled - always uses plain UI for better scrollback
-    # The graphical UI has been removed in favor of plain text output
-    # ui: Annotated[UIMode, typer.Option("--ui", help="UI mode")] = UIMode.auto,
     warmup_seconds: Annotated[int, typer.Option("--warmup-seconds", help="Time to let ALS warm up in seconds")] = 10,
     patterns_path: Annotated[Optional[Path], typer.Option("--patterns-path", help="Path to patterns JSON file (default: ./adafmt_patterns.json)")] = None,
     no_patterns: Annotated[bool, typer.Option("--no-patterns", help="Disable pattern processing")] = False,
@@ -572,13 +419,7 @@ def format_command(
     write: Annotated[bool, typer.Option("--write", help="Apply changes to files")] = False,
     files: Annotated[Optional[List[str]], typer.Argument(help="Specific Ada files to format")] = None,
 ) -> None:
-    """Format Ada source code using the Ada Language Server (ALS).
-    
-    Examples:
-        adafmt --project-path /path/to/project.gpr --include-path /path/to/src
-        adafmt --project-path project.gpr --write --check
-        adafmt --project-path project.gpr --ui plain --log-path debug.jsonl
-    """
+    """Format Ada source code using the Ada Language Server (ALS)."""
     # Validate: Must have include paths or specific files
     if not include_path and not files:
         typer.echo("Error: No files or directories to process. You must provide --include-path or specific files.", err=True)
@@ -600,16 +441,10 @@ def format_command(
     
     # Validate paths
     path_valid, path_errors = ArgumentValidator.validate_paths(
-        project_path=project_path,
-        include_paths=include_paths,
-        exclude_paths=exclude_paths,
-        patterns_path=patterns_path,
-        files=files,
-        log_path=log_path,
-        stderr_path=stderr_path,
-        metrics_path=metrics_path,
-        no_patterns=no_patterns
-    )
+        project_path=project_path, include_paths=include_paths,
+        exclude_paths=exclude_paths, patterns_path=patterns_path,
+        files=files, log_path=log_path, stderr_path=stderr_path,
+        metrics_path=metrics_path, no_patterns=no_patterns)
     
     if not path_valid:
         for error in path_errors:
@@ -618,71 +453,33 @@ def format_command(
     
     # Validate options
     options_valid, option_errors = ArgumentValidator.validate_options(
-        no_patterns=no_patterns,
-        no_als=no_als,
-        validate_patterns=validate_patterns,
-        write=write,
-        diff=diff,
-        check=check
-    )
+        no_patterns=no_patterns, no_als=no_als,
+        validate_patterns=validate_patterns, write=write,
+        diff=diff, check=check)
     
     if not options_valid:
         for error in option_errors:
             typer.echo(f"Error: {error}", err=True)
         raise typer.Exit(2)
     
-    # Generate default filenames with timestamp if not provided (ISO 8601 format)
-    from datetime import timezone
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    
-    # Track if using default paths
-    using_default_log = False
-    using_default_stderr = False
-    
-    # Set default log path if not provided (check env var first)
-    if log_path is None:
-        env_log_path = os.getenv("ADAFMT_LOG_FILE_PATH")
-        if env_log_path:
-            log_path = Path(env_log_path)
-        else:
-            log_path = Path(f"./adafmt_{timestamp}_log.jsonl")
-            using_default_log = True
-    
-    # Set default stderr path if not provided  
-    if stderr_path is None:
-        stderr_path = Path(f"./adafmt_{timestamp}_stderr.log")
-        using_default_stderr = True
+    # Get default paths if not provided
+    log_path, stderr_path, using_default_log, using_default_stderr = get_default_paths(
+        log_path, stderr_path)
     
     # Run the async formatter
     exit_code = asyncio.run(run_formatter(
-        project_path=project_path,
-        include_paths=include_paths,
-        exclude_paths=exclude_paths,
-        write=write,
-        diff=diff,
-        check=check,
-        preflight_mode=preflight.value,
-        als_stale_minutes=als_stale_minutes,
-        pre_hook=pre_hook,
-        post_hook=post_hook,
-        init_timeout=init_timeout,
-        warmup_seconds=warmup_seconds,
-        format_timeout=format_timeout,
-        max_attempts=max_attempts,
-        log_path=log_path,
-        stderr_path=stderr_path,
-        files=files or [],
-        max_consecutive_timeouts=max_consecutive_timeouts,
-        patterns_path=patterns_path,
-        no_patterns=no_patterns,
-        patterns_timeout_ms=patterns_timeout_ms,
-        patterns_max_bytes=patterns_max_bytes,
-        hook_timeout=hook_timeout,
-        validate_patterns=validate_patterns,
-        metrics_path=metrics_path,
-        no_als=no_als,
-        using_default_log=using_default_log,
-        using_default_stderr=using_default_stderr,
+        project_path=project_path, include_paths=include_paths,
+        exclude_paths=exclude_paths, write=write, diff=diff, check=check,
+        preflight_mode=preflight.value, als_stale_minutes=als_stale_minutes,
+        pre_hook=pre_hook, post_hook=post_hook, init_timeout=init_timeout,
+        warmup_seconds=warmup_seconds, format_timeout=format_timeout,
+        max_attempts=max_attempts, log_path=log_path, stderr_path=stderr_path,
+        files=files or [], max_consecutive_timeouts=max_consecutive_timeouts,
+        patterns_path=patterns_path, no_patterns=no_patterns,
+        patterns_timeout_ms=patterns_timeout_ms, patterns_max_bytes=patterns_max_bytes,
+        hook_timeout=hook_timeout, validate_patterns=validate_patterns,
+        metrics_path=metrics_path, no_als=no_als,
+        using_default_log=using_default_log, using_default_stderr=using_default_stderr,
         using_default_patterns=True))
     
     raise typer.Exit(exit_code)
@@ -697,7 +494,7 @@ def main() -> None:
         import traceback
         traceback.print_exc()
         # Ensure cleanup runs even on exceptions
-        _cleanup_handler()
+        cleanup_handler()
         sys.exit(1)
 
 if __name__ == "__main__":

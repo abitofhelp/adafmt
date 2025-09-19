@@ -30,6 +30,9 @@ import pytest
 from adafmt import cli
 from adafmt.file_discovery_new import is_ada_file
 from adafmt.stderr_handler import Tee
+from adafmt import cleanup_handler
+from adafmt.error_writer import write_stderr_error
+from adafmt.cli_helpers import abs_path
 
 
 class TestTeeClass:
@@ -102,15 +105,16 @@ class TestErrorWriting:
     
     @patch('sys.stderr')
     def test_write_stderr_error(self, mock_stderr):
-        """Test _write_stderr_error formats error messages with all components.
+        """Test write_stderr_error formats error messages with all components.
         
         Given: Error details including path, type, message, and line/column info
-        When: _write_stderr_error is called
+        When: write_stderr_error is called
         Then: Outputs formatted error with all components and separator
         """
         mock_stderr.write = MagicMock()
+        mock_stderr._streams = [mock_stderr]  # Mock the Tee behavior
         
-        cli._write_stderr_error(
+        write_stderr_error(
             path=Path("/test/file.adb"),
             error_type="SYNTAX_ERROR",
             error_msg="Missing semicolon",
@@ -140,24 +144,24 @@ class TestPathValidation:
     """
     
     def test_abs_expands_user(self):
-        """Test _abs expands tilde to user's home directory.
+        """Test abs_path expands tilde to user's home directory.
         
         Given: A path starting with ~ (tilde)
-        When: _abs is called with the path
+        When: abs_path is called with the path
         Then: Returns absolute path with home directory expanded
         """
-        result = cli._abs("~/test")
+        result = abs_path("~/test")
         assert result.startswith("/")
         assert "~" not in result
     
     def test_abs_resolves_relative(self):
-        """Test _abs converts relative paths to absolute paths.
+        """Test abs_path converts relative paths to absolute paths.
         
         Given: A relative path starting with ./
-        When: _abs is called with the path
+        When: abs_path is called with the path
         Then: Returns absolute path resolved from current directory
         """
-        result = cli._abs("./test")
+        result = abs_path("./test")
         assert result.startswith("/")
         assert "./" not in result
     
@@ -220,19 +224,19 @@ class TestCleanupHandler:
         mock_logger = MagicMock()
         
         # Set global cleanup variables
-        cli._cleanup_ui = mock_ui
-        cli._cleanup_logger = mock_logger
+        cleanup_handler.set_cleanup_ui(mock_ui)
+        cleanup_handler.set_cleanup_logger(mock_logger)
         
         # Call cleanup
-        cli._cleanup_handler()
+        cleanup_handler.cleanup_handler()
         
         # Verify UI and logger were closed
         mock_ui.close.assert_called_once()
         mock_logger.close.assert_called_once()
         
         # Cleanup
-        cli._cleanup_ui = None
-        cli._cleanup_logger = None
+        cleanup_handler.set_cleanup_ui(None)
+        cleanup_handler.set_cleanup_logger(None)
     
     def test_cleanup_handler_restores_stderr(self):
         """Test cleanup handler restores original stderr stream.
@@ -245,13 +249,13 @@ class TestCleanupHandler:
         mock_restore = MagicMock()
         
         # Set global cleanup variable
-        cli._cleanup_restore_stderr = mock_restore
+        cleanup_handler.set_cleanup_restore_stderr(mock_restore)
         
         # Call cleanup
-        cli._cleanup_handler()
+        cleanup_handler.cleanup_handler()
         
         # Verify restore was called
         mock_restore.assert_called_once()
         
         # Cleanup
-        cli._cleanup_restore_stderr = None
+        cleanup_handler.set_cleanup_restore_stderr(None)
