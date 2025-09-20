@@ -64,8 +64,15 @@ help:
 	@echo "Documentation targets:"
 	@echo "  make docs        - Check documentation files exist"
 	@echo "  make docs-bump-headers - Update doc headers with next semantic version"
-	@echo "  make docs-bump-headers-dry-run - Preview header updates (dry-run)"
+	@echo "  make docs-bump-headers-dry - Preview header updates (dry-run)"
 	@echo "  make print-next-version - Show next semantic release version"
+	@echo ""
+	@echo "Release targets:"
+	@echo "  make release-local - Run a full local release (tags, changelog, publish)"
+	@echo ""
+	@echo "Cleanup targets:"
+	@echo "  make clean-baks-dry - Preview backup files to be deleted"
+	@echo "  make clean-baks  - Delete backup files created by doc updates"
 	@echo ""
 	@echo "Utility targets:"
 	@echo "  make check       - Quick sanity check of installation"
@@ -99,23 +106,35 @@ install: venv
 	@echo "  adafmt --help"
 
 # Install with development dependencies
+# COMMENTED OUT: Conflicts with new Makefile dev target
+# .PHONY: dev
+# dev: install
+# 	@echo "Using Python: $(PY)"
+# 	@$(PIP) install -U pip >/dev/null
+# 	@if [ -f requirements-dev.txt ]; then \
+# 		echo "Installing dev deps from requirements-dev.txt..."; \
+# 		$(PIP) install -r requirements-dev.txt; \
+# 	else \
+# 		echo "Installing development dependencies from pyproject.toml..."; \
+# 		$(PIP) install -e ".[dev]"; \
+# 		echo "Installing python-semantic-release..."; \
+# 		$(PIP) install "python-semantic-release>=9,<10"; \
+# 	fi
+# 	@echo "✓ Development environment ready"
+# 	@echo ""
+# 	@echo "Activate the virtual environment with:"
+# 	@echo "  source $(VENV)/bin/activate"
+
+# NEW TARGET FROM Makefile: Install python-semantic-release (and friends if you add requirements-dev.txt later)
 .PHONY: dev
-dev: install
+dev:
 	@echo "Using Python: $(PY)"
 	@$(PIP) install -U pip >/dev/null
 	@if [ -f requirements-dev.txt ]; then \
-		echo "Installing dev deps from requirements-dev.txt..."; \
 		$(PIP) install -r requirements-dev.txt; \
 	else \
-		echo "Installing development dependencies from pyproject.toml..."; \
-		$(PIP) install -e ".[dev]"; \
-		echo "Installing python-semantic-release..."; \
 		$(PIP) install "python-semantic-release>=9,<10"; \
 	fi
-	@echo "✓ Development environment ready"
-	@echo ""
-	@echo "Activate the virtual environment with:"
-	@echo "  source $(VENV)/bin/activate"
 
 # Run tests
 .PHONY: test
@@ -302,32 +321,65 @@ docs:
 
 # === Semantic Release Documentation Targets ===
 
-## Compute the next version and update doc headers (writes in-place; without backups per script).
-.PHONY: docs-bump-headers
-docs-bump-headers: dev
-	@echo "Computing next version via python-semantic-release..."
-	@nv="$( $(SEMREL) version --noop --print )"; \
-	 if [ -z "$$nv" ]; then \
-	   echo "ERROR: Could not compute next version (semantic-release)."; exit 2; \
-	 fi; \
-	 echo "Next version: $$nv"; \
-	 SEMVER_NEXT="$$nv" $(PY) scripts/update_doc_headers.py --write --no-backup
+# COMMENTED OUT: These targets conflict with new Makefile targets
+# ## Compute the next version and update doc headers (writes in-place; without backups per script).
+# .PHONY: docs-bump-headers
+# docs-bump-headers: dev
+# 	@echo "Computing next version via python-semantic-release..."
+# 	@nv="$( $(SEMREL) version --noop --print )"; \
+# 	 if [ -z "$$nv" ]; then \
+# 	   echo "ERROR: Could not compute next version (semantic-release)."; exit 2; \
+# 	 fi; \
+# 	 echo "Next version: $$nv"; \
+# 	 SEMVER_NEXT="$$nv" $(PY) scripts/update_doc_headers.py --write --no-backup
+# 
+# ## Dry-run: show what would change without writing files.
+# .PHONY: docs-bump-headers-dry-run
+# docs-bump-headers-dry-run: dev
+# 	@echo "Computing next version via python-semantic-release..."
+# 	@nv="$( $(SEMREL) version --noop --print )"; \
+# 	 if [ -z "$$nv" ]; then \
+# 	   echo "ERROR: Could not compute next version (semantic-release)."; exit 2; \
+# 	 fi; \
+# 	 echo "Next version: $$nv"; \
+# 	 SEMVER_NEXT="$$nv" $(PY) scripts/update_doc_headers.py
+# 
+# ## Print the next version as detected by python-semantic-release.
+# .PHONY: print-next-version
+# print-next-version: dev
+# 	@$(SEMREL) version --noop --print
 
-## Dry-run: show what would change without writing files.
-.PHONY: docs-bump-headers-dry-run
-docs-bump-headers-dry-run: dev
-	@echo "Computing next version via python-semantic-release..."
-	@nv="$( $(SEMREL) version --noop --print )"; \
-	 if [ -z "$$nv" ]; then \
-	   echo "ERROR: Could not compute next version (semantic-release)."; exit 2; \
-	 fi; \
-	 echo "Next version: $$nv"; \
-	 SEMVER_NEXT="$$nv" $(PY) scripts/update_doc_headers.py
+# NEW TARGETS FROM Makefile:
 
-## Print the next version as detected by python-semantic-release.
+## For visibility while iterating
 .PHONY: print-next-version
 print-next-version: dev
-	@$(SEMREL) version --noop --print
+	@$(SEMREL) --noop version --print
+
+## Preview header changes (no writes)
+.PHONY: docs-bump-headers-dry
+docs-bump-headers-dry: dev
+	@NV="$$( $(SEMREL) --noop version --print )"; \
+	[ -n "$$NV" ] || { echo "ERROR: could not compute next version"; exit 2; }; \
+	echo "Next version: $$NV"; \
+	SEMVER_NEXT="$$NV" $(PY) scripts/update_doc_headers.py
+
+## Update headers (no backups) and commit a non-bumping docs change if needed
+.PHONY: docs-bump-headers
+docs-bump-headers: dev
+	@NV="$$( $(SEMREL) --noop version --print )"; \
+	[ -n "$$NV" ] || { echo "ERROR: could not compute next version"; exit 2; }; \
+	echo "Next version: $$NV"; \
+	SEMVER_NEXT="$$NV" $(PY) scripts/update_doc_headers.py --write --no-backup; \
+	if ! git diff --quiet -- README.md docs; then \
+		git add README.md docs; \
+		git commit -m "docs: update headers for v$$NV"; \
+	fi
+
+## Optional: run a full local release (tags, changelog, publish if configured)
+.PHONY: release-local
+release-local: docs-bump-headers
+	@$(SEMREL) publish
 
 # Clean build artifacts but keep venv
 .PHONY: clean
@@ -453,6 +505,16 @@ dist-clean:
 	@echo "Cleaning distribution artifacts..."
 	rm -rf dist-exe build-exe dist-zipapp build-zipapp
 	@echo "✓ Distribution artifacts removed"
+
+# NEW TARGETS FROM Makefile:
+## Clean backup files created by older runs (not used now due to --no-backup)
+.PHONY: clean-baks-dry
+clean-baks-dry:
+	@find docs -type f \( -name '*.bak' -o -name '*.bak.[0-9]*' \) -print
+
+.PHONY: clean-baks
+clean-baks:
+	@find docs -type f \( -name '*.bak' -o -name '*.bak.[0-9]*' \) -depth -delete
 
 # ---- Release-body bundle for Claude (adafmt specifics) ---------------------
 # Usage:
