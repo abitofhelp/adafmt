@@ -80,6 +80,10 @@ class FileProcessor:
         self.max_file_size = max_file_size
         self.num_workers = num_workers
         
+        # UI queue for worker completion messages
+        self.ui_queue: Optional[asyncio.Queue] = None
+        self.ui_consumer_task: Optional[asyncio.Task] = None
+        
         # Statistics
         self.als_changed = 0
         self.als_failed = 0
@@ -107,6 +111,12 @@ class FileProcessor:
         # Create thread-safe metrics for workers
         self.thread_safe_metrics = ThreadSafeMetrics()
         
+        # Create UI queue for worker completion messages
+        self.ui_queue = asyncio.Queue()
+        
+        # Start UI consumer task
+        self.ui_consumer_task = asyncio.create_task(self._ui_consumer())
+        
         # Create worker pool
         self.worker_pool = WorkerPool(num_workers=self.num_workers)
         
@@ -116,7 +126,8 @@ class FileProcessor:
             pattern_formatter=self.pattern_formatter,
             write_enabled=self.write,
             logger=self.logger,
-            pattern_logger=self.pattern_logger
+            pattern_logger=self.pattern_logger,
+            ui_queue=self.ui_queue
         )
         
         if self.ui:
@@ -129,8 +140,16 @@ class FileProcessor:
         if not self.worker_pool:
             return
             
+        # Wait for all tasks to complete
+        await self.worker_pool.wait_for_completion()
+        
         # Shutdown workers
         await self.worker_pool.shutdown()
+        
+        # Signal UI consumer to stop and wait for it
+        if self.ui_queue and self.ui_consumer_task:
+            await self.ui_queue.put(None)  # Sentinel value
+            await self.ui_consumer_task
         
         # Sync worker metrics with main metrics
         if self.thread_safe_metrics:
@@ -139,7 +158,8 @@ class FileProcessor:
             self.total_errors += snapshot['errors']
             
             if self.ui:
-                self.ui.log_line(f"[parallel] Worker pool processed {snapshot['total_processed']} files")
+                total_processed = snapshot['changed'] + snapshot['unchanged'] + snapshot['errors']
+                self.ui.log_line(f"[parallel] Worker pool processed {total_processed} files")
         
     async def format_file_with_als(self, path: Path) -> List[Dict[str, Any]]:
         """Format a single Ada file using ALS.
@@ -315,7 +335,7 @@ class FileProcessor:
                 if self.diff:
                     print(unified_diff(str(path), original_content, formatted_content))
                 
-                status = "changed"
+                status = "edited"
             else:
                 status = "ok"
             
@@ -380,7 +400,7 @@ class FileProcessor:
                     )
                     await self.worker_pool.submit(work_item)
                     # Worker will handle patterns, writing, and logging
-                    status = "queued"
+                    status = "formatted"  # Done formatting, queued for save
                 else:
                     # Process inline (original behavior)
                     # Apply patterns if enabled
@@ -409,7 +429,7 @@ class FileProcessor:
                     if self.diff:
                         print(unified_diff(str(path), original_content, formatted_content))
                     
-                    status = "changed"
+                    status = "edited"
             else:
                 # No ALS changes, but still check patterns
                 if self.pattern_formatter and self.pattern_formatter.enabled:
@@ -433,7 +453,7 @@ class FileProcessor:
                             queue_time=time.time()
                         )
                         await self.worker_pool.submit(work_item)
-                        status = "queued"
+                        status = "formatted"  # Done formatting, queued for save
                     else:
                         # Process inline
                         formatted_content, pattern_result = self.pattern_formatter.apply(
@@ -445,7 +465,7 @@ class FileProcessor:
                                 atomic_write(path, formatted_content)
                             if self.diff:
                                 print(unified_diff(str(path), original_content, formatted_content))
-                            status = "changed"
+                            status = "edited"
                         
         except asyncio.TimeoutError:
             self.consecutive_timeouts += 1
@@ -516,3 +536,50 @@ class FileProcessor:
                 "patterns_applied": pattern_result.applied_names if pattern_result else [],
                 "patterns_replacements": pattern_result.replacements_sum if pattern_result else 0
             })
+    
+    async def _ui_consumer(self) -> None:
+        """Consume completion messages from workers and display them."""
+        while True:
+            try:
+                message = await self.ui_queue.get()
+                if message is None:  # Sentinel value to stop
+                    break
+                    
+                if message.get('type') == 'completion':
+                    # Build status line for worker completion
+                    path = message['path']
+                    index = message['index']
+                    total = message['total']
+                    status = message['status']
+                    note = message.get('note')
+                    worker_id = message.get('worker_id', 0)
+                    
+                    # Build the status line similar to queued but with completion status
+                    prefix = f"[{index:>4}/{total}]"
+                    
+                    # Build status line using CLI formatter
+                    from .cli import _build_status_line
+                    line = _build_status_line(
+                        index, total, path, status, note,
+                        self.no_als, self.pattern_formatter
+                    )
+                    
+                    # Add worker info
+                    line += f" | Worker: {worker_id}"
+                    
+                    # Display the line
+                    if self.ui:
+                        self.ui.log_line(line)
+                    else:
+                        # Use CLI's colored print function
+                        from .cli import _print_colored_line
+                        _print_colored_line(line)
+                        
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                if self.logger:
+                    self.logger.write({
+                        'ev': 'ui_consumer_error',
+                        'error': str(e)
+                    })

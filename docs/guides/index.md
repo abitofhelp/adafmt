@@ -72,6 +72,14 @@ Complete guide to understanding adafmt's output:
 - **Log Files**: Understanding and using generated logs
 - **Troubleshooting**: Interpreting results for debugging
 
+### [🎨 Terminal Colors Guide](terminal-colors-guide.md)
+Recommended terminal color settings for optimal display:
+- **Color Usage**: Visual hierarchy and status indicators
+- **Terminal Settings**: Recommended ANSI color palette
+- **Compatibility**: Tested terminal emulators
+- **Customization**: Adjusting colors to preference
+- **Troubleshooting**: Color display issues
+
 ### [⏱️ Timeout Configuration Guide](timeout-guide.md)
 Comprehensive guide to timeout configuration and tuning:
 - Understanding adafmt's timeout mechanisms

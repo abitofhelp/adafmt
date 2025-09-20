@@ -78,9 +78,7 @@ class WorkerHealthMonitor:
                 await asyncio.sleep(self.health_check_interval)
                 
                 # Check worker health
-                health = await self.metrics.get_worker_health(
-                    timeout_seconds=self.worker_timeout
-                )
+                health = await self.metrics.get_worker_health()
                 
                 # Check each worker
                 for worker_id, is_healthy in health.items():
@@ -107,9 +105,9 @@ class WorkerHealthMonitor:
                 raise
             except Exception as e:
                 self.logger.error(f"Health monitor error: {e}")
-                await self.metrics.record_error(
-                    worker_id=0,
-                    error=f"Health monitor error: {e}"
+                await self.metrics.increment_errors()
+                await self.metrics.add_error_message(
+                    f"Health monitor error: {e}"
                 )
     
     async def _handle_unhealthy_worker(
@@ -130,9 +128,9 @@ class WorkerHealthMonitor:
             workers[worker_id].cancel()
             
         # Record the issue
-        await self.metrics.record_error(
-            worker_id=worker_id,
-            error=f"Worker timeout (>{self.worker_timeout}s)"
+        await self.metrics.increment_errors()
+        await self.metrics.add_error_message(
+            f"Worker {worker_id} timeout (>{self.worker_timeout}s)"
         )
     
     async def _handle_crashed_worker(

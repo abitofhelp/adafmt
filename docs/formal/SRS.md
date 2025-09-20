@@ -556,12 +556,12 @@ The system operates as a client to the Ada Language Server, communicating via th
 **Requirements:**
 
 #### Worker Pool Management
-- FR-13.1: SHALL support configurable number of workers via `--num-workers N` flag (default: 3)
+- FR-13.1: SHALL support configurable number of workers via `--num-workers N` flag (default: 1)
 - FR-13.2: SHALL support disabling parallel processing with `--num-workers 0`
 - FR-13.3: SHALL create worker pool after ALS initialization but before file processing
 - FR-13.4: SHALL cleanly shutdown all workers on normal termination
 - FR-13.5: SHALL cleanly shutdown all workers on signal reception (SIGTERM, SIGINT)
-- FR-13.6: SHALL limit worker count to 0.6 * CPU cores (maximum)
+- FR-13.6: SHALL limit worker count to reasonable maximum based on CPU cores
 
 #### Queue-Based Architecture
 - FR-13.7: SHALL use asynchronous queue to distribute work from ALS to workers

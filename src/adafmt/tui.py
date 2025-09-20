@@ -228,31 +228,11 @@ class PlainUI(BaseUI):
             
             # Special handling for file processing messages
             if msg.startswith("[") and ("/") in msg and ("] [") in msg:
-                # This is a file processing line, color the status
-                # Color [failed ] in bright red
-                if "[failed ]" in msg:
-                    start_idx = msg.find("[failed ]")
-                    end_idx = start_idx + len("[failed ]")
-                    # Print with ANSI color codes for bright red
-                    colored_msg = msg[:start_idx] + "\033[91m\033[1m[failed ]\033[0m" + msg[end_idx:]
-                    print(colored_msg)
-                # Color [changed] in bright yellow
-                elif "[changed]" in msg:
-                    start_idx = msg.find("[changed]")
-                    end_idx = start_idx + len("[changed]")
-                    # Print with ANSI color codes for bright yellow
-                    colored_msg = msg[:start_idx] + "\033[93m\033[1m[changed]\033[0m" + msg[end_idx:]
-                    print(colored_msg)
-                # Color [  ok   ] in bright green (centered format)
-                elif "[  ok   ]" in msg:
-                    start_idx = msg.find("[  ok   ]")
-                    end_idx = start_idx + len("[  ok   ]")
-                    # Print with ANSI color codes for bright green
-                    colored_msg = msg[:start_idx] + "\033[92m\033[1m[  ok   ]\033[0m" + msg[end_idx:]
-                    print(colored_msg)
-                else:
-                    print(msg)
+                # Use the CLI color function for consistent coloring
+                from .cli import _print_colored_line
+                _print_colored_line(msg)
             else:
+                # Regular message, just print it
                 print(msg)
     
     def show_error(self, msg: str) -> None:

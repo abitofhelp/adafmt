@@ -254,3 +254,4 @@ alire/
 config/
 .alire/
 /.claude/
+/benchmark_results

@@ -49,6 +49,7 @@ Configure custom formatting patterns in a simple JSON file. Override defaults, a
 - **Syntax Error Detection**: Compiler verification to catch GNATFORMAT false positives
 - **Performance Statistics**: Detailed summary with files processed, time elapsed, and processing rate
 - **Atomic File Updates**: Safe file writing with automatic backup during updates
+- **Parallel Processing**: Future-ready architecture with minimal overhead (see [Parallel Processing Guide](docs/guides/parallel-processing-guide.md))
 
 ## Quick Start
 
@@ -227,6 +228,9 @@ adafmt format --project-path /path/to/project.gpr \
 - `--warmup-seconds SECONDS`: Time to let ALS warm up (default: 10.0)
 - `--format-timeout SECONDS`: Timeout per file formatting (default: 60.0)
 - `--max-attempts N`: Retry attempts for transient errors (default: 2)
+- `--num-workers N`: Number of parallel workers for post-ALS processing (default: 1)
+  - Use higher values for patterns-only mode or future parallel ALS
+  - See [Parallel Processing Guide](docs/guides/parallel-processing-guide.md) for when to use multiple workers
 
 #### Debugging
 - `--log-path PATH`: Write structured logs to JSONL file

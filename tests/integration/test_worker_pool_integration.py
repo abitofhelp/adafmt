@@ -41,10 +41,12 @@ class TestWorkerPoolIntegration:
         # Mock pattern formatter
         pattern_formatter = Mock()
         pattern_formatter.enabled = True
-        pattern_formatter.format = Mock(return_value=Mock(
-            content="formatted content",
-            pattern_counts={'rule1': 1},
-            replacements=5
+        pattern_formatter.apply = Mock(return_value=(
+            "formatted content",
+            Mock(
+                applied_names=['rule1'],
+                replacements_sum=5
+            )
         ))
         
         # Start pool
@@ -98,13 +100,15 @@ class TestWorkerPoolIntegration:
             call_count += 1
             if call_count % 2 == 0:
                 raise Exception("Pattern error")
-            return Mock(
-                content="formatted",
-                pattern_counts={},
-                replacements=0
+            return (
+                "formatted",
+                Mock(
+                    applied_names=[],
+                    replacements_sum=0
+                )
             )
         
-        pattern_formatter.format = Mock(side_effect=format_side_effect)
+        pattern_formatter.apply = Mock(side_effect=format_side_effect)
         
         await pool.start(metrics, pattern_formatter, write_enabled=False)
         
@@ -167,8 +171,8 @@ class TestWorkerPoolIntegration:
         def slow_format(*args):
             # Synchronous delay - pattern formatter is sync
             time.sleep(0.2)
-            return Mock(content="formatted", pattern_counts={}, replacements=0)
-        pattern_formatter.format = Mock(side_effect=slow_format)
+            return ("formatted", Mock(applied_names=[], replacements_sum=0))
+        pattern_formatter.apply = Mock(side_effect=slow_format)
         
         await pool.start(metrics, pattern_formatter, False)
         
@@ -233,10 +237,12 @@ class TestWorkerPoolIntegration:
         # Mock components
         pattern_formatter = Mock()
         pattern_formatter.enabled = True
-        pattern_formatter.format = Mock(return_value=Mock(
-            content="formatted",
-            pattern_counts={'rule1': 1},
-            replacements=2
+        pattern_formatter.apply = Mock(return_value=(
+            "formatted",
+            Mock(
+                applied_names=['rule1'],
+                replacements_sum=2
+            )
         ))
         
         logger = Mock(spec=JsonlLogger)
@@ -298,10 +304,12 @@ class TestWorkerPoolIntegration:
         # Simple formatter that adds a comment
         pattern_formatter = Mock()
         pattern_formatter.enabled = True
-        pattern_formatter.format.side_effect = lambda path, content: Mock(
-            content=content + "\n-- Processed",
-            pattern_counts={'comment': 1},
-            replacements=1
+        pattern_formatter.apply.side_effect = lambda path, content: (
+            content + "\n-- Processed",
+            Mock(
+                applied_names=['comment'],
+                replacements_sum=1
+            )
         )
         
         # Time the processing

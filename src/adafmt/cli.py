@@ -14,7 +14,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple, Any
 from enum import Enum
 
 import typer
@@ -71,6 +71,7 @@ def main_callback(
     version: Annotated[Optional[bool], typer.Option("--version", "-v", callback=version_callback, help="Show version and exit")] = None
 ) -> None:
     """Print header for all commands."""
+    print("=" * 80)
     print(f"Ada Formatter  {APP_VERSION}")
     print("=" * 80)
 
@@ -113,10 +114,25 @@ def _build_status_line(
 ) -> str:
     """Build status line for file processing output."""
     prefix = f"[{idx:>4}/{total}]"
-    line = f"{prefix} [{status:^7}] {path}"
+    # Left-align status with icon, pad to 11 chars total
+    if status == "found":
+        status_display = "✓ found     "
+    elif status == "formatted":
+        status_display = "~ formatted "
+    elif status == "amended":
+        status_display = "Δ amended   "
+    elif status == "unchanged":
+        status_display = "= unchanged "
+    elif status == "failed":
+        status_display = "✗ failed    "
+    else:
+        # Fallback - left align with padding
+        status_display = f"{status:<11}"
+    
+    line = f"{prefix} [{status_display}] {path}"
     
     # Add ALS info if not in patterns-only mode
-    if not no_als and status in ["changed", "queued"]:
+    if not no_als and status in ["formatted", "amended"]:
         line += " | ALS: ✓"
     
     # Add pattern info if patterns were applied
@@ -140,22 +156,19 @@ def _build_status_line(
 def _print_colored_line(line: str) -> None:
     """Print status line with terminal colors."""
     if sys.stdout.isatty():
-        colored_line = line
-        # Color [failed ] in bright red
-        if "[failed ]" in line:
-            start_idx = line.find("[failed ]")
-            end_idx = start_idx + len("[failed ]")
-            colored_line = line[:start_idx] + "\033[91m\033[1m[failed ]\033[0m" + line[end_idx:]
-        # Color [changed] in bright yellow
-        elif "[changed]" in line:
-            start_idx = line.find("[changed]")
-            end_idx = start_idx + len("[changed]")
-            colored_line = line[:start_idx] + "\033[93m\033[1m[changed]\033[0m" + line[end_idx:]
-        # Color [queued ] in bright cyan
-        elif "[queued ]" in line:
-            start_idx = line.find("[queued ]")
-            end_idx = start_idx + len("[queued ]")
-            colored_line = line[:start_idx] + "\033[96m\033[1m[queued ]\033[0m" + line[end_idx:]
+        # Check if line contains failed status with the cross mark
+        if "[✗ failed" in line and "]" in line:
+            # Find the exact failed status bracket
+            start_idx = line.find("[✗ failed")
+            # Find the closing bracket after the start
+            end_idx = line.find("]", start_idx) + 1
+            failed_text = line[start_idx:end_idx]
+            # Color the entire status bracket in bright red
+            colored_line = line[:start_idx] + "\033[91m" + failed_text + "\033[0m" + line[end_idx:]
+        else:
+            # All other statuses in light gray
+            # Using 256-color palette: 253 (very light gray)
+            colored_line = "\033[38;5;253m" + line + "\033[0m"
         print(colored_line)
     else:
         print(line)
@@ -176,6 +189,14 @@ async def _process_files(
     await file_processor.initialize_worker_pool()
     
     for idx, path in enumerate(file_paths, start=1):
+        # Show "found" status
+        found_line = _build_status_line(
+            idx, total, path, "found", None, no_als, pattern_formatter)
+        if ui:
+            ui.log_line(found_line)
+        else:
+            _print_colored_line(found_line)
+        
         # Log first file to debug hanging
         if idx == 1:
             if ui:
@@ -433,7 +454,7 @@ def format_command(
     no_als: Annotated[bool, typer.Option("--no-als", help="Disable ALS formatting (patterns only)")] = False,
     max_consecutive_timeouts: Annotated[int, typer.Option("--max-consecutive-timeouts", help="Abort after this many timeouts in a row (0 = no limit)")] = 5,
     max_file_size: Annotated[int, typer.Option("--max-file-size", help="Skip files larger than this size in bytes (default: 102400 = 100KB)")] = 102400,
-    num_workers: Annotated[Optional[int], typer.Option("--num-workers", help="Number of parallel workers for post-ALS processing (default: 0.6 * CPU cores)")] = None,
+    num_workers: Annotated[Optional[int], typer.Option("--num-workers", help="Number of parallel workers for post-ALS processing (default: 1)")] = None,
     write: Annotated[bool, typer.Option("--write", help="Apply changes to files")] = False,
     files: Annotated[Optional[List[str]], typer.Argument(help="Specific Ada files to format")] = None,
 ) -> None:

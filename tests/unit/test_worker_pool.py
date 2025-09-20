@@ -26,11 +26,10 @@ class TestWorkerPool:
     
     def test_initialization_default_workers(self):
         """Test worker pool initializes with default worker count."""
-        with patch('os.cpu_count', return_value=8):
-            pool = WorkerPool()
-            assert pool.num_workers == 4  # 0.6 * 8 = 4.8, int() = 4
-            assert pool.queue.maxsize == 10
-            assert not pool._running
+        pool = WorkerPool()
+        assert pool.num_workers == 1  # Default is now 1 based on benchmarks
+        assert pool.queue.maxsize == 10
+        assert not pool._running
     
     def test_initialization_custom_workers(self):
         """Test worker pool with custom worker count."""
@@ -38,11 +37,10 @@ class TestWorkerPool:
         assert pool.num_workers == 3
         assert pool.queue.maxsize == 5
     
-    def test_initialization_min_one_worker(self):
-        """Test worker pool has at least one worker."""
-        with patch('os.cpu_count', return_value=1):
-            pool = WorkerPool()
-            assert pool.num_workers == 1  # max(1, int(0.6)) = 1
+    def test_initialization_explicit_none(self):
+        """Test worker pool with None defaults to 1."""
+        pool = WorkerPool(num_workers=None)
+        assert pool.num_workers == 1  # Default is 1 when None is passed
     
     @pytest.mark.asyncio
     async def test_start_creates_workers(self):
@@ -152,10 +150,12 @@ class TestWorkerPool:
         # Mock pattern formatter
         formatter = Mock()  # Remove spec to allow all attributes
         formatter.enabled = True
-        formatter.format = Mock(return_value=Mock(
-            content="formatted content",
-            pattern_counts={'rule1': 2, 'rule2': 0},
-            replacements=2
+        formatter.apply = Mock(return_value=(
+            "formatted content",  # The formatted text
+            Mock(
+                applied_names=['rule1', 'rule2'],
+                replacements_sum=2
+            )
         ))
         
         # Create test file
@@ -181,8 +181,8 @@ class TestWorkerPool:
         await pool._process_item(item, worker_id=1)
         
         # Verify pattern formatter called
-        formatter.format.assert_called_once_with(
-            str(test_file),
+        formatter.apply.assert_called_once_with(
+            test_file,
             "original content"
         )
         
@@ -235,7 +235,7 @@ class TestWorkerPool:
         # Mock pattern formatter that raises
         formatter = Mock()
         formatter.enabled = True
-        formatter.format = Mock(side_effect=ValueError("Pattern error"))
+        formatter.apply = Mock(side_effect=ValueError("Pattern error"))
         
         await pool.start(
             metrics=metrics,

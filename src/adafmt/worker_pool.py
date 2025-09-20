@@ -39,12 +39,12 @@ class WorkerPool:
         """Initialize worker pool.
         
         Args:
-            num_workers: Number of worker tasks (default: 0.6 * CPU cores)
+            num_workers: Number of worker tasks (default: 1)
             queue_size: Maximum items in queue (default: 10)
         """
         if num_workers is None:
-            # Default to 0.6 * CPU cores as per requirements
-            num_workers = max(1, int(os.cpu_count() * 0.6))
+            # Default to 1 worker based on benchmark results
+            num_workers = 1
         
         self.num_workers = num_workers
         self.queue = asyncio.Queue(maxsize=queue_size)
@@ -54,6 +54,8 @@ class WorkerPool:
         self._shutdown_event = asyncio.Event()
         self._health_monitor: Optional[WorkerHealthMonitor] = None
         self._queue_monitor: Optional[QueueMonitor] = None
+        self._pending_tasks = 0
+        self._all_tasks_done = asyncio.Event()
     
     async def start(
         self,
@@ -97,6 +99,7 @@ class WorkerPool:
         
         # Start workers
         self._running = True
+        self._all_tasks_done.set()  # Initially no tasks
         worker_dict = {}
         for i in range(self.num_workers):
             worker_id = i + 1
@@ -146,7 +149,13 @@ class WorkerPool:
         
         # Add queue time for metrics
         item.queue_time = time.time()
+        self._pending_tasks += 1
+        self._all_tasks_done.clear()
         await self.queue.put(item)
+    
+    async def wait_for_completion(self) -> None:
+        """Wait for all submitted tasks to complete."""
+        await self._all_tasks_done.wait()
     
     async def shutdown(self, timeout: float = 30.0) -> None:
         """Shutdown the worker pool gracefully.
@@ -228,7 +237,12 @@ class WorkerPool:
                         self._queue_monitor.record_dequeue()
                     
                     # Process the item
-                    await self._process_item(item, worker_id)
+                    try:
+                        await self._process_item(item, worker_id)
+                    finally:
+                        self._pending_tasks -= 1
+                        if self._pending_tasks == 0:
+                            self._all_tasks_done.set()
                     
                 except asyncio.TimeoutError:
                     # Check shutdown and continue
@@ -277,15 +291,14 @@ class WorkerPool:
             if self.context.pattern_formatter and self.context.pattern_formatter.enabled:
                 pattern_start = time.time()
                 
-                result = self.context.pattern_formatter.format(
-                    str(item.path),
+                formatted_content, result = self.context.pattern_formatter.apply(
+                    item.path,
                     item.content
                 )
                 
-                if result.content != item.content:
-                    formatted_content = result.content
-                    patterns_applied = len([c for c in result.pattern_counts.values() if c > 0])
-                    total_replacements = result.replacements
+                if formatted_content != item.content:
+                    patterns_applied = len(result.applied_names)
+                    total_replacements = result.replacements_sum
                 
                 pattern_time = time.time() - pattern_start
                 await self.context.metrics.add_timing('pattern', pattern_time)
@@ -353,7 +366,7 @@ class WorkerPool:
             # Update metrics
             if changed:
                 await self.context.metrics.increment_changed()
-                status = "changed"
+                status = "amended"
             else:
                 await self.context.metrics.increment_unchanged()
                 status = "unchanged"

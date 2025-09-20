@@ -1080,7 +1080,7 @@ Optional:
   --max-attempts N           Retry count (default: 2)
   --max-file-size N          Skip files larger than N bytes (default: 102400)
   --max-consecutive-timeouts N  Abort after N consecutive timeouts (default: 5)
-  --num-workers N            Number of parallel workers (default: 0.6*CPUs, 0=sequential)
+  --num-workers N            Number of parallel workers (default: 1, 0=sequential)
   --worker-stats             Show detailed worker statistics
 ```
 
