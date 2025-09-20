@@ -11,7 +11,8 @@ This module contains helper functions used throughout adafmt:
     - Path validation and manipulation
     - Atomic file writing
     - ALS process management
-    
+    - Datetime formatting
+
 These utilities handle platform-specific operations and provide
 safe, robust implementations of common tasks.
 """
@@ -25,27 +26,28 @@ import tempfile
 import shutil
 import subprocess
 import time
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, List, Optional
 
 def ensure_abs(p: str, flag: str) -> str:
     """Ensure a path is absolute, raising an error if not.
-    
+
     This validation function helps catch configuration errors early
     by requiring absolute paths for critical parameters like project
     files and include/exclude paths.
-    
+
     Args:
         p: Path string to validate
         flag: Parameter name for error message (e.g., "--project-file-path")
-        
+
     Returns:
         The unchanged path if it's absolute
-        
+
     Raises:
         ValueError: If the path is not absolute
-        
+
     Example:
         >>> ensure_abs("/home/user/project.gpr", "--project-file-path")
         '/home/user/project.gpr'
@@ -56,27 +58,55 @@ def ensure_abs(p: str, flag: str) -> str:
         raise ValueError(f"{flag} must be an absolute path: {p}")
     return p
 
+def to_iso8601_basic(dt: datetime) -> str:
+    """Convert a datetime to ISO 8601 BASIC format (YYYYMMDDTHHMMSSZ).
+
+    Converts any timezone-aware datetime to UTC and formats it
+    according to ISO 8601 BASIC format without fractional seconds.
+
+    Args:
+        dt: Timezone-aware datetime object
+
+    Returns:
+        String in format: 20250920T220311Z
+
+    Raises:
+        ValueError: If naive (timezone-unaware) datetime is provided
+
+    Example:
+        >>> from datetime import datetime, timezone
+        >>> dt = datetime(2025, 9, 20, 22, 3, 11, tzinfo=timezone.utc)
+        >>> to_iso8601_basic(dt)
+        '20250920T220311Z'
+    """
+    if dt.tzinfo is None:
+        raise ValueError("Naive datetime provided; supply an aware datetime with tzinfo")
+    else:
+        dt_utc = dt.astimezone(timezone.utc)
+    # format: 20250920T220311Z
+    return dt_utc.strftime("%Y%m%dT%H%M%SZ")
+
 def atomic_write(path: str, data: str) -> None:
     """Write data to a file atomically.
-    
+
     This function ensures that the file is either completely written
     or not modified at all, preventing partial writes or corruption.
-    
+
     The atomic write process:
     1. Create parent directories if needed
     2. Write data to a temporary file in the same directory
     3. Atomically rename the temp file to the target path
-    
+
     Args:
         path: Target file path
         data: String data to write
-        
+
     Note:
         - The temporary file is created in the same directory as the target
           to ensure the rename operation is atomic (same filesystem)
         - Parent directories are created with default permissions
         - Uses UTF-8 encoding
-        
+
     Example:
         >>> atomic_write("/tmp/config.toml", "key = 'value'\n")
         # File is written atomically, no partial content possible
@@ -90,13 +120,13 @@ def atomic_write(path: str, data: str) -> None:
 
 def list_als_pids() -> List[int]:
     """List process IDs of running Ada Language Server instances.
-    
+
     Uses pgrep to find processes matching 'ada_language_server'.
     This works on macOS and most Unix-like systems.
-    
+
     Returns:
         List of integer PIDs, empty list if none found or on error
-        
+
     Note:
         - Uses 'pgrep -f' to match the full command line
         - Returns empty list on any error (pgrep not found, etc.)
@@ -132,7 +162,7 @@ class ProcessInfo:
     cmdline: str
     user: Optional[str]
     age_minutes: float
-    
+
     def is_stale(self, minutes: int = 30) -> bool:
         """Check if process is older than specified minutes."""
         return self.age_minutes >= minutes
@@ -197,7 +227,7 @@ def _als_processes(only_user: bool = True) -> List[ProcessInfo]:
                 # Fallback - just get pids and commands, no timing
                 ["ps", "ax", "-o", "pid,command"]
             ]
-            
+
             for ps_cmd in ps_commands:
                 try:
                     out = subprocess.check_output(ps_cmd, text=True, stderr=subprocess.DEVNULL, timeout=5)
@@ -223,7 +253,7 @@ def _als_processes(only_user: bool = True) -> List[ProcessInfo]:
                                             days = int(day_time[0])
                                             time_parts = day_time[1].split(':')
                                             age_minutes = days * 24 * 60 + int(time_parts[0]) * 60 + int(time_parts[1]) + int(time_parts[2]) / 60.0
-                                    
+
                                     cmd = parts[-1] if len(parts) >= 2 else "ada_language_server"
                                     yield ProcessInfo(
                                         pid=pid,
@@ -319,7 +349,7 @@ def find_stale_locks(search_paths: List[Path], ttl_minutes: int = 10) -> List[Pa
             age_min = (now - lock_path.stat().st_mtime) / 60.0
         except Exception:
             age_min = float("inf")
-        
+
         # For directories, check for pid file
         if lock_path.is_dir():
             pid_file = lock_path / "pid"
@@ -358,7 +388,7 @@ def clean_stale_locks(search_paths: List[Path], ttl_minutes: int = 10, logger=No
 def run_hook(hook_cmd: Optional[str], phase: str, logger=None, timeout: int=60, dry_run: bool=False) -> bool:
     if not hook_cmd:
         return True
-    
+
     # Parse command safely without shell
     import shlex
     try:
@@ -367,7 +397,7 @@ def run_hook(hook_cmd: Optional[str], phase: str, logger=None, timeout: int=60, 
         if logger:
             logger(f"[{phase}-hook] Invalid command format: {e}")
         return False
-    
+
     if logger:
         # Log the command as parsed list for transparency
         logger(f"[{phase}-hook] {' '.join(cmd_list)}" + (" [dry-run]" if dry_run else ""))
@@ -448,43 +478,43 @@ def preflight(
 
 def extract_log_path_from_traces_cfg(cfg_path: str) -> Optional[str]:
     """Extract the log file path from a GNATCOLL traces config file.
-    
+
     Looks for lines starting with '>' which indicate log file paths.
     Handles both absolute and relative paths (relative to config location).
-    
+
     Args:
         cfg_path: Path to the traces config file
-        
+
     Returns:
         Resolved absolute path to the log file, or None if not found
-        
+
     Example config line:
         >/tmp/als.log:buffer_size=0
         >als.log:buffer_size=0
     """
     import re
-    
+
     traces_line_pattern = re.compile(r'^\s*>\s*((?:[A-Za-z]:)?[^:]*?)(?::.*)?\s*')
-    
+
     try:
         p = Path(cfg_path).expanduser().resolve()
         if not p.exists():
             return None
-            
+
         with p.open('r', encoding='utf-8', errors='replace') as f:
             for line in f:
                 if not line.lstrip().startswith('>'):
                     continue
-                    
+
                 m = traces_line_pattern.match(line)
                 if not m:
                     continue
-                    
+
                 raw = m.group(1).strip()
                 logp = (p.parent / raw) if not Path(raw).is_absolute() else Path(raw)
                 return str(logp.expanduser().resolve())
-                
+
     except Exception:
         return None
-        
+
     return None

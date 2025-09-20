@@ -48,7 +48,9 @@ adafmt format --num-workers 4 --project-path huge_project.gpr
 
 ## Benchmark Results
 
-Our benchmarks on a typical 303-file project showed:
+Our benchmarks on a typical 303-file Ada project showed:
+
+### Performance Comparison
 
 | Configuration | Time | Notes |
 |--------------|------|-------|
@@ -56,6 +58,28 @@ Our benchmarks on a typical 303-file project showed:
 | 1 Worker | 22.529s | 0.46% overhead - negligible |
 | 3 Workers + ALS | 22.655s | No improvement due to ALS bottleneck |
 | 3 Workers (patterns only) | 3.363s | 7% faster than 1 worker |
+
+### Write Performance (303 files, 182 changed)
+
+We tested both dry run (`--check`) and actual file writes to verify I/O handling:
+
+**Dry Run Performance:**
+- Total Elapsed: 24.2s
+- ALS Processing: 21.8s (12.5 files/s)
+- Pattern Processing: 2.4s (671.0 patterns/s)
+- Files Changed: 182 (60%)
+
+**Write Performance:**
+- Total Elapsed: 24.5s (only 1.2% slower than dry run)
+- ALS Processing: 22.0s (12.4 files/s)
+- Pattern Processing: 2.4s (663.1 patterns/s)
+- Files Written: 182 (60%)
+
+The nearly identical performance between dry run and write modes demonstrates:
+1. **Efficient I/O**: Atomic file writes add negligible overhead
+2. **No I/O Bottleneck**: Disk operations don't slow down processing
+3. **Consistent Performance**: The architecture maintains speed even with real file writes
+4. **Pattern Efficiency**: 36,939 replacements applied at >15,000 replacements/second
 
 ## The Future
 

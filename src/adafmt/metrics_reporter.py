@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any
 from tabulate import tabulate
 
+from .utils import to_iso8601_basic
+
 from .als_client import ALSClient
 from .pattern_formatter import PatternFormatter
 
@@ -146,11 +148,11 @@ class MetricsReporter:
             print(f"  {line}")
         
         # Show Started timestamp
-        print(f"  Started    {als_start_time.strftime('%Y%m%dT%H%M%SZ')}")
+        print(f"  Started    {to_iso8601_basic(als_start_time)}")
         
         # Timing table
         timing_data = [
-            ["Completed", adafmt_end_time.strftime('%Y%m%dT%H%M%SZ')],
+            ["Completed", to_iso8601_basic(adafmt_end_time)],
             ["Elapsed", f"{als_elapsed:.1f}s"],
             ["Rate", f"{rate:.1f} files/s"]
         ]
@@ -217,11 +219,11 @@ class MetricsReporter:
         print()
         
         # Show Started timestamp
-        print(f"  Started              {pattern_start_time.strftime('%Y%m%dT%H%M%SZ')}")
+        print(f"  Started              {to_iso8601_basic(pattern_start_time)}")
         
         # Pattern timing table
         pattern_timing_data = [
-            ["Completed", pattern_end_time.strftime('%Y%m%dT%H%M%SZ')],
+            ["Completed", to_iso8601_basic(pattern_end_time)],
             ["Elapsed", f"{pattern_elapsed:.1f}s"]
         ]
         
@@ -252,8 +254,8 @@ class MetricsReporter:
         print()
         print("ADAFMT RUN")
         completion_data = [
-            ["Started", adafmt_start_time.strftime('%Y%m%dT%H%M%SZ')],
-            ["Completed", adafmt_end_time.strftime('%Y%m%dT%H%M%SZ')],
+            ["Started", to_iso8601_basic(adafmt_start_time)],
+            ["Completed", to_iso8601_basic(adafmt_end_time)],
             ["Total Elapsed", f"{elapsed_seconds:.1f}s"]
         ]
         table_str = tabulate(completion_data, tablefmt="plain")

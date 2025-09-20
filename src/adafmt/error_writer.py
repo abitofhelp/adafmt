@@ -8,9 +8,11 @@
 """Error writing utilities for the Ada formatter."""
 
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+
+from .utils import to_iso8601_basic
 
 
 def write_stderr_error(path: Path, error_type: str, error_msg: str, details: Optional[dict] = None) -> None:
@@ -25,7 +27,7 @@ def write_stderr_error(path: Path, error_type: str, error_msg: str, details: Opt
     # Only write to stderr if it has been properly redirected to a file
     # This prevents error details from appearing in the UI output
     if hasattr(sys.stderr, '_streams') and sys.stderr._streams:
-        timestamp = datetime.now().isoformat()
+        timestamp = to_iso8601_basic(datetime.now(timezone.utc))
         stderr_msg = f"{timestamp} | ERROR | {error_type} | {path}\n"
         stderr_msg += f"{timestamp} | ERROR | Message: {error_msg}\n"
         

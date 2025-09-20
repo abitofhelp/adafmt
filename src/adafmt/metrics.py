@@ -23,9 +23,11 @@ import json
 import time
 import sys
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 from contextlib import contextmanager
+
+from .utils import to_iso8601_basic
 
 
 class MetricsCollector:
@@ -52,7 +54,7 @@ class MetricsCollector:
         
         # Timing tracking
         self._timers: Dict[str, float] = {}
-        self._run_id = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{id(self)}"
+        self._run_id = f"{to_iso8601_basic(datetime.now(timezone.utc)).replace('T', '_').replace('Z', '')}_{id(self)}"
     
     @contextmanager
     def _file_lock(self):
@@ -80,7 +82,7 @@ class MetricsCollector:
         """
         # Add common fields
         event['run_id'] = self._run_id
-        event['ts'] = datetime.now().isoformat()
+        event['ts'] = to_iso8601_basic(datetime.now(timezone.utc))
         
         # Write with file locking
         with self._file_lock() as f:

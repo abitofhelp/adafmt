@@ -245,9 +245,11 @@ class OutputFormatter:
 ```
 
 **DateTime Format Implementation**:
-- Uses `datetime.strftime('%Y%m%dT%H%M%SZ')` for ISO 8601 UTC timestamps
+- Uses ISO 8601 BASIC format: `YYYYMMDDTHHMMSSZ` (e.g., `20250920T143045Z`)
+- Implemented via `to_iso8601_basic()` utility function for consistency
+- Always uses uppercase 'Z' for UTC timezone indicator
+- All datetimes must be timezone-aware (using `timezone.utc`)
 - Elapsed time formatting: `f"{seconds:.1f}s"` for one decimal place
-- Consistent timezone handling through UTC conversion before formatting
 - Timestamp generation at run start shared across all log files
 
 **Column Alignment Implementation**:

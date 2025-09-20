@@ -40,7 +40,7 @@ from pathlib import Path
 from shutil import which
 from typing import Any, Dict, Optional, Tuple
 
-from .utils import extract_log_path_from_traces_cfg
+from .utils import extract_log_path_from_traces_cfg, to_iso8601_basic
 
 JsonDict = Dict[str, Any]
 """Type alias for JSON-compatible dictionaries used in LSP messages."""
@@ -66,6 +66,15 @@ class ALSProtocolError(RuntimeError):
         self.payload = payload
 
 
+class ALSCommunicationError(RuntimeError):
+    """Exception raised when communication with ALS fails.
+    
+    This exception is raised when there are issues with the underlying
+    communication channel, such as timeouts or process failures.
+    """
+    pass
+
+
 def _has_cmd(cmd: str) -> bool:
     """Check if a command is available in the system PATH.
     
@@ -86,10 +95,10 @@ def _timestamp() -> str:
     """Generate ISO timestamp for stderr logging.
     
     Returns:
-        ISO 8601 formatted timestamp with second precision
-        Example: "2025-09-12T14:30:45"
+        ISO 8601 BASIC formatted timestamp
+        Example: "20250912T143045Z"
     """
-    return dt.datetime.now().isoformat(timespec="seconds")
+    return to_iso8601_basic(dt.datetime.now(dt.timezone.utc))
 
 
 def build_als_command(traces_config: Optional[str] = None) -> Tuple[str, dict]:

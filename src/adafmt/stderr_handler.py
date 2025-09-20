@@ -10,9 +10,11 @@
 import contextlib
 import io
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Any, Tuple
+
+from .utils import to_iso8601_basic
 
 
 class Tee(io.TextIOBase):
@@ -67,7 +69,7 @@ def setup_stderr_redirect(stderr_path: Optional[Path]) -> Tuple[Any, Any, Any]:
         if stderr_path:
             stderr_path.parent.mkdir(parents=True, exist_ok=True)
             tee_fp = open(stderr_path, "w", encoding="utf-8")
-            tee_fp.write(f"{datetime.now().isoformat()} | INFO  | ADAFMT STDERR START\n")
+            tee_fp.write(f"{to_iso8601_basic(datetime.now(timezone.utc))} | INFO  | ADAFMT STDERR START\n")
             tee_fp.flush()
             sys.stderr = Tee(tee_fp)  # Only write to file, not to terminal
     except Exception:

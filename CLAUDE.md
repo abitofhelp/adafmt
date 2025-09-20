@@ -29,6 +29,14 @@ All markdown files under `/docs` must include the following header pattern:
 - **Professional software engineering** - No hacks, workarounds, or quick fixes without explicit authorization
 - **Quality over speed** - Take time to implement solutions properly rather than rushing
 
+### Datetime Formatting Standards
+
+- **Always use ISO 8601 BASIC format** for datetime strings: `YYYYMMDDTHHMMSSZ`
+- **Use uppercase Z** for UTC timezone indicator (not lowercase 'z')
+- **Use the `to_iso8601_basic()` utility function** from `utils.py` for all datetime formatting
+- **Always create timezone-aware datetimes** using `timezone.utc` before formatting
+- Example: `20250920T143045Z` (not `2025-09-20T14:30:45Z` or other variants)
+
 ### File Headers
 
 All Python source files must include the following header:

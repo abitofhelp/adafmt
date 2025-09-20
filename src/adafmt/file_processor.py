@@ -157,9 +157,6 @@ class FileProcessor:
             self.pattern_files_changed += snapshot['changed']
             self.total_errors += snapshot['errors']
             
-            if self.ui:
-                total_processed = snapshot['changed'] + snapshot['unchanged'] + snapshot['errors']
-                self.ui.log_line(f"[parallel] Worker pool processed {total_processed} files")
         
     async def format_file_with_als(self, path: Path) -> List[Dict[str, Any]]:
         """Format a single Ada file using ALS.
