@@ -331,25 +331,34 @@ class TestSignalHandler:
         """Test signal handler as context manager."""
         pool = WorkerPool()
         
-        # Store original handlers
-        original_sigterm = signal.signal(signal.SIGTERM, signal.SIG_DFL)
-        original_sigint = signal.signal(signal.SIGINT, signal.SIG_DFL)
+        # Get current handlers (may be pytest's handlers)
+        current_sigterm = signal.signal(signal.SIGTERM, signal.SIG_DFL)
+        current_sigint = signal.signal(signal.SIGINT, signal.SIG_DFL)
+        
+        # Restore them immediately
+        signal.signal(signal.SIGTERM, current_sigterm)
+        signal.signal(signal.SIGINT, current_sigint)
         
         try:
             with SignalHandler(pool) as handler:
-                # Handlers should be replaced
-                current_sigterm = signal.signal(signal.SIGTERM, signal.SIG_DFL)
-                signal.signal(signal.SIGTERM, current_sigterm)  # Restore
-                assert current_sigterm != original_sigterm
+                # Handlers should be replaced with our handler
+                our_sigterm = signal.signal(signal.SIGTERM, signal.SIG_DFL)
+                signal.signal(signal.SIGTERM, our_sigterm)  # Restore
+                
+                # Our handler should be the SignalHandler's method
+                assert our_sigterm == handler._handle_signal
             
-            # Original handlers should be restored
+            # Original handlers should be restored after context exit
             restored_sigterm = signal.signal(signal.SIGTERM, signal.SIG_DFL)
-            assert restored_sigterm == original_sigterm
+            signal.signal(signal.SIGTERM, restored_sigterm)
+            
+            # The restored handler should match what was there before
+            assert restored_sigterm == current_sigterm
             
         finally:
-            # Restore original handlers
-            signal.signal(signal.SIGTERM, original_sigterm)
-            signal.signal(signal.SIGINT, original_sigint)
+            # Ensure original handlers are restored
+            signal.signal(signal.SIGTERM, current_sigterm)
+            signal.signal(signal.SIGINT, current_sigint)
     
     @pytest.mark.asyncio
     async def test_signal_triggers_shutdown(self):
