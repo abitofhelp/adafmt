@@ -1,11 +1,16 @@
 # Makefile for adafmt development
 # Run 'make help' for available targets
 
+# Use bash with pipefail for safer scripting
+SHELL := /bin/bash -eo pipefail
+
 # Configuration
 VENV ?= .venv
 PYTHON ?= python3
-PY ?= $(VENV)/bin/python
-PIP ?= $(VENV)/bin/pip
+# Prefer the project venv if present
+PY := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || (command -v python3 || command -v python))
+PIP := $(PY) -m pip
+SEMREL := $(PY) -m semantic_release
 ADAFMT ?= $(VENV)/bin/adafmt
 
 # Project paths
@@ -56,10 +61,15 @@ help:
 	@echo "  make dist-exe    - Create standalone executable with PyInstaller"
 	@echo "  make dist-zipapp - Create Python zipapp executable"
 	@echo ""
+	@echo "Documentation targets:"
+	@echo "  make docs        - Check documentation files exist"
+	@echo "  make docs-bump-headers - Update doc headers with next semantic version"
+	@echo "  make docs-bump-headers-dry-run - Preview header updates (dry-run)"
+	@echo "  make print-next-version - Show next semantic release version"
+	@echo ""
 	@echo "Utility targets:"
 	@echo "  make check       - Quick sanity check of installation"
 	@echo "  make tools       - List development tools"
-	@echo "  make docs        - Check documentation files exist"
 	@echo "  make clean       - Remove build artifacts and caches"
 	@echo "  make distclean   - Remove venv, build artifacts, and caches"
 	@echo "  make kill-als    - Kill all ALS processes and clean stale locks (aggressive)"
@@ -91,8 +101,17 @@ install: venv
 # Install with development dependencies
 .PHONY: dev
 dev: install
-	@echo "Installing development dependencies..."
-	$(PIP) install -e ".[dev]"
+	@echo "Using Python: $(PY)"
+	@$(PIP) install -U pip >/dev/null
+	@if [ -f requirements-dev.txt ]; then \
+		echo "Installing dev deps from requirements-dev.txt..."; \
+		$(PIP) install -r requirements-dev.txt; \
+	else \
+		echo "Installing development dependencies from pyproject.toml..."; \
+		$(PIP) install -e ".[dev]"; \
+		echo "Installing python-semantic-release..."; \
+		$(PIP) install "python-semantic-release>=9,<10"; \
+	fi
 	@echo "✓ Development environment ready"
 	@echo ""
 	@echo "Activate the virtual environment with:"
@@ -280,6 +299,35 @@ docs:
 			echo "✗ $$doc missing"; \
 		fi \
 	done
+
+# === Semantic Release Documentation Targets ===
+
+## Compute the next version and update doc headers (writes in-place; makes backups per script).
+.PHONY: docs-bump-headers
+docs-bump-headers: dev
+	@echo "Computing next version via python-semantic-release..."
+	@nv="$( $(SEMREL) version --noop --print )"; \
+	 if [ -z "$$nv" ]; then \
+	   echo "ERROR: Could not compute next version (semantic-release)."; exit 2; \
+	 fi; \
+	 echo "Next version: $$nv"; \
+	 SEMVER_NEXT="$$nv" $(PY) scripts/update_doc_headers.py --write
+
+## Dry-run: show what would change without writing files.
+.PHONY: docs-bump-headers-dry-run
+docs-bump-headers-dry-run: dev
+	@echo "Computing next version via python-semantic-release..."
+	@nv="$( $(SEMREL) version --noop --print )"; \
+	 if [ -z "$$nv" ]; then \
+	   echo "ERROR: Could not compute next version (semantic-release)."; exit 2; \
+	 fi; \
+	 echo "Next version: $$nv"; \
+	 SEMVER_NEXT="$$nv" $(PY) scripts/update_doc_headers.py
+
+## Print the next version as detected by python-semantic-release.
+.PHONY: print-next-version
+print-next-version: dev
+	@$(SEMREL) version --noop --print
 
 # Clean build artifacts but keep venv
 .PHONY: clean

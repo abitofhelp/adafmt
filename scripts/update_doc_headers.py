@@ -39,7 +39,7 @@ RE_DATE = re.compile(
     r"(?m)^(?P<prefix>\*\*Date:\*\*\s*)(?P<value>.*?)(?P<suffix>\s*)$"
 )
 
-DEFAULT_GLOBS = ["docs/**/*.md"]
+DEFAULT_GLOBS = ["docs/**/*.md","./README.md"]
 
 
 def iso8601_now_utc_z() -> str:
