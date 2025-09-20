@@ -19,7 +19,9 @@ from .thread_safe_metrics import ThreadSafeMetrics
 from .async_file_io import atomic_write_async
 from .pattern_formatter import PatternFormatter
 from .logging_jsonl import JsonlLogger
+from .worker_pool_monitor import WorkerHealthMonitor, QueueMonitor
 from .edits import unified_diff
+from .retry_handler import RetryHandler
 
 
 class WorkerPool:
@@ -50,6 +52,8 @@ class WorkerPool:
         self.context: Optional[WorkerContext] = None
         self._running = False
         self._shutdown_event = asyncio.Event()
+        self._health_monitor: Optional[WorkerHealthMonitor] = None
+        self._queue_monitor: Optional[QueueMonitor] = None
     
     async def start(
         self,
@@ -93,19 +97,39 @@ class WorkerPool:
         
         # Start workers
         self._running = True
+        worker_dict = {}
         for i in range(self.num_workers):
+            worker_id = i + 1
             worker = asyncio.create_task(
-                self._worker(i + 1),
-                name=f"worker-{i + 1}"
+                self._worker(worker_id),
+                name=f"worker-{worker_id}"
             )
             self.workers.append(worker)
+            worker_dict[worker_id] = worker
+        
+        # Initialize health monitoring
+        self._health_monitor = WorkerHealthMonitor(
+            context=self.context,
+            metrics=metrics,
+            health_check_interval=5.0,
+            worker_timeout=30.0
+        )
+        await self._health_monitor.start_monitoring(worker_dict)
+        
+        # Initialize queue monitoring
+        self._queue_monitor = QueueMonitor(
+            queue=self.queue,
+            metrics=metrics,
+            blockage_threshold=60.0
+        )
         
         # Log startup
         if logger:
             logger.write({
                 'ev': 'worker_pool_started',
                 'num_workers': self.num_workers,
-                'queue_size': self.queue.maxsize
+                'queue_size': self.queue.maxsize,
+                'health_monitoring': True
             })
     
     async def submit(self, item: WorkItem) -> None:
@@ -135,6 +159,10 @@ class WorkerPool:
         
         # Signal shutdown
         self._shutdown_event.set()
+        
+        # Stop health monitoring
+        if self._health_monitor:
+            await self._health_monitor.stop_monitoring()
         
         # Add sentinel values to wake up workers
         for _ in range(self.num_workers):
@@ -194,6 +222,10 @@ class WorkerPool:
                     
                     if item is None:  # Sentinel value
                         break
+                    
+                    # Notify queue monitor of dequeue
+                    if self._queue_monitor:
+                        self._queue_monitor.record_dequeue()
                     
                     # Process the item
                     await self._process_item(item, worker_id)
@@ -275,13 +307,39 @@ class WorkerPool:
             write_time = 0.0
             if self.context.write_enabled and changed:
                 write_start = time.time()
-                await atomic_write_async(
+                
+                # Retry handler callback
+                def on_retry(attempt: int, error: Exception) -> None:
+                    if self.context.logger:
+                        self.context.logger.write({
+                            'ev': 'file_write_retry',
+                            'path': str(item.path),
+                            'attempt': attempt,
+                            'error': str(error),
+                            'worker_id': worker_id
+                        })
+                
+                # Write with retry logic
+                _, attempts = await RetryHandler.retry_async(
+                    atomic_write_async,
                     item.path,
                     formatted_content,
-                    mode=0o644
+                    mode=0o644,
+                    max_attempts=3,
+                    on_retry=on_retry
                 )
+                
                 write_time = time.time() - write_start
                 await self.context.metrics.add_timing('io', write_time)
+                
+                # Log if retries were needed
+                if attempts > 1 and self.context.logger:
+                    self.context.logger.write({
+                        'ev': 'file_write_succeeded_with_retries',
+                        'path': str(item.path),
+                        'attempts': attempts,
+                        'worker_id': worker_id
+                    })
             
             # Show diff if enabled
             if self.context.diff_enabled and changed:
