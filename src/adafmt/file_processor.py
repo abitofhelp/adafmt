@@ -19,6 +19,9 @@ from .edits import apply_text_edits, unified_diff
 from .logging_jsonl import JsonlLogger
 from .metrics import MetricsCollector
 from .pattern_formatter import PatternFormatter, FileApplyResult
+from .worker_pool import WorkerPool
+from .worker_context import WorkItem
+from .thread_safe_metrics import ThreadSafeMetrics
 # UI is a protocol/interface, imported as TYPE_CHECKING
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -43,7 +46,8 @@ class FileProcessor:
         diff: bool = False,
         format_timeout: int = 60,
         max_consecutive_timeouts: int = 5,
-        max_file_size: int = 102400  # 100KB default
+        max_file_size: int = 102400,  # 100KB default
+        num_workers: Optional[int] = None
     ):
         """Initialize the file processor.
         
@@ -60,6 +64,7 @@ class FileProcessor:
             format_timeout: Timeout for formatting operations
             max_consecutive_timeouts: Max consecutive timeouts before aborting
             max_file_size: Maximum file size in bytes to process (default 100KB)
+            num_workers: Number of parallel workers (None = default)
         """
         self.client = client
         self.pattern_formatter = pattern_formatter
@@ -73,6 +78,7 @@ class FileProcessor:
         self.format_timeout = format_timeout
         self.max_consecutive_timeouts = max_consecutive_timeouts
         self.max_file_size = max_file_size
+        self.num_workers = num_workers
         
         # Statistics
         self.als_changed = 0
@@ -80,6 +86,60 @@ class FileProcessor:
         self.pattern_files_changed = 0
         self.total_errors = 0
         self.consecutive_timeouts = 0
+        
+        # Worker pool for parallel processing
+        self.worker_pool: Optional[WorkerPool] = None
+        self.thread_safe_metrics: Optional[ThreadSafeMetrics] = None
+        
+        # Determine if parallel processing should be used
+        self.use_parallel = (
+            num_workers is not None and 
+            num_workers > 0 and 
+            pattern_formatter is not None and
+            pattern_formatter.enabled
+        )
+        
+    async def initialize_worker_pool(self) -> None:
+        """Initialize the worker pool for parallel processing."""
+        if not self.use_parallel:
+            return
+            
+        # Create thread-safe metrics for workers
+        self.thread_safe_metrics = ThreadSafeMetrics()
+        
+        # Create worker pool
+        self.worker_pool = WorkerPool(num_workers=self.num_workers)
+        
+        # Start the worker pool
+        await self.worker_pool.start(
+            metrics=self.thread_safe_metrics,
+            pattern_formatter=self.pattern_formatter,
+            write_enabled=self.write,
+            logger=self.logger,
+            pattern_logger=self.pattern_logger
+        )
+        
+        if self.ui:
+            self.ui.log_line(f"[parallel] Started {self.worker_pool.num_workers} workers for post-ALS processing")
+        else:
+            print(f"[parallel] Started {self.worker_pool.num_workers} workers for post-ALS processing")
+    
+    async def shutdown_worker_pool(self) -> None:
+        """Shutdown the worker pool and sync metrics."""
+        if not self.worker_pool:
+            return
+            
+        # Shutdown workers
+        await self.worker_pool.shutdown()
+        
+        # Sync worker metrics with main metrics
+        if self.thread_safe_metrics:
+            snapshot = await self.thread_safe_metrics.get_snapshot()
+            self.pattern_files_changed += snapshot['changed']
+            self.total_errors += snapshot['errors']
+            
+            if self.ui:
+                self.ui.log_line(f"[parallel] Worker pool processed {snapshot['total_processed']} files")
         
     async def format_file_with_als(self, path: Path) -> List[Dict[str, Any]]:
         """Format a single Ada file using ALS.
@@ -308,33 +368,48 @@ class FileProcessor:
                     raise IOError(f"Failed to read file {path}: {e}")
                 formatted_content = apply_text_edits(original_content, edits)
                 
-                # Apply patterns if enabled
-                if self.pattern_formatter and self.pattern_formatter.enabled:
-                    try:
-                        formatted_content, pattern_result = self.pattern_formatter.apply(
-                            path, formatted_content
-                        )
-                    except Exception as e:
-                        if self.logger:
-                            self.logger.write({
-                                'ev': 'pattern_error',
-                                'path': str(path),
-                                'error': str(e)
-                            })
-                        note = f"pattern error: {e}"
-                
-                # Write changes if requested
-                if self.write:
-                    try:
-                        atomic_write(path, formatted_content)
-                    except Exception as e:
-                        raise RuntimeError(f"Failed to write file: {e}")
-                
-                # Show diff if requested
-                if self.diff:
-                    print(unified_diff(str(path), original_content, formatted_content))
-                
-                status = "changed"
+                # Use worker pool if available, otherwise process inline
+                if self.use_parallel and self.worker_pool:
+                    # Queue for parallel processing
+                    work_item = WorkItem(
+                        path=path,
+                        content=formatted_content,
+                        index=idx,
+                        total=total,
+                        queue_time=time.time()
+                    )
+                    await self.worker_pool.submit(work_item)
+                    # Worker will handle patterns, writing, and logging
+                    status = "queued"
+                else:
+                    # Process inline (original behavior)
+                    # Apply patterns if enabled
+                    if self.pattern_formatter and self.pattern_formatter.enabled:
+                        try:
+                            formatted_content, pattern_result = self.pattern_formatter.apply(
+                                path, formatted_content
+                            )
+                        except Exception as e:
+                            if self.logger:
+                                self.logger.write({
+                                    'ev': 'pattern_error',
+                                    'path': str(path),
+                                    'error': str(e)
+                                })
+                            note = f"pattern error: {e}"
+                    
+                    # Write changes if requested
+                    if self.write:
+                        try:
+                            atomic_write(path, formatted_content)
+                        except Exception as e:
+                            raise RuntimeError(f"Failed to write file: {e}")
+                    
+                    # Show diff if requested
+                    if self.diff:
+                        print(unified_diff(str(path), original_content, formatted_content))
+                    
+                    status = "changed"
             else:
                 # No ALS changes, but still check patterns
                 if self.pattern_formatter and self.pattern_formatter.enabled:
@@ -346,16 +421,31 @@ class FileProcessor:
                         raise PermissionError(f"Permission denied reading file: {path}")
                     except Exception as e:
                         raise IOError(f"Failed to read file {path}: {e}")
-                    formatted_content, pattern_result = self.pattern_formatter.apply(
-                        path, original_content
-                    )
-                    if formatted_content != original_content:
-                        self.pattern_files_changed += 1
-                        if self.write:
-                            atomic_write(path, formatted_content)
-                        if self.diff:
-                            print(unified_diff(str(path), original_content, formatted_content))
-                        status = "changed"
+                    
+                    # Use worker pool if available
+                    if self.use_parallel and self.worker_pool:
+                        # Queue for parallel processing
+                        work_item = WorkItem(
+                            path=path,
+                            content=original_content,
+                            index=idx,
+                            total=total,
+                            queue_time=time.time()
+                        )
+                        await self.worker_pool.submit(work_item)
+                        status = "queued"
+                    else:
+                        # Process inline
+                        formatted_content, pattern_result = self.pattern_formatter.apply(
+                            path, original_content
+                        )
+                        if formatted_content != original_content:
+                            self.pattern_files_changed += 1
+                            if self.write:
+                                atomic_write(path, formatted_content)
+                            if self.diff:
+                                print(unified_diff(str(path), original_content, formatted_content))
+                            status = "changed"
                         
         except asyncio.TimeoutError:
             self.consecutive_timeouts += 1

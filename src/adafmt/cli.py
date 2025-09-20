@@ -116,7 +116,7 @@ def _build_status_line(
     line = f"{prefix} [{status:^7}] {path}"
     
     # Add ALS info if not in patterns-only mode
-    if not no_als and status == "changed":
+    if not no_als and status in ["changed", "queued"]:
         line += " | ALS: ✓"
     
     # Add pattern info if patterns were applied
@@ -127,6 +127,8 @@ def _build_status_line(
             replacements = pattern_result.replacements_sum
             if patterns_applied > 0:
                 line += f" | Patterns: applied={patterns_applied} ({replacements})"
+        elif status == "queued":
+            line += " | Patterns: queued"
     
     if status == "failed":
         line += "  (details in the stderr log)"
@@ -149,6 +151,11 @@ def _print_colored_line(line: str) -> None:
             start_idx = line.find("[changed]")
             end_idx = start_idx + len("[changed]")
             colored_line = line[:start_idx] + "\033[93m\033[1m[changed]\033[0m" + line[end_idx:]
+        # Color [queued ] in bright cyan
+        elif "[queued ]" in line:
+            start_idx = line.find("[queued ]")
+            end_idx = start_idx + len("[queued ]")
+            colored_line = line[:start_idx] + "\033[96m\033[1m[queued ]\033[0m" + line[end_idx:]
         print(colored_line)
     else:
         print(line)
@@ -164,6 +171,9 @@ async def _process_files(
 ) -> None:
     """Process all files and report progress."""
     total = len(file_paths)
+    
+    # Initialize worker pool if using parallel processing
+    await file_processor.initialize_worker_pool()
     
     for idx, path in enumerate(file_paths, start=1):
         # Log first file to debug hanging
@@ -266,7 +276,7 @@ async def run_formatter(
     no_patterns: bool, patterns_timeout_ms: int, patterns_max_bytes: int,
     hook_timeout: float, validate_patterns: bool = False,
     metrics_path: Optional[Path] = None, no_als: bool = False,
-    max_file_size: int = 102400,
+    max_file_size: int = 102400, num_workers: Optional[int] = None,
     using_default_log: bool = False, using_default_stderr: bool = False,
     using_default_patterns: bool = False) -> int:
     """Run the main formatting logic asynchronously."""
@@ -345,7 +355,7 @@ async def run_formatter(
         ui=ui, metrics=metrics, no_als=no_als,
         write=write, diff=diff, format_timeout=format_timeout,
         max_consecutive_timeouts=max_consecutive_timeouts,
-        max_file_size=max_file_size)
+        max_file_size=max_file_size, num_workers=num_workers)
     
     # Process all files
     await _process_files(
@@ -353,6 +363,9 @@ async def run_formatter(
         pattern_formatter, no_als, log_path, stderr_path,
         pattern_log_path, using_default_log, using_default_stderr,
         using_default_patterns, client)
+    
+    # Shutdown worker pool if used
+    await file_processor.shutdown_worker_pool()
     
     # Finalize and generate reports
     exit_code = await finalize_and_report(
@@ -420,6 +433,7 @@ def format_command(
     no_als: Annotated[bool, typer.Option("--no-als", help="Disable ALS formatting (patterns only)")] = False,
     max_consecutive_timeouts: Annotated[int, typer.Option("--max-consecutive-timeouts", help="Abort after this many timeouts in a row (0 = no limit)")] = 5,
     max_file_size: Annotated[int, typer.Option("--max-file-size", help="Skip files larger than this size in bytes (default: 102400 = 100KB)")] = 102400,
+    num_workers: Annotated[Optional[int], typer.Option("--num-workers", help="Number of parallel workers for post-ALS processing (default: 0.6 * CPU cores)")] = None,
     write: Annotated[bool, typer.Option("--write", help="Apply changes to files")] = False,
     files: Annotated[Optional[List[str]], typer.Argument(help="Specific Ada files to format")] = None,
 ) -> None:
@@ -483,6 +497,7 @@ def format_command(
         patterns_timeout_ms=patterns_timeout_ms, patterns_max_bytes=patterns_max_bytes,
         hook_timeout=hook_timeout, validate_patterns=validate_patterns,
         metrics_path=metrics_path, no_als=no_als, max_file_size=max_file_size,
+        num_workers=num_workers,
         using_default_log=using_default_log, using_default_stderr=using_default_stderr,
         using_default_patterns=True))
     
