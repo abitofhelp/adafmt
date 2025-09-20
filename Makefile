@@ -302,7 +302,7 @@ docs:
 
 # === Semantic Release Documentation Targets ===
 
-## Compute the next version and update doc headers (writes in-place; makes backups per script).
+## Compute the next version and update doc headers (writes in-place; without backups per script).
 .PHONY: docs-bump-headers
 docs-bump-headers: dev
 	@echo "Computing next version via python-semantic-release..."
@@ -311,7 +311,7 @@ docs-bump-headers: dev
 	   echo "ERROR: Could not compute next version (semantic-release)."; exit 2; \
 	 fi; \
 	 echo "Next version: $$nv"; \
-	 SEMVER_NEXT="$$nv" $(PY) scripts/update_doc_headers.py --write
+	 SEMVER_NEXT="$$nv" $(PY) scripts/update_doc_headers.py --write --no-backup
 
 ## Dry-run: show what would change without writing files.
 .PHONY: docs-bump-headers-dry-run
