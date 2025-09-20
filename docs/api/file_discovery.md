@@ -1,7 +1,7 @@
 # file_discovery Module
 
-**Version:** 1.0.0
-**Date:** January 2025
+**Version:** 1.0.1
+**Date:** 2025-09-20T00:23:54.445021Z
 **License:** BSD-3-Clause
 **Copyright:** © 2025 Michael Gardner, A Bit of Help, Inc.
 **Authors:** Michael Gardner, A Bit of Help, Inc.
