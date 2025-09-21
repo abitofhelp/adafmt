@@ -163,20 +163,26 @@ class PatternFormatter:
         replacements: Total replacements made by each pattern
     """
     
-    def __init__(self) -> None:
-        """Initialize an empty pattern formatter."""
+    def __init__(self, debug_logger: Optional[JsonlLogger] = None) -> None:
+        """Initialize an empty pattern formatter.
+        
+        Args:
+            debug_logger: Optional logger for detailed debug events
+        """
         self.rules: Tuple[CompiledRule, ...] = ()
         self.enabled: bool = False
         self.loaded_count: int = 0
         self.files_touched: Dict[str, int] = {}
         self.replacements: Dict[str, int] = {}
+        self.debug_logger = debug_logger
     
     @classmethod
     def load_from_json(
         cls,
         path: Path,
         logger: Optional[JsonlLogger] = None,
-        ui = None
+        ui = None,
+        debug_logger: Optional[JsonlLogger] = None
     ) -> PatternFormatter:
         """Load patterns from a JSON file.
         
@@ -187,6 +193,7 @@ class PatternFormatter:
             path: Path to the patterns JSON file
             logger: Optional logger for warnings and errors
             ui: Optional UI instance for user feedback
+            debug_logger: Optional logger for detailed debug events
             
         Returns:
             Configured PatternFormatter instance
@@ -195,7 +202,7 @@ class PatternFormatter:
             Invalid patterns are skipped with warnings logged.
             If no valid patterns are loaded, the formatter is disabled.
         """
-        formatter = cls()
+        formatter = cls(debug_logger=debug_logger)
         
         # Load patterns with guaranteed file closure
         try:
@@ -378,8 +385,56 @@ class PatternFormatter:
         current_text = text
         timeout_seconds = timeout_ms / 1000.0
         
+        # Debug: Log file start event with original content
+        if self.debug_logger:
+            self.debug_logger.write({
+                'ev': 'pattern_debug',
+                'type': 'file_start',
+                'path': str(path),
+                'content_length': len(text),
+                'content_preview': text[:500] if len(text) > 500 else text,
+                'total_patterns': len(self.rules)
+            })
+        
         for rule in self.rules:
             try:
+                # Debug: Log pattern attempt
+                if self.debug_logger:
+                    self.debug_logger.write({
+                        'ev': 'pattern_debug',
+                        'type': 'pattern_attempt',
+                        'path': str(path),
+                        'pattern_name': rule.name,
+                        'pattern_title': rule.title,
+                        'pattern_category': rule.category,
+                        'pattern_regex': rule.find.pattern,
+                        'pattern_flags': rule.find.flags,
+                        'replacement': rule.replace
+                    })
+                
+                # Find all matches before replacement (for debug logging)
+                matches_for_debug = []
+                if self.debug_logger:
+                    for match in rule.find.finditer(current_text):
+                        match_info = {
+                            'start': match.start(),
+                            'end': match.end(),
+                            'matched_text': match.group(0),
+                            'line_number': current_text[:match.start()].count('\n') + 1
+                        }
+                        matches_for_debug.append(match_info)
+                        
+                        # Log each match found
+                        self.debug_logger.write({
+                            'ev': 'pattern_debug',
+                            'type': 'pattern_match',
+                            'path': str(path),
+                            'pattern_name': rule.name,
+                            'location': {'start': match.start(), 'end': match.end()},
+                            'line_number': match_info['line_number'],
+                            'matched_text': match.group(0)[:100]  # Limit length
+                        })
+                
                 # Apply pattern with timeout protection
                 if HAS_TIMEOUT and REGEX_MODULE == 'regex':
                     # Use regex module's built-in timeout
@@ -397,6 +452,27 @@ class PatternFormatter:
                         )
                 
                 if count > 0:
+                    # Debug: Log replacements with before/after snippets
+                    if self.debug_logger and matches_for_debug:
+                        for i, match_info in enumerate(matches_for_debug[:5]):  # Limit to first 5
+                            # Extract context around the match
+                            start = max(0, match_info['start'] - 50)
+                            end = min(len(current_text), match_info['end'] + 50)
+                            before_snippet = current_text[start:match_info['end']]
+                            # Calculate where the replacement would be in new_text
+                            # This is approximate for simplicity
+                            after_snippet = new_text[start:start + len(before_snippet) + 20]
+                            
+                            self.debug_logger.write({
+                                'ev': 'pattern_debug',
+                                'type': 'pattern_replace',
+                                'path': str(path),
+                                'pattern_name': rule.name,
+                                'replacement_index': i + 1,
+                                'before_snippet': before_snippet[-100:],  # Last 100 chars
+                                'after_snippet': after_snippet[:100]     # First 100 chars
+                            })
+                    
                     current_text = new_text
                     result.applied_names.append(rule.name)
                     result.replacements_sum += count
@@ -419,6 +495,18 @@ class PatternFormatter:
                             'category': rule.category,
                             'replacements': count
                         })
+                
+                # Debug: Log pattern complete
+                if self.debug_logger:
+                    self.debug_logger.write({
+                        'ev': 'pattern_debug',
+                        'type': 'pattern_complete',
+                        'path': str(path),
+                        'pattern_name': rule.name,
+                        'matches_found': len(matches_for_debug),
+                        'replacements_made': count,
+                        'content_length_after': len(current_text)
+                    })
                 
             except TimeoutError:
                 # Pattern timed out
@@ -445,6 +533,20 @@ class PatternFormatter:
                 if ui:
                     ui.show_error(f"Pattern '{rule.name}' error: {e}")
                 continue
+        
+        # Debug: Log file complete event
+        if self.debug_logger:
+            self.debug_logger.write({
+                'ev': 'pattern_debug',
+                'type': 'file_complete',
+                'path': str(path),
+                'patterns_applied': result.applied_names,
+                'total_replacements': result.replacements_sum,
+                'content_length_original': len(text),
+                'content_length_final': len(current_text),
+                'content_changed': current_text != text,
+                'final_content_preview': current_text[:500] if len(current_text) > 500 else current_text
+            })
         
         return current_text, result
     

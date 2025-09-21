@@ -84,7 +84,7 @@ The system operates as a client to the Ada Language Server, communicating via th
   - Direct: `ada_language_server`
 - FR-2.3: SHALL detect and report existing ALS processes via preflight checks
 - FR-2.4: SHALL support killing existing ALS processes when requested
-- FR-2.5: SHALL wait for ALS initialization (configurable warmup period)
+- FR-2.5: SHALL verify ALS readiness using active probing with configurable timeout
 - FR-2.6: SHALL cleanly terminate ALS on exit or error
 - FR-2.7: SHALL capture ALS stderr to a timestamped file when requested
 - FR-2.8: SHALL track ALS process metrics (start time, end time, stderr lines)
@@ -214,6 +214,15 @@ The system operates as a client to the Ada Language Server, communicating via th
 - FR-7.30: SHALL write stderr output both to the stderr log file AND display it on the terminal simultaneously
 - FR-7.31: SHALL format stderr error messages in a human-readable format with clear structure and formatting
 - FR-7.32: SHALL ensure stderr error messages provide sufficient context for debugging without requiring access to the JSONL log
+- FR-7.33: SHALL support --debug-patterns flag to enable pattern processing debug output
+- FR-7.34: SHALL support --debug-patterns-path to specify custom location for pattern debug log
+- FR-7.35: SHALL write pattern debug output to default location (./adafmt_<timestamp>_debug-patterns.jsonl) when --debug-patterns used without path
+- FR-7.36: SHALL support --debug-als flag to enable ALS communication debug output
+- FR-7.37: SHALL support --debug-als-path to specify custom location for ALS debug log
+- FR-7.38: SHALL write ALS debug output to default location (./adafmt_<timestamp>_debug-als.jsonl) when --debug-als used without path
+- FR-7.39: SHALL validate that debug path flags require their corresponding debug flags to be set
+- FR-7.40: SHALL include detailed pattern application events in pattern debug log (pattern info, replacements made, timing)
+- FR-7.41: SHALL include detailed ALS communication in ALS debug log (requests, responses, timing)
 
 **Acceptance Criteria:**
 - JSONL logs are valid and parseable
@@ -623,17 +632,19 @@ The system operates as a client to the Ada Language Server, communicating via th
 
 **Requirements:**
 - NFR-1.1: SHALL format files at >100 lines per second on average
-- NFR-1.2: SHALL start up in <1 second (excluding ALS warmup)
+- NFR-1.2: SHALL start up in <1 second (excluding ALS ready timeout)
 - NFR-1.3: SHALL use <100MB RAM for typical operations
 - NFR-1.4: SHALL handle projects with >1000 source files
 - NFR-1.5: SHALL process post-ALS operations (patterns and file I/O) in parallel with configurable workers
-- NFR-1.6: SHALL minimize file I/O operations by keeping log files open for the session duration
-- NFR-1.7: SHALL maintain data integrity through immediate flushing without compromising performance
-- NFR-1.8: SHALL apply patterns without materially increasing ALS formatting time
-- NFR-1.9: SHALL enforce pattern timeout of 100ms per pattern application
-- NFR-1.10: SHALL handle up to 50 patterns without performance degradation
-- NFR-1.11: SHALL use file I/O buffer size of 8KB for optimal performance
-- NFR-1.12: SHALL consider uvloop integration for improved async performance
+- NFR-1.6: SHALL verify ALS readiness before formatting to prevent first-file hanging
+- NFR-1.7: SHALL use dynamic readiness probing instead of fixed delays for optimal startup time
+- NFR-1.8: SHALL minimize file I/O operations by keeping log files open for the session duration
+- NFR-1.9: SHALL maintain data integrity through immediate flushing without compromising performance
+- NFR-1.10: SHALL apply patterns without materially increasing ALS formatting time
+- NFR-1.11: SHALL enforce pattern timeout of 100ms per pattern application
+- NFR-1.12: SHALL handle up to 50 patterns without performance degradation
+- NFR-1.13: SHALL use file I/O buffer size of 8KB for optimal performance
+- NFR-1.14: SHALL consider uvloop integration for improved async performance
 
 **Measurement:**
 - Time formatting a large Ada project
@@ -761,7 +772,7 @@ adafmt --project-path /path/to/project.gpr [options]
 
 **ALS Control:**
 - `--no-startup-health-check`: Skip ALS readiness probe
-- `--warmup-seconds N`: Fixed warmup delay if health check fails (default: 10)
+- `--als-ready-timeout N`: Maximum wait time if health check fails (default: 10)
 - `--health-timeout N`: Health probe timeout in seconds (default: 5)
 - `--health-retries N`: Health probe retry attempts (default: 1)
 - `--max-consecutive-timeouts N`: Abort after N consecutive timeouts (default: 5)

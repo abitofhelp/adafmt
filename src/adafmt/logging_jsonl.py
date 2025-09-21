@@ -49,6 +49,12 @@ class JsonlLogger:
         """
         self.path = Path(path)
         self._file = None
+    
+    def __repr__(self):
+        """Boring representation to avoid leaking paths when printed."""
+        return f"<JsonlLogger {self.path.name}>"
+    
+    __str__ = __repr__
 
     def __enter__(self):
         """Context manager entry - opens the log file."""

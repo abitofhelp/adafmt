@@ -31,7 +31,7 @@ async def main():
     ap.add_argument("--crate-dir", help="Alire crate directory (optional)")
     ap.add_argument("--init-timeout", type=float, default=180,
                     help="Timeout for ALS initialization")
-    ap.add_argument("--warmup-seconds", type=float, default=10,
+    ap.add_argument("--als-ready-timeout", type=float, default=10,
                     help="Warmup period after initialization")
     ap.add_argument("--hover-timeout", type=float, default=15,
                     help="Timeout for hover request")
@@ -52,7 +52,7 @@ async def main():
         alr_mode=args.alr_mode,
         crate_dir=crate_dir,
         init_timeout_seconds=args.init_timeout,
-        warmup_seconds=args.warmup_seconds,
+        als_ready_timeout=args.warmup_seconds,
         process_timeout_seconds=300,
         stderr_file_path=None
     )

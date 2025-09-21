@@ -154,6 +154,7 @@ class ALSClient:
     logger: Optional[Any] = None
     als_traces_config_path: Optional[str] = None
     als_log_path: Optional[str] = None
+    debug_logger: Optional[Any] = None
     init_timeout: float = 180.0
     process: Optional[asyncio.subprocess.Process] = None
     _reader_task: Optional[asyncio.Task] = None
@@ -578,9 +579,15 @@ class ALSClient:
             # Clean up any pending futures
             for future in self._pending.values():
                 if not future.done():
+                    # Set exception and retrieve it to prevent "Future exception was never retrieved" warnings
                     future.set_exception(
                         ALSProtocolError({"message": "ALS connection lost"})
                     )
+                    # Retrieve the exception to mark it as handled
+                    try:
+                        future.exception()
+                    except Exception:
+                        pass
             self._pending.clear()
         # end reader
 

@@ -80,6 +80,7 @@ help:
 	@echo "  make clean       - Remove build artifacts and caches"
 	@echo "  make distclean   - Remove venv, build artifacts, and caches"
 	@echo "  make kill-als    - Kill all ALS processes and clean stale locks (aggressive)"
+	@echo "  make demo-debug-als - Show how to run the demo script (mycli.py)"
 
 # Create virtual environment
 .PHONY: venv
@@ -332,7 +333,7 @@ docs:
 # 	 fi; \
 # 	 echo "Next version: $$nv"; \
 # 	 SEMVER_NEXT="$$nv" $(PY) scripts/update_doc_headers.py --write --no-backup
-# 
+#
 # ## Dry-run: show what would change without writing files.
 # .PHONY: docs-bump-headers-dry-run
 # docs-bump-headers-dry-run: dev
@@ -343,7 +344,7 @@ docs:
 # 	 fi; \
 # 	 echo "Next version: $$nv"; \
 # 	 SEMVER_NEXT="$$nv" $(PY) scripts/update_doc_headers.py
-# 
+#
 # ## Print the next version as detected by python-semantic-release.
 # .PHONY: print-next-version
 # print-next-version: dev

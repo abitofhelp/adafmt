@@ -26,7 +26,7 @@ python tools/als_rpc_probe.py --project-path /path/to/project.gpr \
 # Verbose output with custom timeouts
 python tools/als_rpc_probe.py --project-path /path/to/project.gpr \
     --file test.adb --verbose \
-    --warmup-seconds 30 --format-timeout 90
+    --als-ready-timeout 30 --format-timeout 90
 ```
 
 **Options**:
@@ -35,7 +35,7 @@ python tools/als_rpc_probe.py --project-path /path/to/project.gpr \
 - `--alr-mode`: Alire mode (auto/yes/no)
 - `--crate-dir`: Override Alire crate directory
 - `--init-timeout`: ALS initialization timeout (default: 180s)
-- `--warmup-seconds`: Post-init warmup period (default: 10s)
+- `--als-ready-timeout`: Post-init warmup period (default: 10s)
 - `--hover-timeout`: Hover request timeout (default: 15s)
 - `--format-timeout`: Format request timeout (default: 60s)
 - `--verbose`: Enable detailed output

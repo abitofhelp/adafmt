@@ -20,7 +20,8 @@ def load_patterns(
     using_default_patterns: bool,
     pattern_logger: JsonlLogger,
     ui: Optional[Any] = None,
-    client: Optional[Any] = None
+    client: Optional[Any] = None,
+    debug_logger: Optional[JsonlLogger] = None
 ) -> Tuple[Optional[PatternFormatter], Optional[Path]]:
     """
     Load pattern formatter from configuration.
@@ -32,6 +33,7 @@ def load_patterns(
         pattern_logger: Logger for pattern events
         ui: UI instance for logging
         client: ALS client (for shutdown on error)
+        debug_logger: Optional logger for detailed pattern debugging
         
     Returns:
         Tuple of (pattern_formatter, actual_patterns_path)
@@ -66,7 +68,8 @@ def load_patterns(
                 pattern_formatter = PatternFormatter.load_from_json(
                     patterns_path,
                     logger=PatternLogger(pattern_logger),
-                    ui=ui
+                    ui=ui,
+                    debug_logger=debug_logger
                 )
                 
                 # Check if patterns file is empty (no patterns loaded)

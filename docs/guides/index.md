@@ -88,6 +88,22 @@ Comprehensive guide to timeout configuration and tuning:
 - Advanced timeout strategies for large projects
 - Troubleshooting timeout-related issues
 
+### [🚀 ALS Initialization Guide](als-initialization-guide.md)
+Complete guide to ALS initialization and readiness:
+- Understanding the first-file hanging problem
+- How the readiness probe mechanism works
+- Configuring --als-ready-timeout for your project
+- Performance considerations and optimization
+- Troubleshooting ALS startup issues
+
+### [🔍 Debug Logging Guide](debug-logging-guide.md)
+Comprehensive guide to debug logging features:
+- Pattern processing debug logs (--debug-patterns)
+- ALS communication debug logs (--debug-als)
+- Analyzing debug output with jq
+- Common debugging scenarios and solutions
+- Performance impact and best practices
+
 ### [🎨 Pattern Formatter Guide](patterns-guide.md)
 Complete guide to the pattern formatter system:
 - **Usage**: Quick start, configuration, validation

@@ -9,8 +9,8 @@
 
 from __future__ import annotations
 
+
 import asyncio
-import os
 import sys
 import time
 from pathlib import Path
@@ -197,13 +197,6 @@ async def _process_files(
         else:
             _print_colored_line(found_line)
         
-        # Log first file to debug hanging
-        if idx == 1:
-            if ui:
-                ui.log_line(f"[formatter] Processing first file: {path}")
-            else:
-                print(f"[formatter] Processing first file: {path}")
-        
         # Process the file
         file_start_time = time.time()
         status, note = await file_processor.process_file(path, idx, total, run_start_time)
@@ -240,8 +233,9 @@ async def _setup_formatter_environment(
     stderr_path: Optional[Path], log_path: Path, preflight_mode: str,
     als_stale_minutes: int, pre_hook: Optional[str], hook_timeout: float,
     project_path: Path, no_als: bool, init_timeout: int,
-    warmup_seconds: int, validate_patterns: bool, write: bool
-) -> Tuple[Any, Any, Any, Any, JsonlLogger, JsonlLogger, Path, MetricsCollector, Optional[ALSClient]]:
+    als_ready_timeout: int, validate_patterns: bool, write: bool,
+    debug_patterns_path: Optional[Path] = None, debug_als_path: Optional[Path] = None
+) -> Tuple[Any, Any, Any, Any, JsonlLogger, JsonlLogger, Path, Optional[JsonlLogger], Optional[Path], Optional[JsonlLogger], Optional[Path], MetricsCollector, Optional[ALSClient]]:
     """Set up the formatter environment including UI, loggers, and ALS client."""
     # UI - always use plain TTY UI
     ui = make_ui("plain")
@@ -262,7 +256,7 @@ async def _setup_formatter_environment(
         ui.set_header("Ada Formatter", version=APP_VERSION, mode=mode)
 
     # Setup loggers
-    logger, pattern_logger, pattern_log_path = setup_loggers(log_path)
+    logger, pattern_logger, pattern_log_path, debug_pattern_logger, debug_pattern_log_path, debug_als_logger, debug_als_log_path = setup_loggers(log_path, debug_patterns_path, debug_als_path)
     set_cleanup_logger(logger)
     set_cleanup_pattern_logger(pattern_logger)
     
@@ -281,34 +275,36 @@ async def _setup_formatter_environment(
     # Initialize Ada Language Server client
     client = await initialize_als_client(
         project_path, no_als, stderr_path, init_timeout, 
-        warmup_seconds, metrics, ui)
+        als_ready_timeout, metrics, ui, debug_als_logger)
     if client:
         set_cleanup_client(client)
         
-    return ui, _orig_stderr, _tee_fp, _restore_stderr, logger, pattern_logger, pattern_log_path, metrics, client
+    return ui, _orig_stderr, _tee_fp, _restore_stderr, logger, pattern_logger, pattern_log_path, debug_pattern_logger, debug_pattern_log_path, debug_als_logger, debug_als_log_path, metrics, client
 
 async def run_formatter(
     project_path: Path, include_paths: List[Path], exclude_paths: List[Path],
     write: bool, diff: bool, check: bool, preflight_mode: str,
     als_stale_minutes: int, pre_hook: Optional[str], post_hook: Optional[str],
-    init_timeout: int, warmup_seconds: int, format_timeout: int,
+    init_timeout: int, als_ready_timeout: int, format_timeout: int,
     max_attempts: int, log_path: Optional[Path], stderr_path: Optional[Path],
     files: List[str], max_consecutive_timeouts: int, patterns_path: Optional[Path],
     no_patterns: bool, patterns_timeout_ms: int, patterns_max_bytes: int,
     hook_timeout: float, validate_patterns: bool = False,
-    metrics_path: Optional[Path] = None, no_als: bool = False,
-    max_file_size: int = 102400, num_workers: Optional[int] = None,
+    debug_patterns_path: Optional[Path] = None, debug_als_path: Optional[Path] = None, metrics_path: Optional[Path] = None,
+    no_als: bool = False, max_file_size: int = 102400, num_workers: Optional[int] = None,
     using_default_log: bool = False, using_default_stderr: bool = False,
-    using_default_patterns: bool = False) -> int:
+    using_default_patterns: bool = False,
+    using_default_debug_patterns: bool = False,
+    using_default_debug_als: bool = False) -> int:
     """Run the main formatting logic asynchronously."""
     run_start_time = time.time()
     
     # Set up formatter environment
     try:
-        ui, _orig_stderr, _tee_fp, _restore_stderr, logger, pattern_logger, pattern_log_path, metrics, client = await _setup_formatter_environment(
+        ui, _orig_stderr, _tee_fp, _restore_stderr, logger, pattern_logger, pattern_log_path, debug_pattern_logger, debug_pattern_log_path, debug_als_logger, debug_als_log_path, metrics, client = await _setup_formatter_environment(
             stderr_path, log_path, preflight_mode, als_stale_minutes,
             pre_hook, hook_timeout, project_path, no_als, init_timeout,
-            warmup_seconds, validate_patterns, write
+            als_ready_timeout, validate_patterns, write, debug_patterns_path, debug_als_path
         )
     except SystemExit as e:
         return e.code
@@ -328,7 +324,7 @@ async def run_formatter(
     try:
         pattern_formatter, patterns_path = load_patterns(
             patterns_path, no_patterns, using_default_patterns,
-            pattern_logger, ui, client
+            pattern_logger, ui, client, debug_pattern_logger
         )
     except SystemExit as e:
         if client:
@@ -391,14 +387,18 @@ async def run_formatter(
     # Finalize and generate reports
     exit_code = await finalize_and_report(
         file_processor=file_processor, file_paths=file_paths,
-        run_start_time=run_start_time, warmup_seconds=warmup_seconds,
+        run_start_time=run_start_time, als_ready_timeout=als_ready_timeout,
         log_path=log_path, stderr_path=stderr_path,
         pattern_log_path=pattern_log_path, using_default_log=using_default_log,
         using_default_stderr=using_default_stderr, using_default_patterns=using_default_patterns,
         pattern_logger=pattern_logger, client=client,
         pattern_formatter=pattern_formatter, ui=ui,
         no_als=no_als, check=check,
-        post_hook=post_hook, hook_timeout=hook_timeout
+        post_hook=post_hook, hook_timeout=hook_timeout,
+        debug_pattern_log_path=debug_pattern_log_path,
+        debug_als_log_path=debug_als_log_path,
+        using_default_debug_patterns=using_default_debug_patterns,
+        using_default_debug_als=using_default_debug_als
     )
     
     # Record run summary metrics
@@ -444,12 +444,16 @@ def format_command(
     hook_timeout: Annotated[int, typer.Option("--hook-timeout", help="Timeout for hook commands in seconds")] = 5,
     preflight: Annotated[PreflightMode, typer.Option("--preflight", help="Handle existing ALS processes and .als-alire locks")] = PreflightMode.safe,
     stderr_path: Annotated[Optional[Path], typer.Option("--stderr-path", help="Override stderr capture location (default: ./adafmt_<timestamp>_stderr.log)")] = None,
-    warmup_seconds: Annotated[int, typer.Option("--warmup-seconds", help="Time to let ALS warm up in seconds")] = 10,
+    als_ready_timeout: Annotated[int, typer.Option("--als-ready-timeout", help="Maximum seconds to wait for ALS to become ready")] = 10,
     patterns_path: Annotated[Optional[Path], typer.Option("--patterns-path", help="Path to patterns JSON file (default: ./adafmt_patterns.json)")] = None,
     no_patterns: Annotated[bool, typer.Option("--no-patterns", help="Disable pattern processing")] = False,
     patterns_timeout_ms: Annotated[int, typer.Option("--patterns-timeout-ms", help="Timeout per pattern in milliseconds")] = 100,
     patterns_max_bytes: Annotated[int, typer.Option("--patterns-max-bytes", help="Skip patterns for files larger than this (bytes)")] = 10485760,
     validate_patterns: Annotated[bool, typer.Option("--validate-patterns", help="Validate that applied patterns are acceptable to ALS")] = False,
+    debug_patterns: Annotated[bool, typer.Option("--debug-patterns", help="Enable pattern debugging (uses default path if --debug-patterns-path not set)")] = False,
+    debug_patterns_path: Annotated[Optional[Path], typer.Option("--debug-patterns-path", help="Write pattern debug output to this path")] = None,
+    debug_als: Annotated[bool, typer.Option("--debug-als", help="Enable ALS debugging (uses default path if --debug-als-path not set)")] = False,
+    debug_als_path: Annotated[Optional[Path], typer.Option("--debug-als-path", help="Write ALS debug output to this path")] = None,
     metrics_path: Annotated[Optional[Path], typer.Option("--metrics-path", help="Path to cumulative metrics file (default: ~/.adafmt/metrics.jsonl)")] = None,
     no_als: Annotated[bool, typer.Option("--no-als", help="Disable ALS formatting (patterns only)")] = False,
     max_consecutive_timeouts: Annotated[int, typer.Option("--max-consecutive-timeouts", help="Abort after this many timeouts in a row (0 = no limit)")] = 5,
@@ -478,12 +482,54 @@ def format_command(
     if stderr_path:
         stderr_path = ArgumentValidator.ensure_absolute_path(stderr_path, "stderr path")
     
+    # Process debug flags early for validation
+    # Generate timestamp for default paths
+    from datetime import datetime, timezone
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    
+    # Handle debug patterns
+    processed_debug_patterns_path = None
+    using_default_debug_patterns = False
+    if debug_patterns:
+        if debug_patterns_path:
+            # Custom path provided - expand ~ and ensure parent exists
+            processed_debug_patterns_path = debug_patterns_path.expanduser()
+            processed_debug_patterns_path.parent.mkdir(parents=True, exist_ok=True)
+            using_default_debug_patterns = False
+        else:
+            # Use default path in current directory
+            processed_debug_patterns_path = Path(f"./adafmt_{timestamp}_debug-patterns.jsonl")
+            using_default_debug_patterns = True
+    elif debug_patterns_path:
+        # Error: path provided without enabling debug
+        typer.echo("Error: --debug-patterns-path requires --debug-patterns", err=True)
+        raise typer.Exit(2)
+    
+    # Handle debug ALS
+    processed_debug_als_path = None
+    using_default_debug_als = False
+    if debug_als:
+        if debug_als_path:
+            # Custom path provided - expand ~ and ensure parent exists
+            processed_debug_als_path = debug_als_path.expanduser()
+            processed_debug_als_path.parent.mkdir(parents=True, exist_ok=True)
+            using_default_debug_als = False
+        else:
+            # Use default path in current directory
+            processed_debug_als_path = Path(f"./adafmt_{timestamp}_debug-als.jsonl")
+            using_default_debug_als = True
+    elif debug_als_path:
+        # Error: path provided without enabling debug
+        typer.echo("Error: --debug-als-path requires --debug-als", err=True)
+        raise typer.Exit(2)
+    
     # Validate paths
     path_valid, path_errors = ArgumentValidator.validate_paths(
         project_path=project_path, include_paths=include_paths,
         exclude_paths=exclude_paths, patterns_path=patterns_path,
         files=files, log_path=log_path, stderr_path=stderr_path,
-        metrics_path=metrics_path, no_patterns=no_patterns)
+        metrics_path=metrics_path, no_patterns=no_patterns,
+        debug_patterns_path=debug_patterns_path, debug_als_path=debug_als_path)
     
     if not path_valid:
         for error in path_errors:
@@ -494,7 +540,8 @@ def format_command(
     options_valid, option_errors = ArgumentValidator.validate_options(
         no_patterns=no_patterns, no_als=no_als,
         validate_patterns=validate_patterns, write=write,
-        diff=diff, check=check)
+        diff=diff, check=check,
+        debug_patterns_path=processed_debug_patterns_path, debug_als_path=processed_debug_als_path)
     
     if not options_valid:
         for error in option_errors:
@@ -505,22 +552,25 @@ def format_command(
     log_path, stderr_path, using_default_log, using_default_stderr = get_default_paths(
         log_path, stderr_path)
     
+    # Debug paths have already been processed above, using_default_debug_patterns and using_default_debug_als are set
+    
     # Run the async formatter
     exit_code = asyncio.run(run_formatter(
         project_path=project_path, include_paths=include_paths,
         exclude_paths=exclude_paths, write=write, diff=diff, check=check,
         preflight_mode=preflight.value, als_stale_minutes=als_stale_minutes,
         pre_hook=pre_hook, post_hook=post_hook, init_timeout=init_timeout,
-        warmup_seconds=warmup_seconds, format_timeout=format_timeout,
+        als_ready_timeout=als_ready_timeout, format_timeout=format_timeout,
         max_attempts=max_attempts, log_path=log_path, stderr_path=stderr_path,
         files=files or [], max_consecutive_timeouts=max_consecutive_timeouts,
         patterns_path=patterns_path, no_patterns=no_patterns,
         patterns_timeout_ms=patterns_timeout_ms, patterns_max_bytes=patterns_max_bytes,
         hook_timeout=hook_timeout, validate_patterns=validate_patterns,
-        metrics_path=metrics_path, no_als=no_als, max_file_size=max_file_size,
-        num_workers=num_workers,
+        debug_patterns_path=processed_debug_patterns_path, debug_als_path=processed_debug_als_path, metrics_path=metrics_path, no_als=no_als,
+        max_file_size=max_file_size, num_workers=num_workers,
         using_default_log=using_default_log, using_default_stderr=using_default_stderr,
-        using_default_patterns=True))
+        using_default_patterns=True, using_default_debug_patterns=using_default_debug_patterns,
+        using_default_debug_als=using_default_debug_als))
     
     raise typer.Exit(exit_code)
 

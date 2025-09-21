@@ -225,7 +225,7 @@ adafmt format --project-path /path/to/project.gpr \
   - `fail`: Exit with error if any processes/locks found
 - `--als-stale-minutes N`: Age threshold for stale ALS processes (default: 30)
 - `--init-timeout SECONDS`: Timeout for ALS initialization (default: 180.0)
-- `--warmup-seconds SECONDS`: Time to let ALS warm up (default: 10.0)
+- `--als-ready-timeout SECONDS`: Maximum seconds to wait for ALS to become ready (default: 10)
 - `--format-timeout SECONDS`: Timeout per file formatting (default: 60.0)
 - `--max-attempts N`: Retry attempts for transient errors (default: 2)
 - `--num-workers N`: Number of parallel workers for post-ALS processing (default: 1)
@@ -339,7 +339,7 @@ jobs:
 - Or manually: `pkill -f ada_language_server`
 
 #### Timeout Errors
-- Increase timeouts: `--init-timeout 300 --warmup-seconds 20 --format-timeout 120`
+- Increase timeouts: `--init-timeout 300 --als-ready-timeout 20 --format-timeout 120`
 - Check ALS stderr: `--stderr-path als-debug.log`
 
 #### Understanding Error Types
@@ -369,9 +369,29 @@ jobs:
 Enable comprehensive logging to diagnose issues:
 
 ```bash
+# Basic logging
 adafmt format --project-path /path/to/project.gpr \
        --include-path /path/to/src \
        --log-path adafmt-debug.jsonl \
+       --stderr-path als-stderr.log
+
+# Debug pattern processing
+adafmt format --project-path /path/to/project.gpr \
+       --include-path /path/to/src \
+       --debug-patterns \
+       --patterns-path ./custom_patterns.json
+
+# Debug ALS communication  
+adafmt format --project-path /path/to/project.gpr \
+       --include-path /path/to/src \
+       --debug-als \
+       --debug-als-path /tmp/als-debug.jsonl
+
+# Full debugging (all logs)
+adafmt format --project-path /path/to/project.gpr \
+       --include-path /path/to/src \
+       --debug-patterns \
+       --debug-als \
        --stderr-path als-stderr.log
 ```
 
@@ -379,6 +399,12 @@ View logs:
 ```bash
 # View structured logs
 jq . adafmt-debug.jsonl
+
+# View pattern debug log
+jq '.ev == "pattern_application"' adafmt_*_debug-patterns.jsonl
+
+# View ALS debug log
+jq '.ev == "als_format_request" or .ev == "als_format_response"' adafmt_*_debug-als.jsonl
 
 # View ALS errors
 cat als-stderr.log
@@ -467,6 +493,8 @@ We welcome contributions! Please see our [Developer Documentation](docs/guides/i
 - **[Getting Started Guide](docs/guides/getting-started-guide.md)** - **New users start here!** Complete examples and workflows
 - **[User Guides](docs/guides/index.md)** - Troubleshooting, configuration, and usage guides
 - **[Timeout Configuration](docs/guides/timeout-guide.md)** - ALS timeout tuning and optimization
+- **[ALS Initialization Guide](docs/guides/als-initialization-guide.md)** - Understanding ALS readiness and --als-ready-timeout configuration
+- **[Debug Logging Guide](docs/guides/debug-logging-guide.md)** - Using debug flags for troubleshooting
 
 ### For Developers
 - **[Developer Documentation](docs/guides/index.md)** - Complete development guide

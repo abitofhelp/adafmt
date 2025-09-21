@@ -173,6 +173,9 @@ class FileProcessor:
         if not self.client:
             return []
             
+        # Get debug logger from ALS client if available
+        debug_logger = self.client.debug_logger if self.client and hasattr(self.client, 'debug_logger') else None
+        
         # Open the file in ALS
         try:
             content = path.read_text(encoding="utf-8", errors="ignore")
@@ -182,6 +185,15 @@ class FileProcessor:
             raise PermissionError(f"Permission denied reading file: {path}")
         except Exception as e:
             raise IOError(f"Failed to read file {path}: {e}")
+        
+        # Log file start
+        if debug_logger:
+            debug_logger.write({
+                'ev': 'als_file_start',
+                'path': str(path),
+                'size': len(content),
+                'lines': content.count('\n') + 1
+            })
         await self.client._notify("textDocument/didOpen", {
             "textDocument": {
                 "uri": path.as_uri(),
@@ -193,6 +205,17 @@ class FileProcessor:
         
         # Request formatting
         try:
+            # Log formatting request
+            if debug_logger:
+                debug_logger.write({
+                    'ev': 'als_format_request',
+                    'path': str(path),
+                    'method': 'textDocument/formatting',
+                    'uri': path.as_uri(),
+                    'tab_size': 3,
+                    'insert_spaces': True
+                })
+            
             res = await self.client.request_with_timeout(
                 {
                     "method": "textDocument/formatting",
@@ -203,8 +226,42 @@ class FileProcessor:
                 },
                 timeout=self.format_timeout
             )
+            
+            # Log formatting response
+            if debug_logger:
+                debug_logger.write({
+                    'ev': 'als_format_response',
+                    'path': str(path),
+                    'has_edits': res is not None and len(res) > 0,
+                    'edit_count': len(res) if res else 0
+                })
+            
+            # If we have edits, apply them to get the formatted content for debug log
+            if debug_logger:
+                if res:
+                    formatted_content = apply_text_edits(content, res)
+                    debug_logger.write({
+                        'ev': 'als_file_complete',
+                        'path': str(path),
+                        'changed': True,
+                        'original_size': len(content),
+                        'formatted_size': len(formatted_content)
+                    })
+                else:
+                    debug_logger.write({
+                        'ev': 'als_file_complete',
+                        'path': str(path),
+                        'changed': False
+                    })
+                
         except asyncio.TimeoutError:
             res = None
+            if debug_logger:
+                debug_logger.write({
+                    'ev': 'als_format_timeout',
+                    'path': str(path),
+                    'timeout_seconds': self.format_timeout
+                })
             raise
         finally:
             # Always close the file

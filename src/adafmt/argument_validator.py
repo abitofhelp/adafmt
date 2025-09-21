@@ -20,7 +20,9 @@ class ArgumentValidator:
                       log_path: Optional[Path],
                       stderr_path: Optional[Path],
                       metrics_path: Optional[Path],
-                      no_patterns: bool) -> Tuple[bool, List[str]]:
+                      no_patterns: bool,
+                      debug_patterns_path: Optional[Path] = None,
+                      debug_als_path: Optional[Path] = None) -> Tuple[bool, List[str]]:
         """
         Validate all path arguments.
         
@@ -109,7 +111,9 @@ class ArgumentValidator:
     @staticmethod
     def validate_options(no_patterns: bool, no_als: bool,
                         validate_patterns: bool, write: bool,
-                        diff: bool, check: bool) -> Tuple[bool, List[str]]:
+                        diff: bool, check: bool,
+                        debug_patterns_path: Optional[Path] = None,
+                        debug_als_path: Optional[Path] = None) -> Tuple[bool, List[str]]:
         """
         Validate option combinations.
         
@@ -127,6 +131,10 @@ class ArgumentValidator:
             
         if validate_patterns and no_als:
             errors.append("Pattern validation requires ALS (cannot use --no-als)")
+            
+        # Check debug ALS compatibility
+        if debug_als_path is not None and no_als:
+            errors.append("Cannot use --debug-als or --debug-als-path with --no-als (no ALS to debug)")
             
         if write and check:
             errors.append("Cannot use both --write and --check")

@@ -23,7 +23,7 @@ async def finalize_and_report(
     file_processor: FileProcessor,
     file_paths: List[Path],
     run_start_time: float,
-    warmup_seconds: int,
+    als_ready_timeout: int,
     log_path: Path,
     stderr_path: Optional[Path],
     pattern_log_path: Path,
@@ -37,7 +37,11 @@ async def finalize_and_report(
     no_als: bool,
     check: bool,
     post_hook: Optional[str],
-    hook_timeout: float
+    hook_timeout: float,
+    debug_pattern_log_path: Optional[Path] = None,
+    debug_als_log_path: Optional[Path] = None,
+    using_default_debug_patterns: bool = False,
+    using_default_debug_als: bool = False
 ) -> int:
     """
     Handle final metrics calculation, reporting, and cleanup.
@@ -107,7 +111,7 @@ async def finalize_and_report(
     # ALS processing includes warmup + file processing
     als_start_time = adafmt_start_time
     # Pattern processing happens during file processing, estimate based on timing
-    pattern_start_time = datetime.fromtimestamp(run_start_time + (warmup_seconds if client else 0), tz=timezone.utc)
+    pattern_start_time = datetime.fromtimestamp(run_start_time + (als_ready_timeout if client else 0), tz=timezone.utc)
     pattern_end_time = adafmt_end_time
     
     # Calculate pattern processing time
@@ -145,13 +149,20 @@ async def finalize_and_report(
         pattern_log_path=pattern_log_path,
         using_default_log=using_default_log,
         using_default_stderr=using_default_stderr,
-        using_default_patterns=using_default_patterns
+        using_default_patterns=using_default_patterns,
+        # Debug log paths
+        debug_pattern_log_path=debug_pattern_log_path,
+        debug_als_log_path=debug_als_log_path,
+        using_default_debug_patterns=using_default_debug_patterns,
+        using_default_debug_als=using_default_debug_als
     )
     
     # Log pattern run_end event
+    # Calculate total patterns applied from files_touched
+    total_patterns_applied = sum(pattern_formatter.files_touched.values()) if pattern_formatter else 0
     pattern_logger.write({
         'ev': 'run_end',
-        'patterns_applied': pattern_formatter.total_patterns_applied if pattern_formatter else 0,
+        'patterns_applied': total_patterns_applied,
         'files_with_patterns': pattern_files_changed,
         'elapsed_seconds': pattern_elapsed
     })

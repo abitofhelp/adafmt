@@ -54,7 +54,12 @@ class MetricsReporter:
         using_default_stderr: bool = False,
         using_default_patterns: bool = False,
         no_als: bool = False,
-        ui: Any = None
+        ui: Any = None,
+        # Debug log paths
+        debug_pattern_log_path: Optional[Path] = None,
+        debug_als_log_path: Optional[Path] = None,
+        using_default_debug_patterns: bool = False,
+        using_default_debug_als: bool = False
     ) -> None:
         """Print the complete metrics summary.
         
@@ -110,7 +115,9 @@ class MetricsReporter:
         self._print_log_files(
             log_path, stderr_path, pattern_log_path,
             client, no_als, ui,
-            using_default_log, using_default_stderr, using_default_patterns
+            using_default_log, using_default_stderr, using_default_patterns,
+            debug_pattern_log_path, debug_als_log_path,
+            using_default_debug_patterns, using_default_debug_als
         )
         
         # Final separator
@@ -272,41 +279,61 @@ class MetricsReporter:
         ui: Any,
         using_default_log: bool,
         using_default_stderr: bool,
-        using_default_patterns: bool
+        using_default_patterns: bool,
+        debug_pattern_log_path: Optional[Path] = None,
+        debug_als_log_path: Optional[Path] = None,
+        using_default_debug_patterns: bool = False,
+        using_default_debug_als: bool = False
     ) -> None:
         """Print log file locations."""
-        if ui and (log_path or (client and client.als_log_path) or stderr_path):
-            print("\nLOG FILES")
-            
-            # Build log files table
-            log_files = []
-            
-            # Adafmt Log
-            if log_path:
-                log_display = f"./{log_path} (default location)" if using_default_log else str(log_path)
-                log_files.append(["Adafmt", log_display])
+        # Always print log files section
+        print("\nLOG FILES")
+        
+        # Build log files table in the specified order
+        log_files = []
+        
+        # 1. Adafmt Log
+        if log_path:
+            log_display = f"./{log_path} (default location)" if using_default_log else str(log_path)
+            log_files.append(["Adafmt", log_display])
+        else:
+            log_files.append(["Adafmt", "Not configured"])
+        
+        # 2. ALS Log
+        if not no_als:
+            als_log_display = (client.als_log_path if client else None) or "~/.als/ada_ls_log.*.log (default location)"
+            log_files.append(["ALS", als_log_display])
+        
+        # 3. Debug ALS Log (if present)
+        if debug_als_log_path:
+            if using_default_debug_als:
+                debug_als_display = f"./{debug_als_log_path.name} (default location)"
             else:
-                log_files.append(["Adafmt", "Not configured"])
-            
-            # ALS Log
-            if not no_als:
-                als_log_display = (client.als_log_path if client else None) or "~/.als/ada_ls_log.*.log (default location)"
-                log_files.append(["ALS", als_log_display])
-            
-            # Patterns Log
-            pattern_log_display = f"./{pattern_log_path} (default location)" if using_default_patterns else str(pattern_log_path)
-            log_files.append(["Patterns", pattern_log_display])
-            
-            # Performance Log
-            log_files.append(["Performance", "~/.adafmt/metrics.jsonl (default location)"])
-            
-            # Stderr Log
-            if stderr_path:
-                stderr_display = f"./{stderr_path} (default location)" if using_default_stderr else str(stderr_path)
-                log_files.append(["Stderr", stderr_display])
+                debug_als_display = str(debug_als_log_path)
+            log_files.append(["Debug ALS", debug_als_display])
+        
+        # 4. Debug Pattern Log (if present)
+        if debug_pattern_log_path:
+            if using_default_debug_patterns:
+                debug_patterns_display = f"./{debug_pattern_log_path.name} (default location)"
             else:
-                log_files.append(["Stderr", "Not configured"])
-            
-            table_str = tabulate(log_files, tablefmt="plain", colalign=("left", "left"))
-            for line in table_str.split('\n'):
-                print(f"  {line}")
+                debug_patterns_display = str(debug_pattern_log_path)
+            log_files.append(["Debug Patterns", debug_patterns_display])
+        
+        # 5. Patterns Log
+        pattern_log_display = f"./{pattern_log_path} (default location)" if using_default_patterns else str(pattern_log_path)
+        log_files.append(["Patterns", pattern_log_display])
+        
+        # 6. Performance Log
+        log_files.append(["Performance", "~/.adafmt/metrics.jsonl (default location)"])
+        
+        # 7. Stderr Log
+        if stderr_path:
+            stderr_display = f"./{stderr_path} (default location)" if using_default_stderr else str(stderr_path)
+            log_files.append(["Stderr", stderr_display])
+        else:
+            log_files.append(["Stderr", "Not configured"])
+        
+        table_str = tabulate(log_files, tablefmt="plain", colalign=("left", "left"))
+        for line in table_str.split('\n'):
+            print(f"  {line}")

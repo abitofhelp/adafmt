@@ -60,12 +60,12 @@
     "name": "decl_colon01",
     "title": "Declaration colon spacing: `Name : Type`",
     "category": "declaration",
-    "find": "^(?P<i>[ \\t]*)(?:(?:[^\\n\\\"]*\\\"){2})*[^\\n\\\"]*?(?P<lhs>\\b\\w(?:[\\w.]*\\w)?)[ \\t]*:[ \\t]*(?P<rhs>[^=\\n].*)$",
+    "find": "^(?P<i>[ \\t]*)(?!.*--)(?:(?:[^\\n\\\"]*\\\"){2})*[^\\n\\\"]*?(?P<lhs>\\b\\w(?:[\\w.]*\\w)?)[ \\t]*:[ \\t]*(?P<rhs>[^=\\n].*)$",
     "replace": "\\g<i>\\g<lhs> : \\g<rhs>",
     "flags": [
       "MULTILINE"
     ],
-    "comment": "Excludes assignments (`:=`); preserves indentation; avoids strings with even-quote heuristic."
+    "comment": "Excludes assignments (`:=`) and comment lines (--); preserves indentation; avoids strings with even-quote heuristic."
   },
   {
     "name": "eof_newline1",

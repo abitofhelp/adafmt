@@ -172,6 +172,57 @@ async def _pump_stderr(self):
 - Metrics tracking (start_ns, end_ns)
 - Compiler verification for syntax error validation
 
+#### 3.2.1 ALS Initialization and Readiness Mechanism
+
+**Problem**: The Ada Language Server requires additional initialization time beyond the LSP handshake before it can reliably process formatting requests. This initialization includes loading Ada libraries, parsing the full project, and building internal caches.
+
+**Solution**: Active readiness probe with retry mechanism.
+
+**Implementation**:
+
+```python
+# als_initializer.py - Readiness probe implementation
+async def initialize_als_client(...):
+    # 1. Start ALS and complete LSP handshake
+    client = ALSClient(project_file=project_file, ...)
+    await client.start()  # Sends initialize request
+    
+    # 2. Readiness probe with retry logic
+    dummy_ada_source = """package Dummy is
+       procedure Test;
+    end Dummy;"""
+    
+    max_retries = max(1, als_ready_timeout // 5)
+    retry_delay = 2.0
+    
+    for attempt in range(max_retries):
+        try:
+            # Send dummy formatting request
+            await client._notify("textDocument/didOpen", {...})
+            await client.request_with_timeout({
+                "method": "textDocument/formatting",
+                ...
+            }, timeout=60)  # Extended timeout for first request
+            await client._notify("textDocument/didClose", {...})
+            break  # Success!
+        except Exception:
+            if attempt < max_retries - 1:
+                await asyncio.sleep(retry_delay)
+                retry_delay = min(retry_delay * 1.5, 10.0)  # Exponential backoff
+```
+
+**Key Design Decisions**:
+
+1. **Dynamic vs Fixed Delay**: Replaced fixed `warmup_seconds` with dynamic probing
+2. **Exponential Backoff**: Retry delays increase (2s, 3s, 4.5s...) to reduce load
+3. **Extended First Timeout**: 60s timeout for readiness probe vs 30s for normal requests
+4. **Graceful Degradation**: Continue with warnings if probe fails
+
+**Performance Impact**:
+- Successful probe: ~100-500ms overhead on fast systems
+- Failed attempts: 2s + exponential backoff delays
+- Net improvement: 4+ seconds faster than fixed 10s delay
+
 ### 3.3 TUI Component (tui.py)
 
 **Purpose**: Provide adaptive terminal UI
@@ -456,6 +507,36 @@ Action: Fix syntax errors in the file and retry
 - Events: `run_start`, `file`, `pattern`, `pattern_error`, `pattern_timeout`, `file_skipped_large`, `validation_check`, `run_end`
 - Pattern events include name, title, and category for analysis
 - Summary includes only patterns with `files_touched > 0`
+
+#### 3.6.1 Debug Logging Components
+
+**Debug Pattern Logger** (`--debug-patterns` and `--debug-patterns-path`):
+- Captures detailed pattern processing information
+- Default location: `./adafmt_<timestamp>_debug-patterns.jsonl`
+- Events logged:
+  ```json
+  {"ev": "pattern_application", "path": "/src/file.adb", "pattern": "comment-norm", "regex": "\\s*--\\s+", "replacement": " -- ", "matches": 3, "timing_ms": 2.5}
+  {"ev": "pattern_skip", "path": "/src/large.adb", "reason": "file_too_large", "size_bytes": 11534336}
+  {"ev": "pattern_complete", "path": "/src/file.adb", "patterns_applied": 5, "total_replacements": 12, "total_time_ms": 15.3}
+  ```
+
+**Debug ALS Logger** (`--debug-als` and `--debug-als-path`):
+- Captures detailed ALS communication
+- Default location: `./adafmt_<timestamp>_debug-als.jsonl`
+- Events logged:
+  ```json
+  {"ev": "als_format_request", "path": "/src/file.adb", "method": "textDocument/formatting", "uri": "file:///src/file.adb", "tab_size": 3}
+  {"ev": "als_format_response", "path": "/src/file.adb", "has_edits": true, "edit_count": 5, "response_time_ms": 125}
+  {"ev": "als_file_complete", "path": "/src/file.adb", "changed": true, "original_size": 1024, "formatted_size": 1035}
+  {"ev": "als_format_timeout", "path": "/src/slow.adb", "timeout_seconds": 60}
+  ```
+
+**Debug Flag Design**:
+- Two-flag pattern: boolean enable flag + optional path flag
+- Example: `--debug-patterns` enables with default path, `--debug-patterns-path /tmp/patterns.jsonl` sets custom path
+- Validation: path flags require corresponding enable flags
+- Integration: Debug loggers passed through component hierarchy as needed
+- Performance: Minimal overhead when disabled (null logger pattern)
 
 ### 3.7 Utils Component (utils.py)
 
@@ -1076,7 +1157,7 @@ Optional:
   --log-path PATH            Override JSONL log location (default: ./adafmt_<timestamp>_log.jsonl)
   --stderr-path PATH         Override stderr capture location (default: ./adafmt_<timestamp>_stderr.log)
   --preflight MODE           Handle existing ALS: off|warn|safe|kill|aggressive|fail
-  --warmup-seconds N         ALS warmup time (default: 10)
+  --als-ready-timeout N         ALS ready timeout (default: 10)
   --format-timeout N         Per-file timeout (default: 60)
   --init-timeout N           ALS initialization timeout (default: 180)
   --max-attempts N           Retry count (default: 2)
@@ -1084,6 +1165,19 @@ Optional:
   --max-consecutive-timeouts N  Abort after N consecutive timeouts (default: 5)
   --num-workers N            Number of parallel workers (default: 1, 0=sequential)
   --worker-stats             Show detailed worker statistics
+
+Pattern formatter options:
+  --patterns-path PATH       Path to patterns JSON file (default: ./adafmt_patterns.json)
+  --no-patterns              Disable pattern processing
+  --validate-patterns        Validate patterns are acceptable to ALS
+  --patterns-timeout-ms N    Timeout per pattern in milliseconds (default: 100)
+  --patterns-max-bytes N     Skip patterns for files larger than N bytes (default: 10485760)
+
+Debug options:
+  --debug-patterns           Enable pattern processing debug output
+  --debug-patterns-path PATH Write pattern debug output to this path (requires --debug-patterns)
+  --debug-als                Enable ALS communication debug output  
+  --debug-als-path PATH      Write ALS debug output to this path (requires --debug-als)
 ```
 
 ### 5.2 Python API

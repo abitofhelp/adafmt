@@ -49,3 +49,45 @@ def get_default_paths(
         using_default_stderr = True
         
     return log_path, stderr_path, using_default_log, using_default_stderr
+
+
+def get_debug_paths(
+    timestamp: str,
+    debug_patterns_path: Optional[Path],
+    debug_als_path: Optional[Path]
+) -> Tuple[Optional[Path], Optional[Path]]:
+    """
+    Generate paths for debug logs.
+    
+    Args:
+        timestamp: Timestamp string for default filenames
+        debug_patterns_path: User-provided debug patterns path or None
+        debug_als_path: User-provided debug ALS path or None
+        
+    Returns:
+        Tuple of (resolved_debug_patterns_path, resolved_debug_als_path)
+        
+    Note:
+        If a path is provided as Path(""), it means use the default location.
+        If None, debug logging is disabled for that component.
+    """
+    resolved_patterns_path = None
+    resolved_als_path = None
+    
+    # Handle debug patterns path
+    if debug_patterns_path is not None:
+        if str(debug_patterns_path) == "" or str(debug_patterns_path) == ".":
+            # Use default location
+            resolved_patterns_path = Path(f"./adafmt_{timestamp}_debug-patterns.jsonl")
+        else:
+            resolved_patterns_path = debug_patterns_path
+    
+    # Handle debug ALS path
+    if debug_als_path is not None:
+        if str(debug_als_path) == "" or str(debug_als_path) == ".":
+            # Use default location
+            resolved_als_path = Path(f"./adafmt_{timestamp}_debug-als.jsonl")
+        else:
+            resolved_als_path = debug_als_path
+            
+    return resolved_patterns_path, resolved_als_path

@@ -144,7 +144,7 @@ class TestCLIParameters:
             '--diff',
             '--preflight',
             '--init-timeout',
-            '--warmup-seconds',
+            '--als-ready-timeout',
             '--format-timeout',
             '--max-attempts',
             '--log-path',
