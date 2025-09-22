@@ -20,7 +20,6 @@ from unittest.mock import Mock
 from adafmt.pattern_formatter import (
     PatternFormatter,
     PatternLogger,
-    HAS_TIMEOUT,
     REGEX_MODULE,
     timeout_context
 )

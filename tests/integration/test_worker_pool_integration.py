@@ -10,13 +10,12 @@
 import asyncio
 import time
 from pathlib import Path
-from unittest.mock import Mock, AsyncMock
+from unittest.mock import Mock
 import pytest
 
-from adafmt.worker_pool import WorkerPool, SignalHandler
+from adafmt.worker_pool import WorkerPool
 from adafmt.worker_context import WorkItem
 from adafmt.thread_safe_metrics import ThreadSafeMetrics
-from adafmt.pattern_formatter import PatternFormatter
 from adafmt.logging_jsonl import JsonlLogger
 
 

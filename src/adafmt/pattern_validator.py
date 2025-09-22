@@ -1,10 +1,8 @@
 """Pattern validation module for adafmt - validates patterns against ALS formatting."""
 
 import asyncio
-import os
-import tempfile
 from pathlib import Path
-from typing import List, Tuple, Optional, Any, Dict
+from typing import List, Tuple, Any
 
 from .als_client import ALSClient
 from .pattern_formatter import PatternFormatter

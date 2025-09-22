@@ -8,17 +8,15 @@
 """Unit tests for worker pool implementation."""
 
 import asyncio
-import os
 import signal
 import time
 from pathlib import Path
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
+from unittest.mock import Mock, AsyncMock
 import pytest
 
 from adafmt.worker_pool import WorkerPool, SignalHandler
 from adafmt.worker_context import WorkItem
 from adafmt.thread_safe_metrics import ThreadSafeMetrics
-from adafmt.pattern_formatter import PatternFormatter
 
 
 class TestWorkerPool:

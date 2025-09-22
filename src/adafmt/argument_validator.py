@@ -1,6 +1,5 @@
 """Argument validation module for adafmt - validates CLI arguments and paths."""
 
-import os
 import sys
 from pathlib import Path
 from typing import List, Optional, Tuple

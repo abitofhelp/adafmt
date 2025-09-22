@@ -9,7 +9,7 @@
 
 import asyncio
 from pathlib import Path
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import Mock, AsyncMock
 import pytest
 
 from adafmt.worker_context import WorkItem, WorkerContext

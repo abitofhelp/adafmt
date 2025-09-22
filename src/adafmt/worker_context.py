@@ -10,7 +10,7 @@
 import asyncio
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from .thread_safe_metrics import ThreadSafeMetrics
 from .pattern_formatter import PatternFormatter

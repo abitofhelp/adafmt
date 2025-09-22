@@ -1,0 +1,39 @@
+{
+  "patterns": [
+    {
+      "name": "cmt_whole_01_v2",
+      "title": "Whole-line comment spacing: `--  text` (GNAT style)",
+      "category": "comment",
+      "pattern": "^([ \\t]*)--(?:[ \\t])?(?![ \\t])(\\S.*?)$",
+      "replacement": "$1--  $2",
+      "flags": ["MULTILINE"],
+      "description": "Ensures whole-line comments have exactly 2 spaces after -- when they have 0-1 spaces. Preserves comments with 2+ spaces."
+    },
+    {
+      "name": "comment_eol1_v2",
+      "title": "EOL comment spacing: one before --, one after",
+      "category": "comment", 
+      "pattern": "^((?:(?:[^\"\\n]*\"){2})*[^\"\\n]*?\\S)[ \\t]*--(?!\\s)(.*?)$",
+      "replacement": "$1 -- $2",
+      "flags": ["MULTILINE"],
+      "description": "Ensures inline comments have at least 1 space before and after --. Only fixes missing space after --."
+    },
+    {
+      "name": "separator_lines",
+      "title": "Fix separator line comments to have 2 spaces",
+      "category": "comment",
+      "pattern": "^([ \\t]*)--([ \\t])([-=*#]{3,})$",
+      "replacement": "$1--  $3",
+      "flags": ["MULTILINE"],
+      "description": "Ensures separator lines like '-- ======' have 2 spaces after --"
+    }
+  ],
+  "notes": {
+    "gnat_style": "Based on GNAT compiler -gnatyy requirements",
+    "whole_line_comments": "Require exactly 2 spaces after -- (compiler error if less)",
+    "inline_comments": "Require at least 1 space after -- (compiler error if none)",
+    "preservation": "Patterns preserve existing valid spacing (2+ for whole line, 1+ for inline)",
+    "ascii_art": "ASCII art with +-- patterns are accepted by GNAT and not modified"
+  },
+  "compiler_flags": "-gnat2022 -gnatyy -gnatyM120"
+}

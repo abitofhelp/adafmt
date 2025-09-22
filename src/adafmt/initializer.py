@@ -1,9 +1,7 @@
 """Initialization module for adafmt - handles setup of loggers, clients, and formatters."""
 
 import asyncio
-import contextlib
 import sys
-import time
 from pathlib import Path
 from typing import Optional, List, Tuple, Any, Dict
 

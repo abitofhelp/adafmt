@@ -5,7 +5,8 @@
 # See LICENSE file in the project root.
 # =============================================================================
 
-import pytest, importlib
+import pytest
+import importlib
 spec = importlib.util.find_spec("cli") or importlib.util.find_spec("adafmt.cli")
 if not spec:
     pytest.skip("cli module not present")

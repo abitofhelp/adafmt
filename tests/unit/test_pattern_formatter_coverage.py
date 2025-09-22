@@ -11,18 +11,14 @@ This module targets specific uncovered lines.
 """
 
 import json
-import os
-import re
 import signal
-import sys
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 import pytest
 
 from adafmt.pattern_formatter import (
     PatternFormatter,
     PatternLogger,
-    CompiledRule,
     timeout_context,
     HAS_TIMEOUT,
     REGEX_MODULE

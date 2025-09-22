@@ -9,7 +9,7 @@
 
 import asyncio
 import time
-from typing import Optional, Dict, Any
+from typing import Optional, Dict
 import logging
 
 from .worker_context import WorkerContext

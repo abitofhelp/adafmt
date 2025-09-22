@@ -9,12 +9,10 @@
 
 import asyncio
 import time
-from pathlib import Path
 import pytest
 
 from adafmt.async_file_io import (
     buffered_read,
-    buffered_write,
     atomic_write_async,
 )
 

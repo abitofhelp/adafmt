@@ -8,7 +8,6 @@
 """Unit tests for thread-safe metrics collection."""
 
 import asyncio
-import time
 from unittest.mock import patch
 import pytest
 

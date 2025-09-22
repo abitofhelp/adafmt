@@ -13,7 +13,6 @@ multiple patterns, and complex pattern interactions.
 
 import json
 from pathlib import Path
-import pytest
 
 from adafmt.pattern_formatter import PatternFormatter
 

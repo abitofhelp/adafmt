@@ -5,7 +5,8 @@
 # See LICENSE file in the project root.
 # =============================================================================
 
-import pytest, importlib
+import pytest
+import importlib
 spec = importlib.util.find_spec("file_discovery") or importlib.util.find_spec("adafmt.file_discovery")
 if not spec:
     pytest.skip("file_discovery module not present")

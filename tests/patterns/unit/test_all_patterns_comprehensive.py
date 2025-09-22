@@ -15,7 +15,6 @@ This module ensures each pattern has at least 80% test coverage including:
 - Negative cases (what should NOT be matched)
 """
 
-import pytest
 from tests.patterns.test_utils import PatternEngine, fake_als, compiles_ada
 
 

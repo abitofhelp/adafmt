@@ -23,9 +23,8 @@ All tests use mocks to avoid side effects and ensure isolated testing.
 import io
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import MagicMock, patch
 
-import pytest
 
 from adafmt import cli
 from adafmt.file_discovery_new import is_ada_file

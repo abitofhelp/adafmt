@@ -10,7 +10,7 @@
 import pytest
 import asyncio
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 from pathlib import Path
 from adafmt.als_client import ALSClient
 

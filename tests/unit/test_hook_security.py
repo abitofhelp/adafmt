@@ -7,7 +7,6 @@
 
 """Tests for hook security improvements."""
 
-import pytest
 from unittest.mock import patch, MagicMock
 import subprocess
 

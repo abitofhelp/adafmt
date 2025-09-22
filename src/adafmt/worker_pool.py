@@ -8,10 +8,9 @@
 """Worker pool for parallel post-ALS processing."""
 
 import asyncio
-import os
 import signal
 import time
-from typing import List, Optional, Callable, Any
+from typing import List, Optional
 from pathlib import Path
 
 from .worker_context import WorkItem, WorkerContext

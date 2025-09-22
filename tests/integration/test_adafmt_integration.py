@@ -26,10 +26,7 @@ Note:
     These tests are marked with @pytest.mark.integration and will be skipped
     if the Ada Language Server is not available in the system PATH.
 """
-import asyncio
-import os
 import sys
-import tempfile
 from pathlib import Path
 import pytest
 import shutil

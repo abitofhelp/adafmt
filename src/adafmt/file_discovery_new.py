@@ -8,7 +8,7 @@
 """File discovery and resolution logic for the Ada formatter."""
 
 from pathlib import Path
-from typing import List, Optional, Union, Any
+from typing import List, Optional, Any
 
 from .file_discovery import collect_files
 from .path_validator import validate_path

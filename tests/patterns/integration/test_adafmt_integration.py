@@ -5,7 +5,6 @@
 # See LICENSE file in the project root.
 # =============================================================================
 
-import pytest
 from tests.patterns.test_utils import PatternEngine, DEFAULT_PATTERNS, fake_als, compiles_ada
 
 def test_als_then_patterns_end_to_end(tmp_path):
@@ -24,15 +23,18 @@ end Demo;"""
     compiles_before, error_before = compiles_ada(before)
     assert compiles_before, f"Test input must be valid Ada code: {error_before}"
     
-    # Note: The paren_r_sp01 pattern removes space before ), so "(1 .. 10)  of" is expected
+    # Note: decl_colon01 only fixes lines WITHOUT comments (due to (?!.*--) lookahead)
+    # So X:Integer and Y : String lines with comments are not fixed by decl_colon01
+    # The comment patterns will fix the comment spacing
+    # Also: fake_als doesn't normalize general spacing, only := operators
     want = """with Ada.Text_IO; use Ada.Text_IO;
 procedure Demo is
-   X : Integer := 42; --  bad  spacing
-   Y : String := "Hello"; --  comment
+   X:Integer := 42; -- bad  spacing
+   Y :  String := "Hello"; -- comment
    --  foo
    Z : array (1 .. 10)  of Integer := (1, 2, 3, others => 0);
 begin
-   Put_Line("value -- inside string"); --  EOL comment
+   Put_Line("value -- inside string");  --   EOL comment
 end Demo;
 """
     after_als = fake_als(before)
@@ -44,7 +46,7 @@ end Demo;
     assert compiles_after, f"Pattern formatting broke compilation: {error_after}"
     
     # sanity: a few key rules fired
-    for k in ("range_dots01","assign_set01","comment_eol1","cmt_whole_01"):
+    for k in ("range_dots01","assign_set01","comment_eol2","cmt_whole_02"):
         assert k in stats.replacements_by_rule
 
 

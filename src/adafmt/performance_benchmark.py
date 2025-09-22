@@ -7,7 +7,6 @@
 
 """Performance benchmarking for optimal worker count determination."""
 
-import asyncio
 import time
 import os
 import statistics

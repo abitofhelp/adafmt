@@ -15,10 +15,8 @@ handling, and safety features.
 import json
 import os
 import re
-import signal
-import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch, mock_open
+from unittest.mock import Mock, patch
 import pytest
 
 from adafmt.pattern_formatter import (
@@ -28,9 +26,7 @@ from adafmt.pattern_formatter import (
     FileApplyResult,
     timeout_context,
     PATTERN_NAME_REGEX,
-    HAS_TIMEOUT,
-    REGEX_MODULE,
-    VALID_CATEGORIES
+    HAS_TIMEOUT
 )
 from adafmt.logging_jsonl import JsonlLogger
 

@@ -22,7 +22,6 @@ JSONL logging provides structured, machine-readable logs of all formatting opera
 """
 import json
 from pathlib import Path
-import pytest
 
 from adafmt.logging_jsonl import JsonlLogger
 

@@ -7,6 +7,14 @@
 **Authors:** Michael Gardner, A Bit of Help, Inc.
 **Status:** Released
 
+## Development Status: Discontinued
+
+**Reason:** Running into context parsing issues that exceeded the limits of regex.
+
+Development has moved to a new unified Go-based tool that uses an ANTLR-based Ada 2022 parser for accurate, context-aware formatting.
+
+---
+
 `adafmt` is an opinionated Ada 2022 formatter that leverages the Ada Language Server (ALS) to provide consistent, modern formatting while maintaining compatibility with earlier Ada versions. Built with extensibility in mind, it supports custom pattern formatting functions that allow teams to enforce project-specific style rules beyond what GNATFORMAT provides. It delivers a robust, production-ready solution for maintaining consistent code style across Ada projects of any size.
 
 ## Why Use AdaFmt?

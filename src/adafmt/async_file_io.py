@@ -7,7 +7,6 @@
 
 """Asynchronous file I/O operations with buffering."""
 
-import asyncio
 import os
 import tempfile
 from pathlib import Path

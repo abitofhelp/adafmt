@@ -1,0 +1,44 @@
+{
+  "comment_patterns": [
+    {
+      "name": "cmt_whole_fix",
+      "title": "Fix whole-line comments with 0-1 spaces to have 2 spaces",
+      "category": "comment",
+      "description": "Ensures whole-line comments have at least 2 spaces after -- (GNAT style)",
+      "pattern": "^(\\s*)--(?:\\s|(?=\\S))(?!\\s\\S)(.*?)$",
+      "replacement": "$1--  $2",
+      "flags": ["MULTILINE"],
+      "notes": "Only fixes comments with 0-1 spaces, preserves 2+ spaces"
+    },
+    {
+      "name": "cmt_eol_fix", 
+      "title": "Fix end-of-line comments with no space",
+      "category": "comment",
+      "description": "Ensures inline comments have at least 1 space after --",
+      "pattern": "^(.*\\S)\\s*--(?!\\s)(.*?)$",
+      "replacement": "$1 -- $2",
+      "flags": ["MULTILINE"],
+      "notes": "Only fixes comments with 0 spaces, preserves existing spacing"
+    },
+    {
+      "name": "cmt_preserve_art",
+      "title": "Skip ASCII art and separators",
+      "category": "comment",
+      "description": "Identifies comment lines that should not be reformatted",
+      "pattern": "^\\s*--\\s*([+|\\-=*#]{3,}|[+|]\\s*[+\\-|])",
+      "action": "skip",
+      "flags": ["MULTILINE"],
+      "notes": "Preserves ASCII boxes, separators, and tree structures"
+    }
+  ],
+  "pattern_order": [
+    "cmt_preserve_art",
+    "cmt_whole_fix",
+    "cmt_eol_fix"
+  ],
+  "rationale": {
+    "cmt_whole_fix": "GNAT -gnatyy requires exactly 2 spaces for whole-line comments but accepts more",
+    "cmt_eol_fix": "GNAT -gnatyy requires at least 1 space for inline comments", 
+    "cmt_preserve_art": "ASCII art and visual separators should maintain their original formatting"
+  }
+}

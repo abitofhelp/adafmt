@@ -5,7 +5,8 @@
 # See LICENSE file in the project root.
 # =============================================================================
 
-import pytest, importlib
+import pytest
+import importlib
 spec = importlib.util.find_spec("logging_jsonl") or importlib.util.find_spec("adafmt.logging_jsonl")
 if not spec:
     pytest.skip("logging_jsonl module not present")

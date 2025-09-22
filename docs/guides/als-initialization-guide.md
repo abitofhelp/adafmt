@@ -217,6 +217,18 @@ This provides:
 - Stderr output from ALS process
 - Timing information for each phase
 
+### Terminal State Issues
+
+If adafmt continues to hang despite all troubleshooting steps:
+
+**Close and restart your terminal session**. This resolves issues caused by:
+- Corrupted terminal state or environment variables
+- Orphaned background processes
+- Stale file descriptors or process groups
+- Shell-specific issues that persist across commands
+
+This "clean slate" approach has proven effective when all other solutions fail.
+
 ## Performance Considerations
 
 ### Startup Overhead

@@ -42,7 +42,6 @@ from .cleanup_handler import (
 )
 from .cli_helpers import APP_VERSION, read_license_text, version_callback
 from .tui import make_ui
-from .utils import preflight
 
 # Setup signal and cleanup handlers
 setup_cleanup_handlers()

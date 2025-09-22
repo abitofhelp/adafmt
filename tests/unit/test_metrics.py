@@ -10,7 +10,6 @@
 """Unit tests for performance metrics collection."""
 
 import json
-import tempfile
 from pathlib import Path
 import pytest
 

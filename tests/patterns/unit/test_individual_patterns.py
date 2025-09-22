@@ -12,7 +12,6 @@ Each test verifies that a specific pattern:
 2. Doesn't break valid Ada code compilation
 """
 
-import pytest
 from tests.patterns.test_utils import PatternEngine, fake_als, compiles_ada
 
 
@@ -61,15 +60,15 @@ end Test;"""
 class TestCommentPatterns:
     """Test comment formatting patterns with real transformations."""
     
-    def test_comment_eol1_transforms_and_compiles(self):
-        """Test end-of-line comment spacing."""
-        # Use the actual pattern from test_patterns.json with string protection
+    def test_comment_eol2_transforms_and_compiles(self):
+        """Test end-of-line comment spacing (updated pattern)."""
+        # Use the new pattern that only requires 1 space after --
         pattern = {
-            "name": "comment_eol1",
-            "title": "EOL comment spacing",
+            "name": "comment_eol2",
+            "title": "EOL comment spacing: one before --, one after",
             "category": "comment", 
-            "find": r"^(?P<head>(?:(?:[^\"\n]*\"){2})*[^\"\n]*?\S)[ \t]*--[ \t]*(?P<text>.+)$",
-            "replace": r"\g<head>  --  \g<text>",
+            "find": r"^((?:(?:[^\"\n]*\"){2})*[^\"\n]*?\S)[ \t]*--(?!\s)(.*?)$",
+            "replace": r"\g<1> -- \g<2>",
             "flags": ["MULTILINE"]
         }
         
@@ -77,7 +76,7 @@ class TestCommentPatterns:
    X : Integer := 42;--This is a comment
    Y : Integer := 100;    --   Another comment
 begin
-   null;-- Yet another
+   null;--Yet another
 end Test;"""
         
         # Verify input compiles
@@ -90,23 +89,23 @@ end Test;"""
         result, stats = PatternEngine.apply(after_als, rules)
         
         # Verify transformations happened
-        assert ";  --  This is a comment" in result
-        assert ";  --  Another comment" in result
-        assert ";  --  Yet another" in result
-        assert stats.total_replacements == 3
+        assert "; -- This is a comment" in result  # Only 1 space after --
+        assert ";    --   Another comment" in result  # Already has space, not changed
+        assert "; -- Yet another" in result  # Fixed to have space
+        assert stats.total_replacements == 2  # Only fixes missing space
         
         # Verify output still compiles
         compiles_after, error = compiles_ada(result)
         assert compiles_after, f"Pattern broke compilation: {error}"
     
-    def test_cmt_whole_01_transforms_and_compiles(self):
-        """Test whole-line comment formatting."""
+    def test_cmt_whole_02_transforms_and_compiles(self):
+        """Test whole-line comment formatting (updated pattern)."""
         pattern = {
-            "name": "cmt_whole_01",
-            "title": "Whole-line comment spacing",
+            "name": "cmt_whole_02",
+            "title": "Whole-line comment spacing: `--  text` (GNAT style)",
             "category": "comment",
-            "find": r"^(?P<i>[ \t]*)--[ \t]*(?P<t>\S.*)$",
-            "replace": r"\g<i>--  \g<t>",
+            "find": r"^([ \t]*)--(?:[ \t])?(?![ \t])(\S.*?)$",
+            "replace": r"\g<1>--  \g<2>",
             "flags": ["MULTILINE"]
         }
         
@@ -130,10 +129,11 @@ end Test;"""
         
         # Verify transformations
         assert "   --  This needs spacing" in result
-        assert "   --  Too many spaces here" in result
+        # New pattern preserves existing correct spacing:
+        assert "   --    Too many spaces here" in result  # 4 spaces preserved
         assert "   --  This is already good" in result
-        # Pattern normalizes all comments, even if already correct
-        assert stats.total_replacements == 3
+        # New pattern only fixes comments with 0-1 spaces
+        assert stats.total_replacements == 1  # Only "This needs spacing"
         
         # Verify output still compiles
         compiles_after, error = compiles_ada(result)
@@ -332,7 +332,7 @@ class TestMultiplePatterns:
         """Test that multiple patterns work together."""
         patterns = [
             {
-                "name": "comment_eol1",
+                "name": "comment_eol2",
                 "title": "EOL comment spacing",
                 "category": "comment",
                 "find": r"(\S)[ \t]*--[ \t]*(.*)$",
@@ -389,7 +389,7 @@ end Test;"""
         # Verify patterns were applied
         assert stats.total_replacements > 0
         assert any(name in stats.replacements_by_rule for name in 
-                  ["comment_eol1", "range_dots01", "comma_space1", "decl_colon01"])
+                  ["comment_eol2", "range_dots01", "comma_space1", "decl_colon01"])
         
         # Verify output still compiles
         compiles_after, error = compiles_ada(result)
@@ -403,7 +403,7 @@ class TestPatternRobustness:
         """Ensure patterns don't modify content inside strings."""
         patterns = [
             {
-                "name": "comment_eol1",
+                "name": "comment_eol2",
                 "title": "EOL comment spacing",
                 "category": "comment",
                 # Use the actual pattern with even-quote heuristic

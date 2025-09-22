@@ -9,7 +9,7 @@
 
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import List, Optional, Any
 from tabulate import tabulate
 
 from .utils import to_iso8601_basic

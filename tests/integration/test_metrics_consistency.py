@@ -9,7 +9,6 @@
 
 """Integration tests for metrics consistency across different modes."""
 
-import json
 import re
 import subprocess
 import tempfile
@@ -188,7 +187,7 @@ end File3;""",
         print(f"Combined: {metrics_combined}")
         
         # Show the mismatch
-        print(f"\nPattern applications mismatch:")
+        print("\nPattern applications mismatch:")
         print(f"  Patterns-only: {metrics_patterns['patterns']['applied']}")
         print(f"  Combined mode: {metrics_combined['patterns']['applied']}")
         

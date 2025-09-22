@@ -5,9 +5,9 @@
 # See LICENSE file in the project root.
 # =============================================================================
 
-import re, json
+import re
 from dataclasses import dataclass
-from typing import List, Tuple, Dict
+from typing import Tuple, Dict
 try:
     import regex as rx  # type: ignore
 except Exception:

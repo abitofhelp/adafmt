@@ -8,8 +8,7 @@
 """Retry handler for transient errors."""
 
 import asyncio
-import os
-from typing import TypeVar, Callable, Optional, Tuple, Type
+from typing import TypeVar, Callable, Optional, Tuple
 from pathlib import Path
 
 T = TypeVar('T')

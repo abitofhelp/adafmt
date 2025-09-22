@@ -7,14 +7,12 @@
 
 """Unit tests for async file I/O operations."""
 
-import asyncio
 import os
 import stat
 from pathlib import Path
-from unittest.mock import Mock, patch, AsyncMock
+from unittest.mock import patch
 import pytest
 
-import aiofiles
 
 from adafmt.async_file_io import (
     buffered_read,

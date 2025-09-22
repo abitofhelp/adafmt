@@ -12,7 +12,7 @@ import contextlib
 import time
 import traceback
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple, Any
+from typing import Dict, List, Optional, Tuple, Any
 
 from .als_client import ALSClient
 from .edits import apply_text_edits, unified_diff

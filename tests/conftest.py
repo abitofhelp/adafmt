@@ -13,10 +13,9 @@ without explicit imports.
 """
 
 import asyncio
-import os
 import sys
 from pathlib import Path
-from typing import Generator, List, Any
+from typing import List
 from unittest.mock import Mock, MagicMock, AsyncMock
 
 import pytest

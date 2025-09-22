@@ -5,9 +5,10 @@
 # See LICENSE file in the project root.
 # =============================================================================
 
-import re, json
+import re
+import json
 from dataclasses import dataclass
-from typing import List, Tuple, Dict
+from typing import Tuple, Dict
 from pathlib import Path
 
 try:

@@ -23,7 +23,7 @@ All tests use mocks to avoid requiring actual ALS installation.
 import asyncio
 import json
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch, mock_open
+from unittest.mock import AsyncMock, MagicMock, patch
 import os
 import pytest
 

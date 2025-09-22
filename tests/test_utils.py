@@ -19,9 +19,7 @@ the adafmt formatter. Tests cover:
 
 These utilities ensure safe, reliable operation of the formatter in various environments.
 """
-import os
 import signal
-import tempfile
 from pathlib import Path
 import pytest
 from unittest.mock import patch, MagicMock
@@ -31,10 +29,8 @@ from adafmt.utils import (
     atomic_write,
     list_als_pids,
     preflight,
-    _als_processes,
     kill_als_processes,
     find_stale_locks,
-    clean_stale_locks,
     ProcessInfo
 )
 
@@ -410,8 +406,6 @@ class TestPreflight:
 
 # Add subprocess import for the test
 import subprocess
-import time
-from unittest.mock import MagicMock
 
 
 class TestKillAlsProcesses:

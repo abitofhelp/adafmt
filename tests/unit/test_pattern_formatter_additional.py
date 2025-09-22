@@ -11,10 +11,7 @@ This module contains additional tests targeting specific coverage gaps.
 """
 
 import json
-import os
-import re
 import signal
-import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
 import pytest
@@ -22,15 +19,9 @@ import pytest
 from adafmt.pattern_formatter import (
     PatternFormatter,
     PatternLogger,
-    CompiledRule,
-    FileApplyResult,
     timeout_context,
-    PATTERN_NAME_REGEX,
-    HAS_TIMEOUT,
-    REGEX_MODULE,
-    VALID_CATEGORIES
+    REGEX_MODULE
 )
-from adafmt.logging_jsonl import JsonlLogger
 
 
 class TestAdditionalCoverage:

@@ -5,7 +5,8 @@
 # See LICENSE file in the project root.
 # =============================================================================
 
-import pytest, importlib
+import pytest
+import importlib
 spec = importlib.util.find_spec("edits") or importlib.util.find_spec("adafmt.edits")
 if not spec:
     pytest.skip("edits module not present")
