@@ -20,12 +20,12 @@ from __future__ import annotations
 import asyncio
 import sys
 from pathlib import Path
-from typing import Optional, List
+from typing import Any, Optional, List
 
 import typer
 from typing_extensions import Annotated
 
-from returns.io import impure_safe
+from returns.io import IOResult, impure_safe
 from returns.future import future_safe
 from returns.result import Failure, Result
 
@@ -58,7 +58,7 @@ def main_callback(
 
 
 @impure_safe
-def _execute_command_sync(command_processor: CommandProcessor, args: any) -> int:
+def _execute_command_sync(command_processor: CommandProcessor, args: Any) -> int:
     """Execute command processor synchronously with automatic exception handling.
     
     Args:
@@ -72,11 +72,19 @@ def _execute_command_sync(command_processor: CommandProcessor, args: any) -> int
         @impure_safe automatically converts exceptions to IOResult[int, Exception]
     """
     # Run async command in sync context
-    return asyncio.run(_execute_command_async(command_processor, args))
+    # _execute_command_async is decorated with @future_safe, so we need to await it
+    async def run_command():
+        return await _execute_command_async(command_processor, args)
+    
+    # Run the coroutine and get the IOResult
+    result = asyncio.run(run_command())
+    
+    # Handle the IOResult returned by @future_safe
+    return _handle_command_result(result)
 
 
 @future_safe
-async def _execute_command_async(command_processor: CommandProcessor, args: any) -> int:
+async def _execute_command_async(command_processor: CommandProcessor, args: Any) -> int:
     """Execute command processor asynchronously with automatic exception handling.
     
     Args:
@@ -100,7 +108,7 @@ async def _execute_command_async(command_processor: CommandProcessor, args: any)
     return result.unwrap()
 
 
-def _handle_command_result(result: Result[int, Exception]) -> int:
+def _handle_command_result(result: Result[int, Exception] | IOResult[int, Exception]) -> int:
     """Handle command execution result with proper error mapping.
     
     Args:
@@ -123,7 +131,7 @@ def _handle_command_result(result: Result[int, Exception]) -> int:
             print(f"Unexpected error: {error}", file=sys.stderr)
             return 3
     
-    return result.unwrap()
+    return result.unwrap()  # type: ignore[return-value]
 
 
 @app.command("license", help="Show the project's license text (BSD-3-Clause).")

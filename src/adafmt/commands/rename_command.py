@@ -43,6 +43,7 @@ class RenameArgs(CommandArgs):
     check: bool = False
     diff: bool = False
     files: list[Path] | None = None
+    verbose: bool = False  # Enable verbose output
     
     def __post_init__(self):
         """Initialize default values for list fields."""

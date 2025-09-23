@@ -48,6 +48,8 @@ class FormatArgs(CommandArgs):
     init_timeout: int = 180
     write: bool = False
     files: list[Path] | None = None
+    workers: int = 3  # Number of worker threads for parallel processing
+    verbose: bool = False  # Enable verbose output
     
     def __post_init__(self):
         """Initialize default values for list fields."""
@@ -296,9 +298,10 @@ class FormatCommandProcessor(CommandProcessor[FormattedFile]):
                 summary.append(f"  Parse errors: {parse_errors} files")
         
         # Report pattern statistics
-        all_patterns = set()
+        all_patterns: set[str] = set()
         for result in results:
-            all_patterns.update(result.patterns_applied)
+            if result.patterns_applied:
+                all_patterns.update(result.patterns_applied)
         
         if all_patterns:
             summary.append(f"  Patterns applied: {len(all_patterns)}")

@@ -35,8 +35,8 @@ class UIState:
     total_count: int = 0
     failed_count: int = 0
     
-    # Log entries
-    log_entries: list[str] = None
+    # Log entries  
+    log_entries: list[str] | None = None
     
     # Footer status line
     footer_status: str = ""
@@ -228,9 +228,8 @@ class PlainUI(BaseUI):
             
             # Special handling for file processing messages
             if msg.startswith("[") and ("/") in msg and ("] [") in msg:
-                # Use the CLI color function for consistent coloring
-                from .cli import _print_colored_line
-                _print_colored_line(msg)
+                # Simple colored output for file processing messages
+                print(msg)  # TODO: Add color support when needed
             else:
                 # Regular message, just print it
                 print(msg)
