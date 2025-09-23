@@ -1,0 +1,12 @@
+{
+  "spacing": {
+    "assignment": {
+      "enabled": true,
+      "description": "Fix spacing around := in assignment statements",
+      "parameters": {
+        "spaces_before": 1,
+        "spaces_after": 1
+      }
+    }
+  }
+}
