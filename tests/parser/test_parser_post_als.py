@@ -7,8 +7,7 @@
 
 """Test parser-based patterns on post-ALS formatted code."""
 
-import pytest
-from typing import List, Dict
+from typing import List
 from dataclasses import dataclass
 
 from ada2022_parser import Parser, Success

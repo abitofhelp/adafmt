@@ -8,7 +8,6 @@
 """Test formatting using the Ada 2022 parser instead of regex patterns."""
 
 import pytest
-from typing import List, Dict, Any
 from dataclasses import dataclass
 
 # Check if parser is available
@@ -147,7 +146,7 @@ end Test;
                     self.ranges.append({
                         'line': ctx.start.line,
                         'text': text,
-                        'needs_fix': not (' .. ' in text)
+                        'needs_fix': ' .. ' not in text
                     })
                 return self.visitChildren(ctx)
         

@@ -8,8 +8,6 @@
 """Test parser-based formatting patterns using ada2022_parser."""
 
 import pytest
-from typing import List, Tuple, Optional
-from dataclasses import dataclass
 
 # Try to import the parser - mark tests as skipped if not available
 ada_parser_available = True

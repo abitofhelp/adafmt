@@ -21,10 +21,8 @@ from ..core.processing_pipeline import (
     FileData,
     FormatOperation,
     FormattedFile,
-    GNATValidationStage,
     LSPStage,
     ParseStage,
-    PatternStage,
     ProcessingPipeline,
     ValidateStage,
 )
@@ -34,7 +32,6 @@ from ..file_discovery_new import discover_files
 from ..worker_pool import WorkerPool
 from ..errors import AdafmtError
 from returns.result import Result, Success, Failure
-from returns.future import future_safe
 
 
 @dataclass

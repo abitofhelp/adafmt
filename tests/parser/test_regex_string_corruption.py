@@ -67,7 +67,7 @@ def demonstrate_regex_corruption():
             if result == test['expected_fix']:
                 print("✓ Correctly fixed only the comment spacing")
             else:
-                print(f"❌ Unexpected result")
+                print("❌ Unexpected result")
         
         print("-" * 80)
         print()

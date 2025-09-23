@@ -19,7 +19,6 @@ from typing import Any
 from ..core.base_command import CommandArgs, CommandProcessor
 from ..core.processing_pipeline import (
     FileData,
-    GNATValidationStage,
     LSPStage,
     ParseStage,
     ProcessedFile,
@@ -29,7 +28,7 @@ from ..core.processing_pipeline import (
 )
 from ..file_discovery_new import discover_files
 from ..errors import AdafmtError
-from returns.result import Result, Success, Failure
+from returns.result import Result, Success
 
 
 @dataclass

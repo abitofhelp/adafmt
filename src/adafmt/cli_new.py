@@ -27,7 +27,7 @@ from typing_extensions import Annotated
 
 from returns.io import impure_safe
 from returns.future import future_safe
-from returns.result import Failure, Result, Success
+from returns.result import Failure, Result
 
 from .commands.format_command import FormatCommandProcessor, FormatArgs
 from .commands.rename_command import RenameCommandProcessor, RenameArgs

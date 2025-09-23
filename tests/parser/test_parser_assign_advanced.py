@@ -9,7 +9,7 @@
 
 import re
 import pytest
-from typing import List, Optional, Tuple
+from typing import List, Optional
 from dataclasses import dataclass
 
 try:

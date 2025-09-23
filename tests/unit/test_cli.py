@@ -26,7 +26,6 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 
-from adafmt import cli
 from adafmt.file_discovery_new import is_ada_file
 from adafmt.stderr_handler import Tee
 from adafmt import cleanup_handler

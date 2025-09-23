@@ -19,8 +19,7 @@ from returns.result import Failure, Success
 
 from adafmt.gnat_validator import (
     GNATValidator,
-    validate_ada_content,
-    validate_ada_file
+    validate_ada_content
 )
 from adafmt.validation_pipeline import (
     ValidationPipeline,

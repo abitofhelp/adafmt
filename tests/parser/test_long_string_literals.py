@@ -13,7 +13,7 @@ automatically break long string literals into multiple lines with concatenation.
 
 from ada2022_parser import Parser, Success
 from ada2022_parser.generated import Ada2022ParserVisitor
-from typing import List, Optional, Tuple
+from typing import List
 
 
 class LongStringAnalyzer(Ada2022ParserVisitor):

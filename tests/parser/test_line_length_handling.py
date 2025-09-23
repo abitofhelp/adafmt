@@ -7,8 +7,7 @@
 
 """Demonstrate handling of line length limits when applying spacing fixes."""
 
-from ada2022_parser import Parser, Success
-from typing import List, Tuple, Optional
+from typing import Tuple, Optional
 
 
 def apply_spacing_fix(line: str, max_length: int = 120) -> Tuple[str, bool, Optional[str]]:
@@ -197,11 +196,11 @@ end Very_Long_Package_Name;
             original_len = len(line)
             # Count potential spacing fixes
             fixes_needed = 0
-            if ':=' in line and not ' := ' in line:
+            if ':=' in line and ' := ' not in line:
                 fixes_needed += line.count(':=') * 2
-            if '=>' in line and not ' => ' in line:
+            if '=>' in line and ' => ' not in line:
                 fixes_needed += line.count('=>') * 2
-            if '..' in line and not ' .. ' in line:
+            if '..' in line and ' .. ' not in line:
                 fixes_needed += line.count('..') * 2
             
             if fixes_needed > 0:

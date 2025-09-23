@@ -13,7 +13,7 @@ Pass 2: Post-ALS - Fix remaining spacing issues
 
 from ada2022_parser import Parser, Success
 from ada2022_parser.generated import Ada2022ParserVisitor
-from typing import List, Tuple, Optional
+from typing import List
 import re
 
 

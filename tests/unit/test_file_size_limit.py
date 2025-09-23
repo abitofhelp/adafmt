@@ -10,7 +10,6 @@
 """Unit tests for file size limit enforcement."""
 
 import pytest
-import subprocess
 
 
 # TODO: Update these tests for the new CLI interface

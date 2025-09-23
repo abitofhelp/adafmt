@@ -49,9 +49,9 @@ end Demo;
                 if not before_ok or not after_ok:
                     print(f"  Line {i}: NEEDS FIX - {line.strip()}")
                     if not before_ok:
-                        print(f"    → Missing space before :=")
+                        print("    → Missing space before :=")
                     if not after_ok:
-                        print(f"    → Missing space after :=")
+                        print("    → Missing space after :=")
                 else:
                     print(f"  Line {i}: OK - {line.strip()}")
     else:
@@ -90,7 +90,7 @@ end Test;
             # Check spacing after --
             if idx + 2 < len(line) and line[idx+2] not in (' ', '\n', '\r', ''):
                 print(f"  Line {i}: NEEDS FIX - {line.strip()}")
-                print(f"    → Missing space after --")
+                print("    → Missing space after --")
             else:
                 print(f"  Line {i}: OK - {line.strip()}")
 
@@ -121,7 +121,7 @@ end Ranges;
                 print(f"  Line {i}: OK - {line.strip()}")
             else:
                 print(f"  Line {i}: NEEDS FIX - {line.strip()}")
-                print(f"    → Missing spaces around ..")
+                print("    → Missing spaces around ..")
 
 
 def demo_arrow_detection():
@@ -156,9 +156,9 @@ end Test;
             if not before_ok or not after_ok:
                 print(f"  Line {i}: NEEDS FIX - {line.strip()}")
                 if not before_ok:
-                    print(f"    → Missing space before =>")
+                    print("    → Missing space before =>")
                 if not after_ok:
-                    print(f"    → Missing space after =>")
+                    print("    → Missing space after =>")
             else:
                 print(f"  Line {i}: OK - {line.strip()}")
 

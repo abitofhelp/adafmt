@@ -24,7 +24,7 @@ from .logging_jsonl import JsonlLogger
 from .worker_pool_monitor import WorkerHealthMonitor, QueueMonitor
 from .edits import unified_diff
 from .retry_handler import RetryHandler
-from .errors import WorkerError, ConcurrencyError
+from .errors import WorkerError
 
 
 class WorkerPool:

@@ -8,7 +8,6 @@
 """Test assign_set01 pattern using the Ada 2022 parser."""
 
 import pytest
-from typing import List, Tuple
 from dataclasses import dataclass
 
 try:

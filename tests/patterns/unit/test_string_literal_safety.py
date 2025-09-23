@@ -7,7 +7,6 @@
 
 """Test that patterns don't modify content inside string literals."""
 
-import pytest
 from tests.patterns.test_utils import PatternEngine, fake_als, compiles_ada
 
 
