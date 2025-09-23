@@ -13,6 +13,9 @@ from pathlib import Path
 from unittest.mock import patch
 import pytest
 
+from returns.result import Failure
+from adafmt.errors import FileError
+
 
 from adafmt.async_file_io import (
     buffered_read,
@@ -197,7 +200,12 @@ class TestAtomicWrite:
         test_file.write_text(original_content)
         
         # Mock to cause error during write
-        with patch('adafmt.async_file_io.buffered_write', side_effect=OSError("Write failed")):
+        mock_error = FileError(
+            message="Write failed",
+            path=test_file,
+            operation="write"
+        )
+        with patch('adafmt.async_file_io.buffered_write_safe', return_value=Failure(mock_error)):
             with pytest.raises(OSError):
                 await atomic_write_async(test_file, "new content")
         
@@ -219,8 +227,13 @@ class TestAtomicWrite:
                 temp_files.append(args[0])
             return result
         
+        mock_error = FileError(
+            message="Write failed",
+            path=test_file,
+            operation="write"
+        )
         with patch('os.open', side_effect=track_mkstemp):
-            with patch('adafmt.async_file_io.buffered_write', side_effect=OSError("Write failed")):
+            with patch('adafmt.async_file_io.buffered_write_safe', return_value=Failure(mock_error)):
                 with pytest.raises(OSError):
                     await atomic_write_async(test_file, "content")
         
