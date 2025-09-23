@@ -17,6 +17,7 @@ import pytest
 from adafmt.worker_pool import WorkerPool, SignalHandler
 from adafmt.worker_context import WorkItem
 from adafmt.thread_safe_metrics import ThreadSafeMetrics
+from returns.result import Success, Failure
 
 
 class TestWorkerPool:
@@ -46,7 +47,8 @@ class TestWorkerPool:
         pool = WorkerPool(num_workers=3)
         metrics = ThreadSafeMetrics()
         
-        await pool.start(metrics, None, False)
+        result = await pool.start(metrics, None, False)
+        assert isinstance(result, Success)
         
         assert pool._running
         assert len(pool.workers) == 3
@@ -59,14 +61,18 @@ class TestWorkerPool:
     
     @pytest.mark.asyncio
     async def test_start_twice_raises_error(self):
-        """Test starting already running pool raises error."""
+        """Test starting already running pool returns Failure."""
         pool = WorkerPool(num_workers=2)
         metrics = ThreadSafeMetrics()
         
-        await pool.start(metrics, None, False)
+        result = await pool.start(metrics, None, False)
+        assert isinstance(result, Success)
         
-        with pytest.raises(RuntimeError, match="already running"):
-            await pool.start(metrics, None, False)
+        # Second start should fail
+        result2 = await pool.start(metrics, None, False)
+        assert isinstance(result2, Failure)
+        error = result2.failure()
+        assert "already running" in str(error)
         
         await pool.shutdown()
     
@@ -76,7 +82,8 @@ class TestWorkerPool:
         pool = WorkerPool(num_workers=1)
         metrics = ThreadSafeMetrics()
         
-        await pool.start(metrics, None, False)
+        result = await pool.start(metrics, None, False)
+        assert isinstance(result, Success)
         
         item = WorkItem(
             path=Path("test.adb"),
@@ -86,7 +93,8 @@ class TestWorkerPool:
             queue_time=0.0
         )
         
-        await pool.submit(item)
+        result = await pool.submit(item)
+        assert isinstance(result, Success)
         
         # Check item in queue
         assert pool.queue.qsize() == 1
@@ -98,12 +106,14 @@ class TestWorkerPool:
     
     @pytest.mark.asyncio
     async def test_submit_without_start_raises(self):
-        """Test submitting to non-started pool raises error."""
+        """Test submitting to non-started pool returns Failure."""
         pool = WorkerPool()
         item = WorkItem(Path("test.adb"), "content", 1, 1, 0.0)
         
-        with pytest.raises(RuntimeError, match="not started"):
-            await pool.submit(item)
+        result = await pool.submit(item)
+        assert isinstance(result, Failure)
+        error = result.failure()
+        assert "not started" in str(error)
     
     @pytest.mark.asyncio
     async def test_shutdown_stops_workers(self):
@@ -111,7 +121,8 @@ class TestWorkerPool:
         pool = WorkerPool(num_workers=2)
         metrics = ThreadSafeMetrics()
         
-        await pool.start(metrics, None, False)
+        result = await pool.start(metrics, None, False)
+        assert isinstance(result, Success)
         assert pool._running
         
         await pool.shutdown()
@@ -131,7 +142,8 @@ class TestWorkerPool:
             await asyncio.sleep(100)
         
         pool._worker = stuck_worker
-        await pool.start(metrics, None, False)
+        result = await pool.start(metrics, None, False)
+        assert isinstance(result, Success)
         
         # Shutdown with short timeout
         await pool.shutdown(timeout=0.1)
@@ -160,12 +172,13 @@ class TestWorkerPool:
         test_file = tmp_path / "test.adb"
         test_file.write_text("original content")
         
-        await pool.start(
+        result = await pool.start(
             metrics=metrics,
             pattern_formatter=formatter,
             write_enabled=True,
             logger=Mock()
         )
+        assert isinstance(result, Success)
         
         item = WorkItem(
             path=test_file,
@@ -201,11 +214,12 @@ class TestWorkerPool:
         test_file = tmp_path / "test.adb"
         test_file.write_text("original content")
         
-        await pool.start(
+        result = await pool.start(
             metrics=metrics,
             pattern_formatter=None,  # No patterns
             write_enabled=True
         )
+        assert isinstance(result, Success)
         
         item = WorkItem(
             path=test_file,
@@ -235,11 +249,12 @@ class TestWorkerPool:
         formatter.enabled = True
         formatter.apply = Mock(side_effect=ValueError("Pattern error"))
         
-        await pool.start(
+        result = await pool.start(
             metrics=metrics,
             pattern_formatter=formatter,
             write_enabled=False
         )
+        assert isinstance(result, Success)
         
         item = WorkItem(
             path=Path("test.adb"),
@@ -262,7 +277,8 @@ class TestWorkerPool:
         pool = WorkerPool(num_workers=1)
         metrics = ThreadSafeMetrics()
         
-        await pool.start(metrics, None, False)
+        result = await pool.start(metrics, None, False)
+        assert isinstance(result, Success)
         
         # Submit items
         items = []
@@ -275,7 +291,8 @@ class TestWorkerPool:
                 queue_time=time.time()
             )
             items.append(item)
-            await pool.submit(item)
+            result = await pool.submit(item)
+        assert isinstance(result, Success)
         
         # Wait a bit for processing
         await asyncio.sleep(0.1)
@@ -294,7 +311,8 @@ class TestWorkerPool:
         
         # Start with no workers to prevent processing
         pool._worker = AsyncMock()  # Mock to prevent actual workers
-        await pool.start(metrics, None, False)
+        result = await pool.start(metrics, None, False)
+        assert isinstance(result, Success)
         pool.workers.clear()  # Remove any started workers
         
         # Fill queue
@@ -302,8 +320,10 @@ class TestWorkerPool:
         item2 = WorkItem(Path("test2.adb"), "content", 2, 3, 0.0)
         item3 = WorkItem(Path("test3.adb"), "content", 3, 3, 0.0)
         
-        await pool.submit(item1)
-        await pool.submit(item2)
+        result = await pool.submit(item1)
+        assert isinstance(result, Success)
+        result = await pool.submit(item2)
+        assert isinstance(result, Success)
         
         # Third submit should block
         submit_task = asyncio.create_task(pool.submit(item3))
@@ -364,7 +384,8 @@ class TestSignalHandler:
         pool = WorkerPool()
         metrics = ThreadSafeMetrics()
         
-        await pool.start(metrics, None, False)
+        result = await pool.start(metrics, None, False)
+        assert isinstance(result, Success)
         
         with SignalHandler(pool) as handler:
             # Simulate signal

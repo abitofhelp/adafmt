@@ -172,15 +172,20 @@ class WorkerPool:
                 operation="worker_start"
             ))
         
-        return await self._start_internal(
+        result = await self._start_internal(
             metrics, pattern_formatter, write_enabled, diff_enabled,
             logger, pattern_logger, ui_queue
-        ).map_failure(
-            lambda exc: WorkerError(
+        )
+        
+        # Handle FutureResult -> convert exceptions to WorkerError
+        if isinstance(result, Failure):
+            exc = result.failure()
+            return Failure(WorkerError(
                 message=f"Failed to start worker pool: {exc}",
                 operation="worker_start"
-            )
-        )
+            ))
+        
+        return Success(None)
     
     @future_safe
     async def _submit_internal(self, item: WorkItem) -> None:

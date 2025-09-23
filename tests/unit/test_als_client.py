@@ -28,6 +28,7 @@ import os
 import pytest
 
 from adafmt.als_client import ALSClient, ALSProtocolError, build_als_command, _has_cmd, _timestamp
+from returns.result import Success, Failure
 
 
 class TestUtilityFunctions:
@@ -375,11 +376,13 @@ class TestALSClient:
         client._write = AsyncMock()
         client._send = AsyncMock()
         
-        with pytest.raises(asyncio.TimeoutError):
-            await client.request_with_timeout(
-                {"method": "test", "params": {}},
-                timeout=0.001
-            )
+        result = await client.request_with_timeout(
+            {"method": "test", "params": {}},
+            timeout=0.001
+        )
+        assert isinstance(result, Failure)
+        error = result.failure()
+        assert "timeout" in str(error).lower() or "timed out" in str(error).lower()
     
     def test_summary_with_metrics(self, client):
         """Test summary generation with complete execution metrics.
@@ -509,7 +512,12 @@ class TestALSClient:
         client._send = AsyncMock()
         client._notify = AsyncMock()
         
-        await client.shutdown()
+        # Capture mocks before shutdown clears them
+        reader_task_mock = client._reader_task
+        stderr_task_mock = client._stderr_task
+        
+        result = await client.shutdown()
+        assert isinstance(result, Success)
         
         # Verify shutdown message was sent
         client._send.assert_called_once()
@@ -523,9 +531,9 @@ class TestALSClient:
         # Verify process termination was called
         mock_process.terminate.assert_called_once()
         
-        # Verify tasks were cancelled
-        client._reader_task.cancel.assert_called_once()
-        client._stderr_task.cancel.assert_called_once()
+        # Verify tasks were cancelled (using captured mocks)
+        reader_task_mock.cancel.assert_called()
+        stderr_task_mock.cancel.assert_called()
         
         # Verify process is set to None
         assert client.process is None

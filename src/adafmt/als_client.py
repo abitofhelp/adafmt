@@ -434,12 +434,17 @@ class ALSClient:
         Returns:
             Result[None, ALSError]: Success or specific error
         """
-        return await self._shutdown_internal().map_failure(
-            lambda exc: ALSError(
+        result = await self._shutdown_internal()
+        
+        # Handle FutureResult -> convert exceptions to ALSError
+        if isinstance(result, Failure):
+            exc = result.failure()
+            return Failure(ALSError(
                 message=f"Shutdown failed: {exc}",
                 operation="shutdown"
-            )
-        )
+            ))
+        
+        return Success(None)
 
     # --------------- JSON-RPC plumbing ---------------
     def _next_id(self) -> str:
@@ -706,12 +711,17 @@ class ALSClient:
     
     async def _notify_safe(self, method: str, params: Any) -> Result[None, ALSError]:
         """Send notification with error handling."""
-        return await self._notify_internal(method, params).map_failure(
-            lambda exc: ALSError(
+        result = await self._notify_internal(method, params)
+        
+        # Handle FutureResult -> convert exceptions to ALSError
+        if isinstance(result, Failure):
+            exc = result.failure()
+            return Failure(ALSError(
                 message=f"Failed to send notification {method}: {exc}",
                 operation="request"
-            )
-        )
+            ))
+        
+        return Success(None)
     
     async def _cleanup_on_error(self) -> None:
         """Clean up resources when an error occurs during startup."""

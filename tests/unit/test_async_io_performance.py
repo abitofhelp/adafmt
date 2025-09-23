@@ -15,6 +15,7 @@ from adafmt.async_file_io import (
     buffered_read,
     atomic_write_async,
 )
+from returns.result import Success
 
 
 class TestAsyncIOPerformance:
@@ -30,8 +31,12 @@ class TestAsyncIOPerformance:
         
         # Time async read
         start = time.perf_counter()
-        async_content = await buffered_read(test_file, buffer_size=8192)
+        result = await buffered_read(test_file, buffer_size=8192)
         async_time = time.perf_counter() - start
+        
+        # Extract content from Result
+        assert isinstance(result, Success)
+        async_content = result.unwrap()
         
         # Time sync read for comparison
         start = time.perf_counter()
@@ -62,13 +67,19 @@ class TestAsyncIOPerformance:
         results = await asyncio.gather(*tasks)
         concurrent_time = time.perf_counter() - start
         
+        # Extract content from Result types
+        async_contents = []
+        for r in results:
+            assert isinstance(r, Success)
+            async_contents.append(r.unwrap())
+        
         # Time sequential sync reads
         start = time.perf_counter()
         sync_results = [f.read_text() for f in files]
         sequential_time = time.perf_counter() - start
         
         # Verify results match
-        assert results == sync_results
+        assert async_contents == sync_results
         
         # Log performance
         print(f"\nConcurrent async time: {concurrent_time:.4f}s")
@@ -108,7 +119,8 @@ class TestAsyncIOPerformance:
         
         for buffer_size in buffer_sizes:
             start = time.perf_counter()
-            await buffered_read(test_file, buffer_size=buffer_size)
+            result = await buffered_read(test_file, buffer_size=buffer_size)
+            assert isinstance(result, Success)
             elapsed = time.perf_counter() - start
             results.append((buffer_size, elapsed))
             print(f"\nBuffer size {buffer_size}: {elapsed:.4f}s")
