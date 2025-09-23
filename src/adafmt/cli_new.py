@@ -156,8 +156,14 @@ def format_command(
     include_path: Annotated[Optional[List[Path]], typer.Option("--include-path", help="Directory to search for Ada files (can be used multiple times)")] = None,
     init_timeout: Annotated[int, typer.Option("--init-timeout", help="Timeout for ALS initialization in seconds")] = 180,
     write: Annotated[bool, typer.Option("--write", help="Apply changes to files")] = False,
+    # Missing parameters that integration tests expect
+    preflight: Annotated[str, typer.Option("--preflight", help="ALS preflight mode (off, warn, safe, kill, aggressive, fail)")] = "check",
+    als_ready_timeout: Annotated[int, typer.Option("--als-ready-timeout", help="Timeout for ALS readiness in seconds")] = 30,
+    max_attempts: Annotated[int, typer.Option("--max-attempts", help="Maximum retry attempts")] = 3,
+    log_path: Annotated[Optional[Path], typer.Option("--log-path", help="Path to log file")] = None,
+    stderr_path: Annotated[Optional[Path], typer.Option("--stderr-path", help="Path to stderr log file")] = None,
+    no_patterns: Annotated[bool, typer.Option("--no-patterns", help="Disable pattern processing")] = False,
     files: Annotated[Optional[List[str]], typer.Argument(help="Specific Ada files to format")] = None,
-    # Add other format-specific options as needed
 ) -> None:
     """Format Ada source code using the Ada Language Server (ALS)."""
     
@@ -173,6 +179,12 @@ def format_command(
         init_timeout=init_timeout,
         write=write,
         files=[Path(f) for f in files] if files else [],
+        preflight=preflight,
+        als_ready_timeout=als_ready_timeout,
+        max_attempts=max_attempts,
+        log_path=log_path,
+        stderr_path=stderr_path,
+        no_patterns=no_patterns,
     )
     
     # Create command processor

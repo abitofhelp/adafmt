@@ -50,6 +50,13 @@ class FormatArgs(CommandArgs):
     files: list[Path] | None = None
     workers: int = 3  # Number of worker threads for parallel processing
     verbose: bool = False  # Enable verbose output
+    # Additional parameters for integration test compatibility
+    preflight: str = "check"  # ALS preflight mode
+    als_ready_timeout: int = 30  # Timeout for ALS readiness
+    max_attempts: int = 3  # Maximum retry attempts
+    log_path: Path | None = None  # Path to log file
+    stderr_path: Path | None = None  # Path to stderr log file
+    no_patterns: bool = False  # Disable pattern processing
     
     def __post_init__(self):
         """Initialize default values for list fields."""
