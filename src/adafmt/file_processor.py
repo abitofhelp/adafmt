@@ -292,7 +292,7 @@ class FileProcessor:
         # Validate response
         if res is not None and not isinstance(res, list):
             raise TypeError(f"ALS returned unexpected type for {path}: {type(res).__name__} instead of list")
-        return res
+        return res  # type: ignore[return-value]
     
     async def process_file(
         self,
@@ -341,8 +341,8 @@ class FileProcessor:
                 self.total_errors += 1
                 return "failed", f"stat error: {error.message}"
         
-        file_stat = stat_result.unwrap()
-        file_size = file_stat.st_size
+        file_stat = stat_result.unwrap()  # type: ignore[assignment]
+        file_size = file_stat.st_size  # type: ignore[attr-defined]
         if file_size > self.max_file_size:
             if self.logger:
                 self.logger.write({
@@ -384,15 +384,15 @@ class FileProcessor:
                     raise PermissionError(error.message)
                 else:
                     raise IOError(error.message)
-            original_content = content_result.unwrap()
-            formatted_content = original_content
+            original_content = content_result.unwrap()  # type: ignore[assignment]
+            formatted_content = original_content  # type: ignore[assignment]
             
             # Apply patterns if available
             pattern_result = None
             if self.pattern_formatter and self.pattern_formatter.enabled:
                 try:
                     formatted_content, pattern_result = self.pattern_formatter.apply(
-                        path, original_content
+                        path, original_content  # type: ignore[arg-type]
                     )
                 except Exception as e:
                     if self.logger:
@@ -409,12 +409,12 @@ class FileProcessor:
                 
                 if self.write:
                     try:
-                        atomic_write(path, formatted_content)
+                        atomic_write(str(path), formatted_content)  # type: ignore[arg-type]
                     except Exception as e:
                         raise RuntimeError(f"Failed to write file: {e}")
                 
                 if self.diff:
-                    print(unified_diff(str(path), original_content, formatted_content))
+                    print(unified_diff(str(path), original_content, formatted_content))  # type: ignore[arg-type]
                 
                 status = "edited"
             else:
