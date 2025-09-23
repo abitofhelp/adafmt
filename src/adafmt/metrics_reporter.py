@@ -95,14 +95,14 @@ class MetricsReporter:
         print("\n" + "=" * 80)
         
         # ALS Metrics
-        if client:
+        if client and als_start_time is not None:
             self._print_als_metrics(
                 file_paths, als_changed, als_unchanged, als_failed,
                 als_start_time, adafmt_end_time, als_elapsed, rate
             )
         
         # Pattern Metrics
-        if pattern_formatter and pattern_formatter.enabled:
+        if pattern_formatter and pattern_formatter.enabled and pattern_start_time is not None and pattern_end_time is not None:
             self._print_pattern_metrics(
                 file_paths, pattern_formatter, client,
                 pattern_start_time, pattern_end_time, pattern_elapsed

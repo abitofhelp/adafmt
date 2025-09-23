@@ -17,9 +17,9 @@ from pathlib import Path
 from typing import Any, Protocol, TypeVar
 
 try:
-    from ada2022_parser import Parser as AdaParser
+    from ada2022_parser import Parser as AdaParser  # type: ignore[import-not-found]
 except ImportError:
-    AdaParser = None  # Parser is optional
+    AdaParser = None  # type: ignore[assignment]  # Parser is optional
 
 from ..als_client import ALSClient
 
@@ -44,8 +44,8 @@ class FileData:
 @dataclass
 class ParsedFile(FileData):
     """File with parsed AST."""
-    ast: dict[str, Any] = None
-    parse_errors: list[str] = None
+    ast: dict[str, Any] | None = None
+    parse_errors: list[str] | None = None
     
     def __post_init__(self):
         if self.parse_errors is None:
@@ -58,7 +58,7 @@ class ParsedFile(FileData):
 class ValidatedFile(ParsedFile):
     """File with validation results."""
     is_safe: bool = True
-    validation_messages: list[str] = None
+    validation_messages: list[str] | None = None
     
     def __post_init__(self):
         super().__post_init__()
@@ -77,7 +77,7 @@ class ProcessedFile(ValidatedFile):
 class FormattedFile(ProcessedFile):
     """File after formatting/pattern application."""
     final_content: str = ""
-    patterns_applied: list[str] = None
+    patterns_applied: list[str] | None = None
     
     def __post_init__(self):
         super().__post_init__()

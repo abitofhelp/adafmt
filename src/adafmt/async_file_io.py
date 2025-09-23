@@ -16,8 +16,8 @@ import tempfile
 from pathlib import Path
 from typing import Union
 
-import aiofiles
-import aiofiles.os
+import aiofiles  # type: ignore[import-untyped]
+import aiofiles.os  # type: ignore[import-untyped]
 from returns.result import Failure, Result, Success
 
 from .errors import FileError, file_not_found, permission_denied

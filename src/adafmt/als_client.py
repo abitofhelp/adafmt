@@ -416,7 +416,7 @@ class ALSClient:
                 await self._stderr_task
 
         # Clean up tasks and process
-        shutdown_errors = []
+        shutdown_errors: list[str] = []
         await self._cleanup_resources(shutdown_errors)
         
         if shutdown_errors:
@@ -598,7 +598,7 @@ class ALSClient:
                     except ValueError:
                         # Malformed header, skip it
                         if self.logger:
-                            self.logger(f"[als] Malformed header: {line}")
+                            self.logger(f"[als] Malformed header: {line.decode('utf-8', errors='replace')}")
                         continue
                 
                 # Extract content length
@@ -612,7 +612,7 @@ class ALSClient:
                     length = int(content_length)
                 except ValueError:
                     if self.logger:
-                        self.logger(f"[als] Invalid Content-Length: {content_length}")
+                        self.logger(f"[als] Invalid Content-Length: {content_length.decode('utf-8', errors='replace')}")
                     continue
                 
                 # Read the JSON payload
@@ -725,10 +725,10 @@ class ALSClient:
     
     async def _cleanup_on_error(self) -> None:
         """Clean up resources when an error occurs during startup."""
-        errors = []
+        errors: list[str] = []
         await self._cleanup_resources(errors)
     
-    async def _cleanup_resources(self, error_list: list) -> None:
+    async def _cleanup_resources(self, error_list: list[str]) -> None:
         """Clean up all resources, capturing errors in the provided list."""
         # Cancel reader task
         if self._reader_task:
