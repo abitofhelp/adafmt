@@ -67,7 +67,7 @@ def load_patterns(
             try:
                 pattern_formatter = PatternFormatter.load_from_json(
                     patterns_path,
-                    logger=PatternLogger(pattern_logger),
+                    logger=pattern_logger,
                     ui=ui,
                     debug_logger=debug_logger
                 )

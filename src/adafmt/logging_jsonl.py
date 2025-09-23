@@ -103,8 +103,9 @@ class JsonlLogger:
         """
         if not self._file:
             self.start_fresh()
-        self._file.write(json.dumps(record, ensure_ascii=False) + "\n")
-        self._file.flush()  # Ensure crash safety
+        if self._file:  # Additional check after start_fresh
+            self._file.write(json.dumps(record, ensure_ascii=False) + "\n")
+            self._file.flush()  # Ensure crash safety
     
     def close(self) -> None:
         """Close the log file if open."""

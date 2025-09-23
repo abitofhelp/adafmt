@@ -12,10 +12,13 @@ from pathlib import Path
 import typer
 
 # Python 3.9+: importlib.resources.files
+from typing import Any, Optional
+
 try:
     from importlib.resources import files as pkg_files
+    pkg_files_fn: Optional[Any] = pkg_files
 except ImportError:
-    pkg_files = None
+    pkg_files_fn = None
 
 # Version is dynamically read from package metadata
 try:
@@ -29,9 +32,9 @@ except Exception:
 def read_license_text() -> str:
     """Read the LICENSE file from package data or filesystem."""
     # 1) Prefer a bundled copy inside the package: adafmt/LICENSE
-    if pkg_files:
+    if pkg_files_fn is not None:
         try:
-            return pkg_files("adafmt").joinpath("LICENSE").read_text(encoding="utf-8")
+            return pkg_files_fn("adafmt").joinpath("LICENSE").read_text(encoding="utf-8")
         except Exception:
             pass
 

@@ -29,7 +29,7 @@ import time
 from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, List, Optional
+from typing import Callable, Generator, List, Optional
 
 def ensure_abs(p: str, flag: str) -> str:
     """Ensure a path is absolute, raising an error if not.
@@ -174,7 +174,7 @@ def _current_username() -> str:
     except Exception:
         return ""
 
-def _als_processes(only_user: bool = True) -> List[ProcessInfo]:
+def _als_processes(only_user: bool = True) -> Generator[ProcessInfo, None, None]:
     """Return list of ProcessInfo objects for running ALS processes."""
     username = _current_username()
     now = time.time()

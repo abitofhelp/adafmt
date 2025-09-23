@@ -33,7 +33,7 @@ def execute_pre_hook(
         ok = run_hook(
             pre_hook, "pre", 
             logger=(ui.log_line if ui else print), 
-            timeout=hook_timeout, 
+            timeout=int(hook_timeout), 
             dry_run=False
         )
         if not ok:

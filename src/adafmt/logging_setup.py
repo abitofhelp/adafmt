@@ -28,7 +28,7 @@ def setup_loggers(log_path: Path, debug_patterns_path: Optional[Path] = None, de
                  debug_als_logger, debug_als_log_path)
     """
     # Main logger - always create a logger (log_path is always set now)
-    logger = JsonlLogger(log_path)
+    logger = JsonlLogger(str(log_path))
     logger.start_fresh()  # Create empty file, ensuring it exists
     
     # Pattern logger - create pattern log file
@@ -40,7 +40,7 @@ def setup_loggers(log_path: Path, debug_patterns_path: Optional[Path] = None, de
         timestamp = dt.now().strftime('%Y%m%dT%H%M%SZ')
     
     pattern_log_path = log_path.parent / f"adafmt_{timestamp}_patterns.log"
-    pattern_logger = JsonlLogger(pattern_log_path)
+    pattern_logger = JsonlLogger(str(pattern_log_path))
     pattern_logger.start_fresh()
     
     # Debug pattern logger - only create if path is provided
@@ -52,7 +52,7 @@ def setup_loggers(log_path: Path, debug_patterns_path: Optional[Path] = None, de
             debug_pattern_log_path = debug_patterns_path
         else:
             debug_pattern_log_path = log_path.parent / debug_patterns_path
-        debug_pattern_logger = JsonlLogger(debug_pattern_log_path)
+        debug_pattern_logger = JsonlLogger(str(debug_pattern_log_path))
         debug_pattern_logger.start_fresh()
     
     # Debug ALS logger - only create if path is provided
@@ -64,7 +64,7 @@ def setup_loggers(log_path: Path, debug_patterns_path: Optional[Path] = None, de
             debug_als_log_path = debug_als_path
         else:
             debug_als_log_path = log_path.parent / debug_als_path
-        debug_als_logger = JsonlLogger(debug_als_log_path)
+        debug_als_logger = JsonlLogger(str(debug_als_log_path))
         debug_als_logger.start_fresh()
     
     return logger, pattern_logger, pattern_log_path, debug_pattern_logger, debug_pattern_log_path, debug_als_logger, debug_als_log_path

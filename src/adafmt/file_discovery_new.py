@@ -64,17 +64,17 @@ def discover_files(
         
         # Collect files and convert to absolute paths
         collected_files = collect_files(include_paths or [], exclude_paths or [])
-        for p in collected_files:
-            path = Path(p)
+        for file_str in collected_files:
+            path = Path(file_str)
             if is_ada_file(path):
                 abs_path = path.resolve()
                 # Validate path after resolving to absolute
                 validation_error = validate_path(str(abs_path))
                 if validation_error:
                     if ui:
-                        ui.log_line(f"[warning] Skipping invalid file path '{p}' (resolved to '{abs_path}') - {validation_error}")
+                        ui.log_line(f"[warning] Skipping invalid file path '{file_str}' (resolved to '{abs_path}') - {validation_error}")
                     else:
-                        print(f"[warning] Skipping invalid file path '{p}' (resolved to '{abs_path}') - {validation_error}")
+                        print(f"[warning] Skipping invalid file path '{file_str}' (resolved to '{abs_path}') - {validation_error}")
                     continue
                 file_paths.append(abs_path)
         

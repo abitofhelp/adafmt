@@ -8,7 +8,7 @@
 """Retry handler for transient errors."""
 
 import asyncio
-from typing import TypeVar, Callable, Optional, Tuple
+from typing import TypeVar, Callable, Optional, Tuple, Awaitable
 from pathlib import Path
 
 T = TypeVar('T')
@@ -74,7 +74,7 @@ class RetryHandler:
     
     @staticmethod
     async def retry_async(
-        func: Callable[..., T],
+        func: Callable[..., Awaitable[T]],
         *args,
         max_attempts: int = 3,
         backoff_base: float = 0.1,

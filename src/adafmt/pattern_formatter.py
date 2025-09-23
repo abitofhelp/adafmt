@@ -441,7 +441,7 @@ class PatternFormatter:
                     new_text, count = rule.find.subn(
                         rule.replace,
                         current_text,
-                        timeout=timeout_seconds
+                        timeout=int(timeout_seconds)
                     )
                 else:
                     # Use signal-based timeout
@@ -456,9 +456,11 @@ class PatternFormatter:
                     if self.debug_logger and matches_for_debug:
                         for i, match_info in enumerate(matches_for_debug[:5]):  # Limit to first 5
                             # Extract context around the match
-                            start = max(0, match_info['start'] - 50)
-                            end = min(len(current_text), match_info['end'] + 50)
-                            before_snippet = current_text[start:match_info['end']]
+                            match_start = int(match_info['start'])
+                            match_end = int(match_info['end'])
+                            start = max(0, match_start - 50)
+                            end = min(len(current_text), match_end + 50)
+                            before_snippet = current_text[start:match_end]
                             # Calculate where the replacement would be in new_text
                             # This is approximate for simplicity
                             after_snippet = new_text[start:start + len(before_snippet) + 20]

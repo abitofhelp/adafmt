@@ -64,7 +64,7 @@ class WorkerContext:
         Returns:
             True if shutdown requested
         """
-        return self.shutdown_event.is_set()
+        return self.shutdown_event is not None and self.shutdown_event.is_set()
     
     async def report_completion(
         self,
