@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, TextIO
 
 class JsonlLogger:
     """Logger that writes JSON objects to a file, one per line.
@@ -48,7 +48,7 @@ class JsonlLogger:
                   Parent directories are created if needed.
         """
         self.path = Path(path)
-        self._file = None
+        self._file: Optional[TextIO] = None
     
     def __repr__(self):
         """Boring representation to avoid leaking paths when printed."""
@@ -136,3 +136,11 @@ class JsonlLogger:
         if not notes:
             return
         self.write({"file": file, "notes": notes})
+    
+    def log(self, record: Dict[str, Any]) -> None:
+        """Alias for write method for compatibility.
+        
+        Args:
+            record: Dictionary to serialize as JSON
+        """
+        self.write(record)
