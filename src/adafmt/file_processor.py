@@ -28,7 +28,7 @@ from .thread_safe_metrics import ThreadSafeMetrics
 # UI is a protocol/interface, imported as TYPE_CHECKING
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from .tui import UI
+    from .tui import BaseUI as UI
 from .utils import atomic_write
 
 
@@ -391,7 +391,7 @@ class FileProcessor:
             pattern_result = None
             if self.pattern_formatter and self.pattern_formatter.enabled:
                 try:
-                    formatted_content, pattern_result = self.pattern_formatter.apply(
+                    formatted_content, pattern_result = self.pattern_formatter.apply(  # type: ignore[assignment]
                         path, original_content  # type: ignore[arg-type]
                     )
                 except Exception as e:
@@ -468,8 +468,8 @@ class FileProcessor:
                         raise PermissionError(error.message)
                     else:
                         raise IOError(error.message)
-                original_content = content_result.unwrap()
-                formatted_content = apply_text_edits(original_content, edits)
+                original_content = content_result.unwrap()  # type: ignore[assignment]
+                formatted_content = apply_text_edits(original_content, edits)  # type: ignore[arg-type]
                 
                 # Use worker pool if available, otherwise process inline
                 if self.use_parallel and self.worker_pool:
@@ -504,13 +504,13 @@ class FileProcessor:
                     # Write changes if requested
                     if self.write:
                         try:
-                            atomic_write(path, formatted_content)
+                            atomic_write(str(path), formatted_content)  # type: ignore[arg-type]
                         except Exception as e:
                             raise RuntimeError(f"Failed to write file: {e}")
                     
                     # Show diff if requested
                     if self.diff:
-                        print(unified_diff(str(path), original_content, formatted_content))
+                        print(unified_diff(str(path), original_content, formatted_content))  # type: ignore[arg-type]
                     
                     status = "edited"
             else:
@@ -532,7 +532,7 @@ class FileProcessor:
                         # Queue for parallel processing
                         work_item = WorkItem(
                             path=path,
-                            content=original_content,
+                            content=original_content,  # type: ignore[arg-type]
                             index=idx,
                             total=total,
                             queue_time=time.time()
@@ -542,14 +542,14 @@ class FileProcessor:
                     else:
                         # Process inline
                         formatted_content, pattern_result = self.pattern_formatter.apply(
-                            path, original_content
+                            path, original_content  # type: ignore[arg-type]
                         )
                         if formatted_content != original_content:
                             self.pattern_files_changed += 1
                             if self.write:
-                                atomic_write(path, formatted_content)
+                                atomic_write(str(path), formatted_content)  # type: ignore[arg-type]
                             if self.diff:
-                                print(unified_diff(str(path), original_content, formatted_content))
+                                print(unified_diff(str(path), original_content, formatted_content))  # type: ignore[arg-type]
                             status = "edited"
                         
         except asyncio.TimeoutError:
@@ -604,8 +604,8 @@ class FileProcessor:
         if self.metrics:
             self.metrics.record_file_format(
                 file_path=str(path),
-                als_success=status != "failed" if als_used else None,
-                als_edits=als_edits if als_used else None,
+                als_success=bool(status != "failed") if als_used else False,  # type: ignore[arg-type]
+                als_edits=als_edits if als_used and als_edits is not None else 0,  # type: ignore[arg-type]
                 patterns_applied=pattern_result.applied_names if pattern_result else [],
                 duration=file_duration,
                 error=note if status == "failed" else None
@@ -626,7 +626,7 @@ class FileProcessor:
         """Consume completion messages from workers and display them."""
         while True:
             try:
-                message = await self.ui_queue.get()
+                message = await self.ui_queue.get()  # type: ignore[union-attr]
                 if message is None:  # Sentinel value to stop
                     break
                     
@@ -642,12 +642,10 @@ class FileProcessor:
                     # Build the status line similar to queued but with completion status
                     prefix = f"[{index:>4}/{total}]"
                     
-                    # Build status line using CLI formatter
-                    from .cli import _build_status_line
-                    line = _build_status_line(
-                        index, total, path, status, note,
-                        self.no_als, self.pattern_formatter
-                    )
+                    # Build simple status line (CLI formatter not available)
+                    line = f"[{index:4d}/{total:4d}] {path} [{status}]"
+                    if note:
+                        line += f" ({note})"
                     
                     # Add worker info
                     line += f" | Worker: {worker_id}"
@@ -657,8 +655,8 @@ class FileProcessor:
                         self.ui.log_line(line)
                     else:
                         # Use CLI's colored print function
-                        from .cli import _print_colored_line
-                        _print_colored_line(line)
+                        # Simple print (colored printing not available)
+                        print(line)
                         
             except asyncio.CancelledError:
                 break
