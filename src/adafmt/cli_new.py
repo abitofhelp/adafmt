@@ -25,7 +25,7 @@ from typing import Any, Optional, List
 import typer
 from typing_extensions import Annotated
 
-from returns.io import IOResult, impure_safe
+from returns.io import IOFailure, IOResult, IOSuccess, impure_safe
 from returns.future import future_safe
 from returns.result import Failure, Result
 
@@ -57,30 +57,22 @@ def main_callback(
     print("=" * 80)
 
 
-@impure_safe
-def _execute_command_sync(command_processor: CommandProcessor, args: Any) -> int:
-    """Execute command processor synchronously with automatic exception handling.
+def _execute_command_sync(command_processor: CommandProcessor, args: Any) -> IOResult[int, Exception]:
+    """Execute command processor synchronously.
     
     Args:
         command_processor: The command processor to execute
         args: Command arguments
         
     Returns:
-        int: Exit code (0 for success, non-zero for error)
-        
-    Note:
-        @impure_safe automatically converts exceptions to IOResult[int, Exception]
+        IOResult[int, Exception]: Exit code wrapped in IOResult
     """
     # Run async command in sync context
-    # _execute_command_async is decorated with @future_safe, so we need to await it
     async def run_command():
         return await _execute_command_async(command_processor, args)
     
-    # Run the coroutine and get the IOResult
-    result = asyncio.run(run_command())
-    
-    # Handle the IOResult returned by @future_safe
-    return _handle_command_result(result)
+    # Run the coroutine and get the IOResult from @future_safe
+    return asyncio.run(run_command())
 
 
 @future_safe
@@ -117,7 +109,27 @@ def _handle_command_result(result: Result[int, Exception] | IOResult[int, Except
     Returns:
         int: Exit code
     """
-    if isinstance(result, Failure):
+    # Handle IOResult from @impure_safe decorators
+    if isinstance(result, IOFailure):
+        error = result.failure()
+        
+        # Map different error types to appropriate exit codes
+        if isinstance(error, AdafmtError):
+            print(f"Error: {error.message}", file=sys.stderr)
+            return 1
+        elif isinstance(error, ConfigError):
+            print(f"Configuration error: {error.message}", file=sys.stderr)
+            return 2
+        else:
+            print(f"Unexpected error: {error}", file=sys.stderr)
+            return 3
+    elif isinstance(result, IOSuccess):
+        # Extract the exit code using unsafe_perform_io
+        from returns.unsafe import unsafe_perform_io
+        return unsafe_perform_io(result.unwrap())
+    
+    # Handle regular Result types (legacy/fallback)
+    elif isinstance(result, Failure):
         error = result.failure()
         
         # Map different error types to appropriate exit codes
@@ -131,6 +143,7 @@ def _handle_command_result(result: Result[int, Exception] | IOResult[int, Except
             print(f"Unexpected error: {error}", file=sys.stderr)
             return 3
     
+    # Must be Success type
     return result.unwrap()  # type: ignore[return-value]
 
 
@@ -148,21 +161,36 @@ def license_command() -> None:
 @app.command(name="format")
 def format_command(
     project_path: Annotated[Path, typer.Option("--project-path", help="Path to your GNAT project file (.gpr)")],
+    als_ready_timeout: Annotated[int, typer.Option("--als-ready-timeout", help="Maximum seconds to wait for ALS to become ready")] = 10,
     als_stale_minutes: Annotated[int, typer.Option("--als-stale-minutes", help="Age threshold in minutes for considering ALS processes stale")] = 30,
     check: Annotated[bool, typer.Option("--check", help="Exit with code 1 if any files need formatting")] = False,
+    debug_als: Annotated[bool, typer.Option("--debug-als", help="Enable ALS debugging (uses default path if --debug-als-path not set)")] = False,
+    debug_als_path: Annotated[Optional[Path], typer.Option("--debug-als-path", help="Write ALS debug output to this path")] = None,
+    debug_patterns: Annotated[bool, typer.Option("--debug-patterns", help="Enable pattern debugging (uses default path if --debug-patterns-path not set)")] = False,
+    debug_patterns_path: Annotated[Optional[Path], typer.Option("--debug-patterns-path", help="Write pattern debug output to this path")] = None,
     diff: Annotated[bool, typer.Option("--diff", help="Show unified diffs of changes")] = False,
     exclude_path: Annotated[Optional[List[Path]], typer.Option("--exclude-path", help="Directory to exclude from search (can be used multiple times)")] = None,
     format_timeout: Annotated[int, typer.Option("--format-timeout", help="Timeout per file formatting in seconds")] = 60,
+    hook_timeout: Annotated[int, typer.Option("--hook-timeout", help="Timeout for hook commands in seconds")] = 5,
     include_path: Annotated[Optional[List[Path]], typer.Option("--include-path", help="Directory to search for Ada files (can be used multiple times)")] = None,
     init_timeout: Annotated[int, typer.Option("--init-timeout", help="Timeout for ALS initialization in seconds")] = 180,
-    write: Annotated[bool, typer.Option("--write", help="Apply changes to files")] = False,
-    # Missing parameters that integration tests expect
-    preflight: Annotated[str, typer.Option("--preflight", help="ALS preflight mode (off, warn, safe, kill, aggressive, fail)")] = "check",
-    als_ready_timeout: Annotated[int, typer.Option("--als-ready-timeout", help="Timeout for ALS readiness in seconds")] = 30,
-    max_attempts: Annotated[int, typer.Option("--max-attempts", help="Maximum retry attempts")] = 3,
-    log_path: Annotated[Optional[Path], typer.Option("--log-path", help="Path to log file")] = None,
-    stderr_path: Annotated[Optional[Path], typer.Option("--stderr-path", help="Path to stderr log file")] = None,
+    log_path: Annotated[Optional[Path], typer.Option("--log-path", help="Override JSONL log location (default: ./adafmt_<timestamp>_log.jsonl)")] = None,
+    max_attempts: Annotated[int, typer.Option("--max-attempts", help="Retry attempts for transient errors")] = 2,
+    max_consecutive_timeouts: Annotated[int, typer.Option("--max-consecutive-timeouts", help="Abort after this many timeouts in a row (0 = no limit)")] = 5,
+    max_file_size: Annotated[int, typer.Option("--max-file-size", help="Skip files larger than this size in bytes (default: 102400 = 100KB)")] = 102400,
+    metrics_path: Annotated[Optional[Path], typer.Option("--metrics-path", help="Path to cumulative metrics file (default: ~/.adafmt/metrics.jsonl)")] = None,
+    no_als: Annotated[bool, typer.Option("--no-als", help="Disable ALS formatting (patterns only)")] = False,
     no_patterns: Annotated[bool, typer.Option("--no-patterns", help="Disable pattern processing")] = False,
+    num_workers: Annotated[Optional[int], typer.Option("--num-workers", help="Number of parallel workers for post-ALS processing (default: 1)")] = None,
+    patterns_max_bytes: Annotated[int, typer.Option("--patterns-max-bytes", help="Skip patterns for files larger than this (bytes)")] = 10485760,
+    patterns_path: Annotated[Optional[Path], typer.Option("--patterns-path", help="Path to patterns JSON file (default: ./adafmt_patterns.json)")] = None,
+    patterns_timeout_ms: Annotated[int, typer.Option("--patterns-timeout-ms", help="Timeout per pattern in milliseconds")] = 100,
+    post_hook: Annotated[Optional[str], typer.Option("--post-hook", help="Command to run after formatting; non-zero exit is logged.")] = None,
+    pre_hook: Annotated[Optional[str], typer.Option("--pre-hook", help="Command to run before formatting; non-zero exit aborts.")] = None,
+    preflight: Annotated[str, typer.Option("--preflight", help="Handle existing ALS processes and .als-alire locks")] = "safe",
+    stderr_path: Annotated[Optional[Path], typer.Option("--stderr-path", help="Override stderr capture location (default: ./adafmt_<timestamp>_stderr.log)")] = None,
+    validate_patterns: Annotated[bool, typer.Option("--validate-patterns", help="Validate that applied patterns are acceptable to ALS")] = False,
+    write: Annotated[bool, typer.Option("--write", help="Apply changes to files")] = False,
     files: Annotated[Optional[List[str]], typer.Argument(help="Specific Ada files to format")] = None,
 ) -> None:
     """Format Ada source code using the Ada Language Server (ALS)."""
@@ -170,27 +198,44 @@ def format_command(
     # Create arguments object
     args = FormatArgs(
         project_path=project_path,
+        als_ready_timeout=als_ready_timeout,
         als_stale_minutes=als_stale_minutes,
         check=check,
+        debug_als=debug_als,
+        debug_als_path=debug_als_path,
+        debug_patterns=debug_patterns,
+        debug_patterns_path=debug_patterns_path,
         diff=diff,
         exclude_path=exclude_path or [],
         format_timeout=format_timeout,
+        hook_timeout=hook_timeout,
         include_path=include_path or [],
         init_timeout=init_timeout,
+        log_path=log_path,
+        max_attempts=max_attempts,
+        max_consecutive_timeouts=max_consecutive_timeouts,
+        max_file_size=max_file_size,
+        metrics_path=metrics_path,
+        no_als=no_als,
+        no_patterns=no_patterns,
+        num_workers=num_workers,
+        patterns_max_bytes=patterns_max_bytes,
+        patterns_path=patterns_path,
+        patterns_timeout_ms=patterns_timeout_ms,
+        post_hook=post_hook,
+        pre_hook=pre_hook,
+        preflight=preflight,
+        stderr_path=stderr_path,
+        validate_patterns=validate_patterns,
         write=write,
         files=[Path(f) for f in files] if files else [],
-        preflight=preflight,
-        als_ready_timeout=als_ready_timeout,
-        max_attempts=max_attempts,
-        log_path=log_path,
-        stderr_path=stderr_path,
-        no_patterns=no_patterns,
     )
     
     # Create command processor
     processor = FormatCommandProcessor()
     
     # Execute command with functional error handling
+    # _execute_command_sync returns IOResult[int, Exception] due to @impure_safe
     result = _execute_command_sync(processor, args)
     exit_code = _handle_command_result(result)
     
@@ -227,6 +272,7 @@ def rename_command(
     processor = RenameCommandProcessor()
     
     # Execute command with functional error handling
+    # _execute_command_sync returns IOResult[int, Exception] due to @impure_safe
     result = _execute_command_sync(processor, args)
     exit_code = _handle_command_result(result)
     

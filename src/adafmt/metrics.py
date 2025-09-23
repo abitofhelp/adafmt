@@ -55,6 +55,10 @@ class MetricsCollector:
         # Timing tracking
         self._timers: Dict[str, float] = {}
         self._run_id = f"{to_iso8601_basic(datetime.now(timezone.utc)).replace('T', '_').replace('Z', '')}_{id(self)}"
+        
+        # File processing counters (for command processors)
+        self.successful_files: int = 0
+        self.failed_files: int = 0
     
     @contextmanager
     def _file_lock(self):

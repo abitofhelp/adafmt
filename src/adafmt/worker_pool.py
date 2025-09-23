@@ -15,6 +15,7 @@ from pathlib import Path
 
 from returns.result import Failure, Result, Success
 from returns.future import future_safe
+from returns.io import IOFailure, IOSuccess
 
 from .worker_context import WorkItem, WorkerContext
 from .thread_safe_metrics import ThreadSafeMetrics
@@ -177,15 +178,24 @@ class WorkerPool:
             logger, pattern_logger, ui_queue
         )
         
-        # Handle FutureResult -> convert exceptions to WorkerError
-        if isinstance(result, Failure):
+        # Handle IOResult from @future_safe decorator
+        if isinstance(result, IOFailure):
             exc = result.failure()
             return Failure(WorkerError(
                 message=f"Failed to start worker pool: {exc}",
                 operation="worker_start"
             ))
-        
-        return Success(None)
+        elif isinstance(result, IOSuccess):
+            # Successfully started - extract the None value using unsafe_perform_io
+            from returns.unsafe import unsafe_perform_io
+            unsafe_perform_io(result.unwrap())  # Should be None
+            return Success(None)
+        else:
+            # Should not happen, but handle unknown result types
+            return Failure(WorkerError(
+                message=f"Unknown result type from worker start: {type(result)}",
+                operation="worker_start"
+            ))
     
     @future_safe
     async def _submit_internal(self, item: WorkItem) -> None:
@@ -223,7 +233,9 @@ class WorkerPool:
             ))
         
         result = await self._submit_internal(item)
-        if isinstance(result, Failure):
+        
+        # Handle IOResult from @future_safe decorator
+        if isinstance(result, IOFailure):
             self._pending_tasks -= 1
             exc = result.failure()
             return Failure(WorkerError(
@@ -231,7 +243,19 @@ class WorkerPool:
                 operation="queue_submit",
                 path=item.path
             ))
-        return Success(None)
+        elif isinstance(result, IOSuccess):
+            # Successfully submitted - extract the None value using unsafe_perform_io
+            from returns.unsafe import unsafe_perform_io
+            unsafe_perform_io(result.unwrap())  # Should be None
+            return Success(None)
+        else:
+            # Should not happen, but handle unknown result types
+            self._pending_tasks -= 1
+            return Failure(WorkerError(
+                message=f"Unknown result type from submit: {type(result)}",
+                operation="queue_submit",
+                path=item.path
+            ))
     
     async def wait_for_completion(self) -> None:
         """Wait for all submitted tasks to complete."""

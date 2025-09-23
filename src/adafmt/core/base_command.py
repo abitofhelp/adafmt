@@ -16,7 +16,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Generic, TypeVar
 
 from returns.future import FutureResult, future_safe
-from returns.io import IOResult
+from returns.io import IOFailure, IOResult, IOSuccess
 from returns.result import Failure, Result, Success
 
 from ..als_client import ALSClient
@@ -68,15 +68,21 @@ class CommandProcessor(ABC, Generic[T]):
         Returns:
             Result[int, AdafmtError]: Exit code on success or error
         """
-        # Execute internal method which returns FutureResult[int, Exception]
+        # Execute internal method which returns IOResult[int, Exception] due to @future_safe
         result = await self._execute_internal(args)
         
-        # Check if it's a success - if so, return as-is since int maps correctly
-        if isinstance(result, Success):
-            return result  # Success[int] is valid as Result[int, AdafmtError]
-        
-        # Handle failures - need to convert Exception to AdafmtError
-        exc = result.failure()
+        # Handle IOResult from @future_safe decorator
+        if isinstance(result, IOSuccess):
+            # Extract the exit code using unsafe_perform_io
+            from returns.unsafe import unsafe_perform_io
+            exit_code = unsafe_perform_io(result.unwrap())
+            return Success(exit_code)
+        elif isinstance(result, IOFailure):
+            # Handle the exception
+            exc = result.failure()
+        else:
+            # Should not happen, but handle just in case
+            exc = Exception(f"Unknown result type: {type(result)}")
         
         if isinstance(exc, KeyboardInterrupt):
             # For keyboard interrupt, log and return special exit code
@@ -86,6 +92,27 @@ class CommandProcessor(ABC, Generic[T]):
             # Already an AdafmtError, wrap in Failure
             return Failure(exc)
         else:
+            # Handle IOResult objects that were raised as exceptions
+            if hasattr(exc, 'unwrap') and hasattr(exc, 'failure'):
+                # This appears to be an IOResult object
+                try:
+                    from returns.unsafe import unsafe_perform_io
+                    if isinstance(exc, IOFailure):
+                        inner_exc = exc.failure()
+                        return Failure(AdafmtError(message=f"IO operation failed: {inner_exc}"))
+                    elif isinstance(exc, IOSuccess):
+                        # This is odd - an IOSuccess was raised as an exception
+                        # Extract the value and treat as successful
+                        value = unsafe_perform_io(exc.unwrap())
+                        if isinstance(value, int):
+                            return Success(value)
+                        else:
+                            return Failure(AdafmtError(message=f"Unexpected IOSuccess value: {value}"))
+                    else:
+                        return Failure(AdafmtError(message=f"Unknown IOResult type: {type(exc)}"))
+                except Exception as e:
+                    return Failure(AdafmtError(message=f"Failed to unwrap IOResult: {e}"))
+            
             # Convert other exceptions to AdafmtError
             return Failure(AdafmtError(
                 message=f"Unexpected error: {exc}"
@@ -113,13 +140,15 @@ class CommandProcessor(ABC, Generic[T]):
             if self.requires_als():
                 als_result = await self.initialize_als(args)
                 if isinstance(als_result, Failure):
-                    raise RuntimeError("Failed to initialize ALS")
+                    await self.log_error(f"Failed to initialize ALS: {als_result.failure()}")
+                    return 1
                 self.als_client = als_result.unwrap()
             
             # Discovery phase
             targets_result = await self.discover_targets(args)
             if isinstance(targets_result, Failure):
-                raise RuntimeError("Failed to discover targets")
+                await self.log_error(f"Failed to discover targets: {targets_result.failure()}")
+                return 1
             
             targets = targets_result.unwrap()
             if not targets:
@@ -129,7 +158,8 @@ class CommandProcessor(ABC, Generic[T]):
             # Processing phase (command-specific)
             results = await self.process_targets(targets, args)
             if isinstance(results, Failure):
-                raise RuntimeError("Failed to process targets")
+                await self.log_error(f"Failed to process targets: {results.failure()}")
+                return 1
             
             # Finalization phase
             return await self.finalize(results.unwrap(), args)
@@ -184,7 +214,8 @@ class CommandProcessor(ABC, Generic[T]):
         result = await als_client.start()
         
         if isinstance(result, Failure):
-            raise RuntimeError(f"Failed to start ALS: {result.failure()}")
+            # Let @future_safe handle the exception wrapping
+            raise AdafmtError(message=f"Failed to start ALS: {result.failure()}")
         
         await self.log_info("Ada Language Server ready")
         return als_client
@@ -204,12 +235,18 @@ class CommandProcessor(ABC, Generic[T]):
         
         # @future_safe returns IOResult, not Result
         # We need to handle IOResult -> Result conversion
-        if isinstance(result, Success):
-            return Success(result.unwrap())
-        else:
+        if isinstance(result, IOSuccess):
+            from returns.unsafe import unsafe_perform_io
+            client = unsafe_perform_io(result.unwrap())
+            return Success(client)
+        elif isinstance(result, IOFailure):
             exc = result.failure()
             return Failure(AdafmtError(
                 message=f"Failed to initialize ALS: {exc}"
+            ))
+        else:
+            return Failure(AdafmtError(
+                message=f"Unexpected result type from ALS initialization: {type(result)}"
             ))
     
     @abstractmethod

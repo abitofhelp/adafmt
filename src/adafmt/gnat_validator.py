@@ -92,7 +92,7 @@ class GNATValidator:
             "-gnatc",       # Syntax/semantic check only (no code generation)
             "-gnatf",       # Full error messages
             "-gnat2022",    # Use Ada 2022 standard
-            "-gnatwe",      # Treat warnings as errors
+            # Note: -gnatwe removed to avoid file naming warnings during validation
         ]
         
         if gnat_flags:
@@ -153,9 +153,9 @@ class GNATValidator:
         
         # result is IOSuccess[bool] here - extract the bool value
         if isinstance(result, IOSuccess):
-            availability = result.unwrap()
-            if hasattr(availability, 'unwrap'):
-                availability = availability.unwrap()
+            # For IOResult, use unsafe_perform_io to extract the boolean value
+            from returns.unsafe import unsafe_perform_io
+            availability = unsafe_perform_io(result.unwrap())
             return Success(availability)
         else:
             # Should not happen but type safety
@@ -195,7 +195,8 @@ class GNATValidator:
             if suffix not in ['.adb', '.ads', '.ada']:
                 suffix = '.adb'  # Default to body
         else:
-            suffix = '.adb'  # Default to body
+            # Auto-detect based on content when no file_path provided
+            suffix = self._detect_ada_file_type(content)
         
         # Create temporary file
         try:
@@ -208,12 +209,19 @@ class GNATValidator:
                 temp_file.write(content)
                 temp_path = Path(temp_file.name)
             
+            # If this is a package body, create a minimal spec file
+            spec_path = None
+            if suffix == '.adb' and 'package body ' in content.lower():
+                spec_path = self._create_minimal_spec_for_body(content, temp_path)
+            
             # Validate the temporary file
             result = self.validate_file(temp_path, ada_version)
             
             # Clean up
             try:
                 temp_path.unlink()
+                if spec_path and spec_path.exists():
+                    spec_path.unlink()
             except OSError:
                 pass  # Ignore cleanup errors
             
@@ -244,10 +252,11 @@ class GNATValidator:
             Result[ValidationResult, ValidationError]: Validation result or error
         """
         # Use async subprocess for validation
+        # @future_safe returns IOResult, so we need to handle it accordingly
         result = await self._validate_content_async_internal(content, file_path, ada_version)
         
-        # Convert FutureResult to Result
-        if isinstance(result, Failure):
+        # Handle IOResult from @future_safe
+        if isinstance(result, IOFailure):
             exc = result.failure()
             if isinstance(exc, ValidationError):
                 return Failure(exc)
@@ -258,12 +267,19 @@ class GNATValidator:
                     command=self.gnat_executable,
                     message=str(exc)
                 ))
-        
-        # Handle IOResult unwrapping properly
-        validation_result = result.unwrap()
-        if hasattr(validation_result, 'unwrap'):
-            validation_result = validation_result.unwrap()
-        return Success(validation_result)
+        elif isinstance(result, IOSuccess):
+            # Extract the validation result using unsafe_perform_io
+            from returns.unsafe import unsafe_perform_io
+            validation_result = unsafe_perform_io(result.unwrap())
+            return Success(validation_result)
+        else:
+            # Should not happen, but handle just in case
+            return Failure(ValidationError(
+                path=file_path or Path(""),
+                exit_code=-1,
+                command=self.gnat_executable,
+                message="Unknown async validation error"
+            ))
     
     @future_safe
     async def _validate_content_async_internal(
@@ -295,9 +311,11 @@ class GNATValidator:
             )
         
         # Determine file extension
-        suffix = '.adb'
         if file_path and file_path.suffix.lower() in ['.adb', '.ads', '.ada']:
             suffix = file_path.suffix.lower()
+        else:
+            # Auto-detect based on content when no file_path provided
+            suffix = self._detect_ada_file_type(content)
         
         # Create temporary file
         with tempfile.NamedTemporaryFile(
@@ -308,6 +326,11 @@ class GNATValidator:
         ) as temp_file:
             temp_file.write(content)
             temp_path = Path(temp_file.name)
+        
+        # If this is a package body, create a minimal spec file
+        spec_path = None
+        if suffix == '.adb' and 'package body ' in content.lower():
+            spec_path = self._create_minimal_spec_for_body(content, temp_path)
         
         try:
             # Build command
@@ -334,7 +357,7 @@ class GNATValidator:
             
             return ValidationResult(
                 valid=process.returncode == 0,
-                exit_code=process.returncode or -1,
+                exit_code=process.returncode if process.returncode is not None else -1,
                 stdout=stdout_text,
                 stderr=stderr_text,
                 warnings=warnings,
@@ -346,6 +369,8 @@ class GNATValidator:
             # Clean up temporary file
             try:
                 temp_path.unlink()
+                if spec_path and spec_path.exists():
+                    spec_path.unlink()
             except OSError:
                 pass
     
@@ -441,11 +466,10 @@ class GNATValidator:
                 message=str(exc)
             ))
         
-        # IOSuccess contains an IO object, need to extract the actual ValidationResult
-        validation_result = result.unwrap()
-        if hasattr(validation_result, 'unwrap'):
-            # If it's still wrapped in IO, unwrap it again
-            validation_result = validation_result.unwrap()
+        # For IOResult, we need to use unsafe_perform_io to extract the actual value
+        # This is the recommended approach for boundary operations
+        from returns.unsafe import unsafe_perform_io
+        validation_result = unsafe_perform_io(result.unwrap())
         return Success(validation_result)
     
     def _build_command(self, file_path: Path, ada_version: str) -> List[str]:
@@ -474,14 +498,144 @@ class GNATValidator:
             else:
                 command.append(ada_flag)
         
-        # Add output file (to temp location)
-        output_file = file_path.parent / f"{file_path.stem}_validation.ali"
-        command.extend(["-o", str(output_file)])
+        # For syntax-only checking (-gnatc), don't specify output file
+        # GNAT will handle this automatically and won't create object files
         
         # Add source file
         command.append(str(file_path))
         
         return command
+    
+    def _detect_ada_file_type(self, content: str) -> str:
+        """Detect whether Ada content is a specification (.ads) or body (.adb).
+        
+        Args:
+            content: Ada source code content
+            
+        Returns:
+            str: File extension (.ads or .adb)
+        """
+        # Simple heuristics to detect file type
+        content_lower = content.lower().strip()
+        
+        # Look for package/generic specification keywords without "body"
+        lines = content_lower.split('\n')
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith('--'):
+                continue
+                
+            # Package specification
+            if line.startswith('package ') and ' body ' not in line and line.endswith(' is'):
+                return '.ads'
+            # Generic package specification  
+            if line.startswith('generic') or (line.startswith('package ') and ' body ' not in line):
+                return '.ads'
+            # Procedure/function specification (might be in spec)
+            if (line.startswith('procedure ') or line.startswith('function ')) and ' is ' in line:
+                # Could be spec or body, continue checking
+                continue
+            # Package body
+            if 'package body ' in line:
+                return '.adb'
+            # Procedure/function body with "begin"
+            if line.startswith('procedure ') and 'begin' in content_lower:
+                return '.adb'
+            if line.startswith('function ') and 'begin' in content_lower:
+                return '.adb'
+        
+        # Default to body if unclear
+        return '.adb'
+    
+    def _create_minimal_spec_for_body(self, body_content: str, body_path: Path) -> Path | None:
+        """Create a minimal specification file for a package body.
+        
+        Args:
+            body_content: Content of the package body
+            body_path: Path to the body file
+            
+        Returns:
+            Path: Path to created spec file, or None if creation failed
+        """
+        try:
+            # Extract package name from body (preserve original case)
+            package_name = None
+            for line in body_content.split('\n'):
+                line = line.strip()
+                if line.lower().startswith('package body '):
+                    # Extract package name, preserving case
+                    parts = line.split()
+                    if len(parts) >= 3:
+                        package_name = parts[2]
+                        # Remove 'is' if present
+                        if package_name.endswith(' is'):
+                            package_name = package_name[:-3]
+                        break
+            
+            if not package_name:
+                return None
+            
+            # Create minimal spec content (use exact case from body)
+            # Extract function/procedure declarations from body for spec
+            declarations = self._extract_declarations_from_body(body_content)
+            
+            spec_content = f"""package {package_name} is
+{declarations}
+   pragma Elaborate_Body;
+end {package_name};
+"""
+            
+            # Create spec file in same directory with package name
+            # GNAT expects filename to match package name in lowercase
+            package_filename = package_name.lower() + '.ads'
+            spec_path = body_path.parent / package_filename
+            spec_path.write_text(spec_content, encoding='utf-8')
+            
+            return spec_path
+            
+        except Exception:
+            return None
+    
+    def _extract_declarations_from_body(self, body_content: str) -> str:
+        """Extract function and procedure declarations from package body.
+        
+        Args:
+            body_content: Content of the package body
+            
+        Returns:
+            str: Declaration strings for the specification
+        """
+        declarations = []
+        lines = body_content.split('\n')
+        i = 0
+        
+        while i < len(lines):
+            line = lines[i].strip()
+            
+            # Look for function or procedure declarations
+            if (line.startswith('function ') or line.startswith('procedure ')) and ' is ' in line:
+                # Extract the declaration part (before 'is')
+                declaration = line.split(' is ')[0].strip()
+                
+                # Handle multi-line declarations
+                while not declaration.endswith(';') and i + 1 < len(lines):
+                    i += 1
+                    next_line = lines[i].strip()
+                    if ' is ' in next_line:
+                        declaration += ' ' + next_line.split(' is ')[0].strip()
+                        break
+                    else:
+                        declaration += ' ' + next_line
+                
+                # Clean up and add semicolon if needed
+                if not declaration.endswith(';'):
+                    declaration += ';'
+                
+                declarations.append(f'   {declaration}')
+            
+            i += 1
+        
+        return '\n'.join(declarations) if declarations else '   -- No public declarations'
     
     def _parse_gnat_output(self, stdout: str, stderr: str) -> tuple[List[str], List[str]]:
         """Parse GNAT compiler output to extract warnings and errors.
