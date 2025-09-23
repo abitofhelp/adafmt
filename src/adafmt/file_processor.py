@@ -223,7 +223,7 @@ class FileProcessor:
                     'insert_spaces': True
                 })
             
-            res = await self.client.request_with_timeout(
+            result = await self.client.request_with_timeout(
                 {
                     "method": "textDocument/formatting",
                     "params": {
@@ -233,6 +233,22 @@ class FileProcessor:
                 },
                 timeout=self.format_timeout
             )
+            
+            if isinstance(result, Failure):
+                error = result.failure()
+                if error.timeout:
+                    if debug_logger:
+                        debug_logger.write({
+                            'ev': 'als_format_timeout',
+                            'path': str(path),
+                            'timeout_seconds': self.format_timeout
+                        })
+                    raise asyncio.TimeoutError(error.message)
+                else:
+                    # Handle other ALS errors
+                    raise RuntimeError(error.message)
+            
+            res = result.unwrap()
             
             # Log formatting response
             if debug_logger:
