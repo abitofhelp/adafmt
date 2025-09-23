@@ -14,8 +14,13 @@ import traceback
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 
+from returns.result import Success, Failure
+from returns.io import IOResult
+
 from .als_client import ALSClient
 from .edits import apply_text_edits, unified_diff
+from .errors import FileError
+from .file_ops import read_text_safe, stat_safe
 from .logging_jsonl import JsonlLogger
 from .metrics import MetricsCollector
 from .pattern_formatter import PatternFormatter, FileApplyResult
@@ -177,14 +182,16 @@ class FileProcessor:
         debug_logger = self.client.debug_logger if self.client and hasattr(self.client, 'debug_logger') else None
         
         # Open the file in ALS
-        try:
-            content = path.read_text(encoding="utf-8", errors="ignore")
-        except FileNotFoundError:
-            raise FileNotFoundError(f"File not found: {path}")
-        except PermissionError:
-            raise PermissionError(f"Permission denied reading file: {path}")
-        except Exception as e:
-            raise IOError(f"Failed to read file {path}: {e}")
+        content_result = read_text_safe(path, encoding="utf-8", errors="ignore")
+        if isinstance(content_result, Failure):
+            error = content_result.failure()
+            if error.not_found:
+                raise FileNotFoundError(error.message)
+            elif error.permission_error:
+                raise PermissionError(error.message)
+            else:
+                raise IOError(error.message)
+        content = content_result.unwrap()
         
         # Log file start
         if debug_logger:
@@ -297,41 +304,45 @@ class FileProcessor:
         file_start_time = time.time()
         
         # Check file size limit
-        try:
-            file_size = path.stat().st_size
-            if file_size > self.max_file_size:
+        stat_result = stat_safe(path)
+        if isinstance(stat_result, Failure):
+            error = stat_result.failure()
+            if error.not_found:
+                error_msg = f"File not found: {path}"
                 if self.logger:
                     self.logger.write({
-                        'ev': 'file_skipped_too_large',
+                        'ev': 'file_not_found',
                         'path': str(path),
-                        'size_bytes': file_size,
-                        'max_bytes': self.max_file_size
+                        'error': error_msg
                     })
-                if self.ui:
-                    self.ui.log_line(f"[formatter] Skipping {path} - file too large ({file_size:,} bytes > 100KB)")
-                else:
-                    print(f"[formatter] Skipping {path} - file too large ({file_size:,} bytes > 100KB)")
                 self.total_errors += 1
-                return "failed", "file too large"
-        except FileNotFoundError:
-            error_msg = f"File not found: {path}"
+                return "failed", error_msg
+            else:
+                if self.logger:
+                    self.logger.write({
+                        'ev': 'file_stat_error',
+                        'path': str(path),
+                        'error': error.message
+                    })
+                self.total_errors += 1
+                return "failed", f"stat error: {error.message}"
+        
+        file_stat = stat_result.unwrap()
+        file_size = file_stat.st_size
+        if file_size > self.max_file_size:
             if self.logger:
                 self.logger.write({
-                    'ev': 'file_not_found',
+                    'ev': 'file_skipped_too_large',
                     'path': str(path),
-                    'error': error_msg
+                    'size_bytes': file_size,
+                    'max_bytes': self.max_file_size
                 })
+            if self.ui:
+                self.ui.log_line(f"[formatter] Skipping {path} - file too large ({file_size:,} bytes > 100KB)")
+            else:
+                print(f"[formatter] Skipping {path} - file too large ({file_size:,} bytes > 100KB)")
             self.total_errors += 1
-            return "failed", error_msg
-        except Exception as e:
-            if self.logger:
-                self.logger.write({
-                    'ev': 'file_stat_error',
-                    'path': str(path),
-                    'error': str(e)
-                })
-            self.total_errors += 1
-            return "failed", f"stat error: {e}"
+            return "failed", "file too large"
         
         # Process with patterns only if --no-als
         if self.no_als:
@@ -350,14 +361,16 @@ class FileProcessor:
     ) -> Tuple[str, Optional[str]]:
         """Process file with patterns only (no ALS)."""
         try:
-            try:
-                original_content = path.read_text(encoding="utf-8", errors="ignore")
-            except FileNotFoundError:
-                raise FileNotFoundError(f"File not found: {path}")
-            except PermissionError:
-                raise PermissionError(f"Permission denied reading file: {path}")
-            except Exception as e:
-                raise IOError(f"Failed to read file {path}: {e}")
+            content_result = read_text_safe(path, encoding="utf-8", errors="ignore")
+            if isinstance(content_result, Failure):
+                error = content_result.failure()
+                if error.not_found:
+                    raise FileNotFoundError(error.message)
+                elif error.permission_error:
+                    raise PermissionError(error.message)
+                else:
+                    raise IOError(error.message)
+            original_content = content_result.unwrap()
             formatted_content = original_content
             
             # Apply patterns if available
@@ -432,14 +445,16 @@ class FileProcessor:
             if edits:
                 self.als_changed += 1
                 # Apply edits to get formatted content
-                try:
-                    original_content = path.read_text(encoding="utf-8", errors="ignore")
-                except FileNotFoundError:
-                    raise FileNotFoundError(f"File not found: {path}")
-                except PermissionError:
-                    raise PermissionError(f"Permission denied reading file: {path}")
-                except Exception as e:
-                    raise IOError(f"Failed to read file {path}: {e}")
+                content_result = read_text_safe(path, encoding="utf-8", errors="ignore")
+                if isinstance(content_result, Failure):
+                    error = content_result.failure()
+                    if error.not_found:
+                        raise FileNotFoundError(error.message)
+                    elif error.permission_error:
+                        raise PermissionError(error.message)
+                    else:
+                        raise IOError(error.message)
+                original_content = content_result.unwrap()
                 formatted_content = apply_text_edits(original_content, edits)
                 
                 # Use worker pool if available, otherwise process inline
@@ -487,14 +502,16 @@ class FileProcessor:
             else:
                 # No ALS changes, but still check patterns
                 if self.pattern_formatter and self.pattern_formatter.enabled:
-                    try:
-                        original_content = path.read_text(encoding="utf-8", errors="ignore")
-                    except FileNotFoundError:
-                        raise FileNotFoundError(f"File not found: {path}")
-                    except PermissionError:
-                        raise PermissionError(f"Permission denied reading file: {path}")
-                    except Exception as e:
-                        raise IOError(f"Failed to read file {path}: {e}")
+                    content_result = read_text_safe(path, encoding="utf-8", errors="ignore")
+                    if isinstance(content_result, Failure):
+                        error = content_result.failure()
+                        if error.not_found:
+                            raise FileNotFoundError(error.message)
+                        elif error.permission_error:
+                            raise PermissionError(error.message)
+                        else:
+                            raise IOError(error.message)
+                    original_content = content_result.unwrap()
                     
                     # Use worker pool if available
                     if self.use_parallel and self.worker_pool:
