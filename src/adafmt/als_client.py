@@ -40,12 +40,16 @@ from pathlib import Path
 from shutil import which
 from typing import Any, Dict, Optional, Tuple
 
+from returns.result import Failure, Result, Success
+
+from .errors import ALSError, als_timeout
 from .utils import extract_log_path_from_traces_cfg, to_iso8601_basic
 
 JsonDict = Dict[str, Any]
 """Type alias for JSON-compatible dictionaries used in LSP messages."""
 
 
+# Legacy exception classes - kept for backward compatibility with existing error handling
 class ALSProtocolError(RuntimeError):
     """Exception raised when ALS returns an error response.
     
@@ -247,7 +251,7 @@ class ALSClient:
             if self.logger:
                 self.logger(f"[als][stderr] Fatal error in pump_stderr: {e}")
 
-    async def start(self) -> None:
+    async def start(self) -> Result[None, ALSError]:
         """Start the Ada Language Server process.
         
         This method:
@@ -255,11 +259,11 @@ class ALSClient:
         2. Sends LSP initialize request
         3. Starts background task to read responses
         
-        Raises:
-            OSError: If ALS executable cannot be found or started
+        Returns:
+            Result[None, ALSError]: Success or specific error
             
         Note:
-            After start(), the client is ready to handle LSP requests.
+            After successful start(), the client is ready to handle LSP requests.
             Always call shutdown() when done to clean up resources.
         """
         # Anchor to project directory to prevent VFS errors
@@ -282,14 +286,25 @@ class ALSClient:
 
         # Spawn ALS
         self._start_ns = time.perf_counter_ns()
-        self.process = await asyncio.create_subprocess_exec(
-            *shlex.split(cmdline),
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env,
-            cwd=cwd,  # ← the fix
-        )
+        try:
+            self.process = await asyncio.create_subprocess_exec(
+                *shlex.split(cmdline),
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env,
+                cwd=cwd,  # ← the fix
+            )
+        except (OSError, FileNotFoundError) as e:
+            return Failure(ALSError(
+                message=f"Failed to start ALS process: {e}",
+                operation="start"
+            ))
+        except Exception as e:
+            return Failure(ALSError(
+                message=f"Unexpected error starting ALS: {e}",
+                operation="start"
+            ))
         self._reader_task = asyncio.create_task(self._reader_loop())
         
         # Start stderr capture task
@@ -305,7 +320,7 @@ class ALSClient:
 
         # Initialize with proper workspace info to prevent "NO_PROJECT" fallback
         project_dir = self.project_file.parent.resolve()
-        init_response = await self.request_with_timeout({
+        init_result = await self.request_with_timeout({
             "method": "initialize",
             "params": {
                 "processId": os.getpid(),
@@ -329,6 +344,13 @@ class ALSClient:
             },
         }, timeout=self.init_timeout)
         
+        if isinstance(init_result, Failure):
+            # Cleanup on initialization failure
+            await self._cleanup_on_error()
+            return init_result
+        
+        init_response = init_result.unwrap()
+        
         # Check if ALS returns log info in the initialize response
         if init_response and isinstance(init_response, dict):
             # Some LSP servers return server info with log paths
@@ -336,8 +358,13 @@ class ALSClient:
             if self.logger and server_info:
                 self.logger(f"[als] Server info: {server_info}")
         
-        await self._notify("initialized", {})
-        # no special warmup here; caller may handle readiness
+        # Send initialized notification
+        notify_result = await self._notify_safe("initialized", {})
+        if isinstance(notify_result, Failure):
+            await self._cleanup_on_error()
+            return notify_result
+        
+        return Success(None)
 
     async def restart(self) -> None:
         """Restart the ALS process.
@@ -389,15 +416,15 @@ class ALSClient:
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await self._stderr_task
 
-        if self.process:
-            with contextlib.suppress(ProcessLookupError):
-                self.process.terminate()
-            try:
-                await asyncio.wait_for(self.process.wait(), timeout=2)
-            except Exception:
-                with contextlib.suppress(ProcessLookupError):
-                    self.process.kill()
-            self.process = None
+        # Clean up tasks and process
+        await self._cleanup_resources(shutdown_errors)
+        
+        if shutdown_errors:
+            return Failure(ALSError(
+                message=f"Shutdown completed with errors: {'; '.join(shutdown_errors)}",
+                operation="shutdown"
+            ))
+        return Success(None)
 
     # --------------- JSON-RPC plumbing ---------------
     def _next_id(self) -> str:
@@ -437,7 +464,7 @@ class ALSClient:
             fut = asyncio.get_running_loop().create_future()
             self._pending[str(msg["id"])] = fut
 
-    async def request_with_timeout(self, msg: JsonDict, timeout: float) -> Any:
+    async def request_with_timeout(self, msg: JsonDict, timeout: float) -> Result[Any, ALSError]:
         """Send a request and wait for response with timeout.
         
         Args:
@@ -445,23 +472,40 @@ class ALSClient:
             timeout: Maximum seconds to wait for response
             
         Returns:
-            The 'result' field from the JSON-RPC response
-            
-        Raises:
-            asyncio.TimeoutError: If no response within timeout
-            ALSProtocolError: If ALS returns an error response
+            Result[Any, ALSError]: The 'result' field from JSON-RPC response or error
             
         Example:
             result = await client.request_with_timeout({
                 "method": "textDocument/formatting",
                 "params": {"textDocument": {"uri": "file:///..."}}
             }, timeout=30)
+            if isinstance(result, Success):
+                formatted_edits = result.unwrap()
         """
-        mid = self._next_id()
-        msg["id"] = mid
-        await self._send(msg)
-        fut = self._pending[mid] = asyncio.get_running_loop().create_future()
-        return await asyncio.wait_for(fut, timeout=timeout)
+        try:
+            mid = self._next_id()
+            msg["id"] = mid
+            await self._send(msg)
+            fut = self._pending[mid] = asyncio.get_running_loop().create_future()
+            response = await asyncio.wait_for(fut, timeout=timeout)
+            return Success(response)
+        except asyncio.TimeoutError:
+            # Clean up the pending request
+            self._pending.pop(mid, None)
+            return Failure(als_timeout(msg.get("method", "unknown")))
+        except ALSProtocolError as e:
+            return Failure(ALSError(
+                message=f"ALS protocol error: {e.payload}",
+                operation="request",
+                invalid_response=True
+            ))
+        except Exception as e:
+            # Clean up the pending request
+            self._pending.pop(mid, None)
+            return Failure(ALSError(
+                message=f"Request failed: {e}",
+                operation="request"
+            ))
 
     async def _write(self, msg: JsonDict) -> None:
         """Write a JSON-RPC message to ALS stdin.
@@ -628,6 +672,65 @@ class ALSClient:
         self._end_ns = time.perf_counter_ns()
         self._returncode = rc
         return rc
+
+    async def _notify_safe(self, method: str, params: Any) -> Result[None, ALSError]:
+        """Send notification with error handling."""
+        try:
+            await self._notify(method, params)
+            return Success(None)
+        except Exception as e:
+            return Failure(ALSError(
+                message=f"Failed to send notification {method}: {e}",
+                operation="request"
+            ))
+    
+    async def _cleanup_on_error(self) -> None:
+        """Clean up resources when an error occurs during startup."""
+        errors = []
+        await self._cleanup_resources(errors)
+    
+    async def _cleanup_resources(self, error_list: list) -> None:
+        """Clean up all resources, capturing errors in the provided list."""
+        # Cancel reader task
+        if self._reader_task:
+            self._reader_task.cancel()
+            try:
+                await self._reader_task
+            except (asyncio.CancelledError, Exception) as e:
+                error_list.append(f"Reader task cleanup error: {e}")
+            self._reader_task = None
+        
+        # Cancel stderr task
+        if self._stderr_task:
+            self._stderr_task.cancel()
+            try:
+                await self._stderr_task
+            except (asyncio.CancelledError, Exception) as e:
+                error_list.append(f"Stderr task cleanup error: {e}")
+            self._stderr_task = None
+        
+        # Terminate process
+        if self.process:
+            try:
+                with contextlib.suppress(ProcessLookupError):
+                    self.process.terminate()
+                await asyncio.wait_for(self.process.wait(), timeout=2)
+            except asyncio.TimeoutError:
+                try:
+                    with contextlib.suppress(ProcessLookupError):
+                        self.process.kill()
+                    await self.process.wait()
+                except Exception as e:
+                    error_list.append(f"Process kill error: {e}")
+            except Exception as e:
+                error_list.append(f"Process cleanup error: {e}")
+            self.process = None
+        
+        # Clear pending requests
+        for fut in self._pending.values():
+            if not fut.done():
+                fut.cancel()
+        self._pending.clear()
 
     def summary(self) -> dict:
         """Return a concise run summary suitable for UI/console display.
