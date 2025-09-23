@@ -1,0 +1,76 @@
+{
+  "spacing": {
+    "assignment": {
+      "enabled": true,
+      "description": "Fix spacing around := in assignment statements",
+      "parameters": {
+        "spaces_before": 1,
+        "spaces_after": 1
+      }
+    },
+    "type_declaration": {
+      "enabled": true,
+      "description": "Fix spacing around : in type declarations",
+      "parameters": {
+        "spaces_before": 1,
+        "spaces_after": 1
+      }
+    },
+    "parameter_association": {
+      "enabled": true,
+      "description": "Fix spacing around := in named parameters",
+      "parameters": {
+        "spaces_before": 1,
+        "spaces_after": 1
+      }
+    },
+    "range_operator": {
+      "enabled": true,
+      "description": "Fix spacing around .. in range expressions",
+      "parameters": {
+        "spaces_before": 1,
+        "spaces_after": 1
+      }
+    },
+    "binary_operators": {
+      "enabled": true,
+      "description": "Fix spacing around +, -, *, / operators",
+      "parameters": {
+        "spaces_before": 1,
+        "spaces_after": 1,
+        "operators": ["+", "-", "*", "/"]
+      }
+    }
+  },
+  "comments": {
+    "inline": {
+      "enabled": true,
+      "description": "Fix spacing after -- in inline comments",
+      "parameters": {
+        "min_spaces_after": 1,
+        "preserve_alignment": true
+      }
+    },
+    "end_of_line": {
+      "enabled": true,
+      "description": "Fix spacing before end-of-line comments",
+      "parameters": {
+        "min_spaces_before": 2
+      }
+    }
+  },
+  "line_formatting": {
+    "trailing_whitespace": {
+      "enabled": true,
+      "description": "Remove trailing whitespace from lines",
+      "parameters": {}
+    },
+    "final_newline": {
+      "enabled": true,
+      "description": "Ensure single final newline at end of file",
+      "parameters": {
+        "newline_count": 1
+      }
+    }
+  }
+}

@@ -15,6 +15,7 @@ and base command infrastructure.
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
+import re
 
 from ..core.base_command import CommandArgs, CommandProcessor
 from ..core.processing_pipeline import (
@@ -32,6 +33,14 @@ from ..file_discovery_new import discover_files
 from ..worker_pool import WorkerPool
 from ..errors import AdafmtError
 from returns.result import Failure, Result, Success
+from ..formatting_rules_model import FormattingRules
+
+
+@dataclass
+class RuleApplicationResult:
+    """Result of applying semantic rules to content."""
+    content: str
+    rules_applied: list[str]
 
 
 @dataclass
@@ -61,7 +70,7 @@ class FormatArgs(CommandArgs):
     no_patterns: bool = False
     num_workers: int | None = None
     patterns_max_bytes: int = 10485760
-    patterns_path: Path | None = None
+    format_rules_path: Path | None = None
     patterns_timeout_ms: int = 100
     post_hook: str | None = None
     pre_hook: str | None = None
@@ -100,6 +109,7 @@ class FormatCommandProcessor(CommandProcessor[FormattedFile]):
         self.config = config or {}
         self.pipeline: ProcessingPipeline | None = None
         self.worker_pool: WorkerPool | None = None
+        self.formatting_rules: FormattingRules | None = None
     
     async def discover_targets(self, args: CommandArgs) -> Result[list[Any], AdafmtError]:
         """Discover Ada files to format."""
@@ -116,12 +126,13 @@ class FormatCommandProcessor(CommandProcessor[FormattedFile]):
             if file_list:
                 files = [Path(f) for f in file_list if Path(f).exists()]
             else:
-                # Simple discovery: look for .ads and .adb files in include paths
+                # Simple discovery: look for .ada, .adb, and .ads files in include paths
                 files = []
                 for include_path in (format_args.include_path or []):
                     if include_path.exists():
-                        files.extend(include_path.glob("*.ads"))
-                        files.extend(include_path.glob("*.adb"))
+                        files.extend(include_path.rglob("*.ada"))
+                        files.extend(include_path.rglob("*.adb"))
+                        files.extend(include_path.rglob("*.ads"))
             
             await self.log_info(f"Found {len(files)} Ada files to format")
             return Success(files)
@@ -140,6 +151,14 @@ class FormatCommandProcessor(CommandProcessor[FormattedFile]):
         format_args = cast(FormatArgs, args)
         await self.log_info(f"Processing {len(targets)} files (parser-based processing stub)")
         
+        # Load formatting rules if not already loaded
+        if self.formatting_rules is None:
+            format_args = cast(FormatArgs, args)
+            self.formatting_rules = FormattingRules.load_from_path_or_default(
+                format_args.format_rules_path
+            )
+            await self.log_info(f"Loaded formatting rules (spacing: {len(self.formatting_rules.spacing.__fields__)} rules)")
+        
         # Simple processing without complex pipeline for now
         # TODO: Implement full parser-based processing pipeline
         results = []
@@ -147,9 +166,14 @@ class FormatCommandProcessor(CommandProcessor[FormattedFile]):
             # Update progress
             await self.update_progress(i, len(targets))
             
-            # Simple file processing stub
-            result = await self._process_file_simple(path, format_args)
+            # Parser-based file processing
+            result = await self._process_file_parser_based(path, format_args)
             results.append(result)
+            
+            # Write file if requested and successful
+            if format_args.write and self.is_successful(result) and result.final_content != result.content:
+                await self._write_file_atomic(path, result.final_content)
+                await self.log_info(f"Wrote {path.name}")
             
             # Update metrics
             if self.is_successful(result):
@@ -196,35 +220,64 @@ class FormatCommandProcessor(CommandProcessor[FormattedFile]):
         
         return pipeline
     
-    async def _process_file_simple(self, path: Path, args: FormatArgs) -> FormattedFile:
-        """Simple file processing stub for parser-based architecture."""
+    async def _process_file_parser_based(self, path: Path, args: FormatArgs) -> FormattedFile:
+        """Parser-based file processing with Pre-ALS, ALS, and Post-ALS phases."""
         try:
             # Read file content
-            content = path.read_text(encoding='utf-8')
+            original_content = path.read_text(encoding='utf-8')
+            current_content = original_content
             
-            # For now, just return the content unchanged
-            # TODO: Implement parser-based transformations here
-            await self.log_info(f"Processed {path.name} ({len(content)} chars)")
+            # Phase 1: Pre-ALS semantic corrections
+            pre_als_result = await self._apply_pre_als_rules(current_content, path)
+            current_content = pre_als_result.content
+            rules_applied = pre_als_result.rules_applied
+            
+            # Phase 2: ALS formatting (if enabled)
+            als_success = True
+            als_result = None
+            if not args.no_als:
+                try:
+                    # TODO: Implement actual ALS formatting call
+                    # For now, just pass through the pre-ALS content
+                    await self.log_info(f"ALS formatting {path.name} (TODO: implement)")
+                    # current_content = await self._format_with_als(current_content, path, args)
+                except Exception as e:
+                    als_success = False
+                    als_result = str(e)
+                    await self.log_error(f"ALS formatting failed for {path.name}: {e}")
+            
+            # Phase 3: Post-ALS cleanup and final corrections
+            post_als_result = await self._apply_post_als_rules(current_content, path)
+            final_content = post_als_result.content
+            rules_applied.extend(post_als_result.rules_applied)
+            
+            # Log processing summary
+            changes_made = original_content != final_content
+            if changes_made:
+                await self.log_info(f"Processed {path.name}: {len(rules_applied)} rules applied")
+            else:
+                await self.log_info(f"Processed {path.name}: no changes needed")
             
             return FormattedFile(
                 path=path,
-                content=content,
+                content=original_content,
                 encoding='utf-8',
-                final_content=content,  # No processing applied yet
-                patterns_applied=[],
-                lsp_success=True,  # Mark as successful for testing
-                ast={},
+                final_content=final_content,
+                patterns_applied=rules_applied,
+                lsp_success=als_success,
+                ast={},  # TODO: Add AST when parser integration is complete
                 parse_errors=[],
                 is_safe=True,
                 validation_messages=[],
-                lsp_result=None
+                lsp_result=als_result
             )
             
         except Exception as e:
             # Return failed result
+            await self.log_error(f"Processing failed for {path.name}: {e}")
             return FormattedFile(
                 path=path,
-                content="",
+                content=original_content if 'original_content' in locals() else "",
                 ast={},
                 parse_errors=[str(e)],
                 is_safe=False,
@@ -234,6 +287,116 @@ class FormatCommandProcessor(CommandProcessor[FormattedFile]):
                 final_content="",
                 patterns_applied=[]
             )
+    
+    async def _apply_pre_als_rules(self, content: str, path: Path) -> RuleApplicationResult:
+        """Apply Pre-ALS semantic correction rules using AST visitors."""
+        rules_applied = []
+        
+        # Check if ada2022_parser is available
+        try:
+            from ada2022_parser.generated import Ada2022Lexer, Ada2022Parser
+            from antlr4 import CommonTokenStream, InputStream
+            from ..ast_visitors import AssignmentSpacingVisitor
+            
+            # Parse the Ada source
+            input_stream = InputStream(content)
+            lexer = Ada2022Lexer(input_stream)
+            token_stream = CommonTokenStream(lexer)
+            parser = Ada2022Parser(token_stream)
+            tree = parser.compilation_unit()
+            
+            # Apply assignment spacing rule via AST visitor
+            if self.formatting_rules and self.formatting_rules.spacing.assignment.enabled:
+                source_lines = content.split('\n')
+                visitor = AssignmentSpacingVisitor(self.formatting_rules, source_lines)
+                visitor.visit(tree)
+                
+                if visitor.edits:
+                    # Apply edits
+                    result_lines = visitor.apply_edits()
+                    content = '\n'.join(result_lines)
+                    rules_applied.append("assignment_spacing")
+                    
+        except ImportError:
+            # Fallback to regex-based rules if parser not available
+            await self.log_info("Ada parser not available, using regex-based rules")
+            original_content = content
+            content = self._fix_assignment_spacing(content)
+            if content != original_content:
+                rules_applied.append("assignment_spacing")
+        
+        return RuleApplicationResult(
+            content=content,
+            rules_applied=rules_applied
+        )
+    
+    async def _apply_post_als_rules(self, content: str, path: Path) -> RuleApplicationResult:
+        """Apply Post-ALS cleanup and final correction rules."""
+        current_content = content
+        rules_applied = []
+        
+        # Rule 1: Remove trailing whitespace
+        # Note: Could be parameterized with preserve_certain_files
+        original_content = current_content
+        current_content = self._remove_trailing_whitespace(current_content)
+        if current_content != original_content:
+            rules_applied.append("trailing_whitespace")
+        
+        # Rule 2: Ensure single final newline
+        # Note: Could be parameterized with newline_count
+        original_content = current_content
+        current_content = self._normalize_final_newline(current_content)
+        if current_content != original_content:
+            rules_applied.append("final_newline")
+        
+        return RuleApplicationResult(
+            content=current_content,
+            rules_applied=rules_applied
+        )
+    
+    def _fix_assignment_spacing(self, content: str) -> str:
+        """Fix assignment operator spacing: X:=Y → X := Y"""
+        # Pattern: word character or ) followed by := followed by word character
+        # Add space before and after := if missing
+        return re.sub(r'(\w|\))(:=)(\w)', r'\1 \2 \3', content)
+    
+    def _fix_operator_spacing(self, content: str) -> str:
+        """Fix basic operator spacing: X+Y → X + Y, X-Y → X - Y"""
+        # Handle common binary operators, avoiding string literals and comments
+        lines = content.split('\n')
+        result_lines = []
+        
+        for line in lines:
+            # Skip lines that are comments
+            if line.strip().startswith('--'):
+                result_lines.append(line)
+                continue
+            
+            # TODO: Add string literal protection
+            # For now, basic operator spacing
+            line = re.sub(r'(\w)(\+)(\w)', r'\1 \2 \3', line)  # X+Y → X + Y
+            line = re.sub(r'(\w)(-)(\w)', r'\1 \2 \3', line)   # X-Y → X - Y  
+            line = re.sub(r'(\w)(\*)(\w)', r'\1 \2 \3', line)  # X*Y → X * Y
+            line = re.sub(r'(\w)(/)(\w)', r'\1 \2 \3', line)   # X/Y → X / Y
+            
+            result_lines.append(line)
+        
+        return '\n'.join(result_lines)
+    
+    def _fix_comment_spacing(self, content: str) -> str:
+        """Fix comment spacing: --comment → -- comment"""
+        # Ensure at least one space after -- if there's content
+        return re.sub(r'--([^\s-])', r'-- \1', content)
+    
+    def _remove_trailing_whitespace(self, content: str) -> str:
+        """Remove trailing whitespace from all lines."""
+        lines = content.split('\n')
+        return '\n'.join(line.rstrip() for line in lines)
+    
+    def _normalize_final_newline(self, content: str) -> str:
+        """Ensure file ends with exactly one newline."""
+        content = content.rstrip('\n')
+        return content + '\n' if content else ''
     
     async def _process_file(self, path: Path) -> FormattedFile:
         """Process a single file through the pipeline."""

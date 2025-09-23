@@ -83,7 +83,7 @@ class AdaParserWrapper:
         try:
             # Import ada2022_parser components
             # Note: This assumes ada2022_parser follows standard ANTLR patterns
-            from ada2022_parser import Ada2022Lexer, Ada2022Parser  # type: ignore[attr-defined]
+            from ada2022_parser.generated import Ada2022Lexer, Ada2022Parser  # type: ignore[attr-defined]
             from antlr4 import CommonTokenStream, InputStream
             
             # Store classes for later use
