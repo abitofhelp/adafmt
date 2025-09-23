@@ -1,0 +1,172 @@
+@startuml system-overview-dip
+!theme plain
+title System Overview with DIP Compliance
+
+package "Presentation Layer" {
+  class CLI {
+    + main(args: list[str]): int
+    - parse_arguments(): CommandArgs
+    - create_container(): ServiceContainer
+  }
+  
+  class TUI {
+    + update_progress(current: int, total: int): void
+    + show_errors(errors: list[str]): void
+  }
+}
+
+package "Application Layer (High-Level)" {
+  abstract class CommandProcessor {
+    # als_client: IALSClient
+    # metrics: IMetricsCollector
+    + {abstract} execute(context: CommandContext): Result[T]
+  }
+  
+  class FormatCommand {
+    - pipeline: Pipeline
+    + execute(context: CommandContext): Result[FormattedFiles]
+  }
+  
+  class RenameCommand {
+    - pipeline: Pipeline
+    + execute(context: CommandContext): Result[RenameResults]
+  }
+  
+  class Pipeline {
+    - stages: list[Stage]
+    + process(item: T): Result[R]
+  }
+}
+
+package "Domain Layer (Abstractions)" #LightBlue {
+  interface IALSClient {
+    + send_request(method: str, params: dict): dict
+  }
+  
+  interface IParserService {
+    + parse(content: str): AST
+  }
+  
+  interface IPatternEngine {
+    + apply_patterns(content: str, patterns: list): str
+  }
+  
+  interface IFileService {
+    + read_file_async(path: Path): str
+    + write_file_atomic(path: Path, content: str): void
+  }
+  
+  interface IMetricsCollector {
+    + record_file_processed(path: Path, duration: float): void
+  }
+  
+  interface Stage {
+    + process(item: T): R
+  }
+  
+  interface IWorkerPool {
+    + process_all(items: list[T], processor: Callable): list[R]
+  }
+}
+
+package "Infrastructure Layer (Low-Level)" {
+  class ALSClient {
+    - process: Process
+    - json_rpc: JSONRPCClient
+    + send_request(method: str, params: dict): dict
+  }
+  
+  class AdaParser {
+    - antlr_parser: Parser
+    + parse(content: str): AST
+  }
+  
+  class PatternEngine {
+    - regex_engine: RegexEngine
+    + apply_patterns(content: str, patterns: list): str
+  }
+  
+  class AsyncFileService {
+    + read_file_async(path: Path): str
+    + write_file_atomic(path: Path, content: str): void
+  }
+  
+  class ThreadSafeMetrics {
+    - lock: Lock
+    + record_file_processed(path: Path, duration: float): void
+  }
+  
+  class WorkerPool {
+    - queue: Queue
+    - workers: list[Worker]
+    + process_all(items: list[T], processor: Callable): list[R]
+  }
+}
+
+package "Dependency Injection" {
+  class ServiceContainer {
+    - services: dict[type, Any]
+    + get[T](service_type: type[T]): T
+    + register_factory(type: type, factory: Callable): void
+  }
+}
+
+' External Systems
+database "Ada Language Server" as ALS
+database "GNAT Compiler" as GNAT
+storage "Ada Source Files" as Files
+
+' DIP-compliant relationships
+CLI --> ServiceContainer : creates
+CLI --> CommandProcessor : creates via factory
+
+CommandProcessor ..> IALSClient : depends on
+CommandProcessor ..> IMetricsCollector : depends on
+FormatCommand --|> CommandProcessor
+RenameCommand --|> CommandProcessor
+
+FormatCommand --> Pipeline : uses
+RenameCommand --> Pipeline : uses
+Pipeline ..> Stage : depends on
+
+' Infrastructure implements abstractions
+IALSClient <|.. ALSClient : implements
+IParserService <|.. AdaParser : implements
+IPatternEngine <|.. PatternEngine : implements
+IFileService <|.. AsyncFileService : implements
+IMetricsCollector <|.. ThreadSafeMetrics : implements
+IWorkerPool <|.. WorkerPool : implements
+
+' Service container manages dependencies
+ServiceContainer --> ALSClient : creates
+ServiceContainer --> AdaParser : creates
+ServiceContainer --> PatternEngine : creates
+ServiceContainer --> AsyncFileService : creates
+ServiceContainer --> ThreadSafeMetrics : creates
+ServiceContainer --> WorkerPool : creates
+
+' External connections (only from concrete implementations)
+ALSClient --> ALS : communicates
+AsyncFileService --> Files : reads/writes
+ALSClient --> GNAT : may validate
+
+' Notes
+note top of "Domain Layer (Abstractions)"
+  All abstractions (interfaces/protocols)
+  are defined here. This is the stable
+  center of the architecture.
+end note
+
+note bottom of "Infrastructure Layer (Low-Level)"
+  Concrete implementations depend on
+  abstractions. They can be replaced
+  without affecting high-level code.
+end note
+
+note right of ServiceContainer
+  Dependency injection ensures
+  high-level code receives only
+  abstractions, never concrete types.
+end note
+
+@enduml

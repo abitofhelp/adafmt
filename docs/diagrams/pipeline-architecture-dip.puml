@@ -1,0 +1,159 @@
+@startuml pipeline-architecture-dip
+!theme plain
+title Pipeline Architecture with DIP Compliance
+
+' Define protocols/interfaces
+interface Stage {
+  + process(item: T): R
+  + name: str
+}
+
+interface LSPOperation {
+  + prepare_request(target: Path, content: str): dict
+  + process_response(response: dict): T
+}
+
+' Pipeline abstraction
+class Pipeline {
+  - stages: list[Stage]
+  - event_bus: IEventBus
+  + add_stage(stage: Stage): Pipeline
+  + set_als_client(client: IALSClient): void
+  + process(item: T): Result[PipelineResult[R]]
+  + process_stream(items: AsyncIterator[T]): AsyncIterator[Result[R]]
+}
+
+' Concrete stages
+class ParseStage {
+  - parser: IParserService
+  + process(file_data: FileData): ParsedFile
+  + name: str = "parse"
+}
+
+class ValidateStage {
+  - validators: list[IValidator]
+  + process(parsed: ParsedFile): ValidatedFile
+  + name: str = "validate"
+}
+
+class LSPStage {
+  - als_client: IALSClient
+  - operation: LSPOperation
+  + process(validated: ValidatedFile): ProcessedFile
+  + name: str = "lsp"
+}
+
+class PatternStage {
+  - patterns: list[Pattern]
+  - phase: str
+  + process(processed: ProcessedFile): FormattedFile
+  + name: str = "pattern"
+}
+
+class GNATValidationStage {
+  - gnat_validator: IGNATValidator
+  + process(formatted: FormattedFile): FormattedFile
+  + name: str = "gnat_validation"
+}
+
+' LSP Operations
+class FormatOperation {
+  - options: dict
+  + prepare_request(target: Path, content: str): dict
+  + process_response(response: dict): str
+}
+
+class RenameOperation {
+  - old_name: str
+  - new_name: str
+  + prepare_request(target: Path, content: str): dict
+  + process_response(response: dict): dict
+}
+
+' Data flow objects
+class FileData {
+  + path: Path
+  + content: str
+  + encoding: str
+}
+
+class ParsedFile {
+  + ast: dict
+  + parse_errors: list[str]
+}
+
+class ValidatedFile {
+  + is_safe: bool
+  + validation_messages: list[str]
+}
+
+class ProcessedFile {
+  + lsp_result: Any
+  + lsp_success: bool
+}
+
+class FormattedFile {
+  + final_content: str
+  + patterns_applied: list[str]
+}
+
+' External service interfaces
+interface IALSClient {
+  + send_request(method: str, params: dict): dict
+}
+
+interface IParserService {
+  + parse(content: str): AST
+}
+
+interface IValidator {
+  + validate(parsed: ParsedFile): ValidationResult
+}
+
+interface IGNATValidator {
+  + validate_file(path: Path, content: str): ValidationResult
+}
+
+interface IEventBus {
+  + publish(event: Event): void
+}
+
+' Relationships - DIP compliant
+Pipeline ..> Stage : depends on abstraction
+Pipeline ..> IEventBus : depends on abstraction
+
+Stage <|.. ParseStage : implements
+Stage <|.. ValidateStage : implements
+Stage <|.. LSPStage : implements
+Stage <|.. PatternStage : implements
+Stage <|.. GNATValidationStage : implements
+
+LSPOperation <|.. FormatOperation : implements
+LSPOperation <|.. RenameOperation : implements
+
+LSPStage ..> IALSClient : depends on abstraction
+LSPStage ..> LSPOperation : depends on abstraction
+ParseStage ..> IParserService : depends on abstraction
+ValidateStage ..> IValidator : depends on abstraction
+GNATValidationStage ..> IGNATValidator : depends on abstraction
+
+' Data flow
+FileData <|-- ParsedFile : extends
+ParsedFile <|-- ValidatedFile : extends
+ValidatedFile <|-- ProcessedFile : extends
+ProcessedFile <|-- FormattedFile : extends
+
+note top of Pipeline
+  Pipeline depends only on Stage abstraction,
+  not concrete stage implementations.
+  This allows adding new stages without
+  modifying the pipeline.
+end note
+
+note bottom of LSPStage
+  Stages depend on service abstractions
+  (IALSClient, IParserService), not
+  concrete implementations.
+end note
+
+@enduml

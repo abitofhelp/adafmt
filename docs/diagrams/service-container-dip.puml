@@ -1,0 +1,140 @@
+@startuml service-container-dip
+!theme plain
+title Service Container with DIP Compliance
+
+' Service interfaces (abstractions)
+interface IALSClient {
+  + start(): void
+  + shutdown(): void
+  + send_request(method: str, params: dict): dict
+}
+
+interface IParserService {
+  + parse(content: str): ParseResult
+  + analyze_safety(ast: AST, operation: Operation): SafetyResult
+}
+
+interface IPatternEngine {
+  + load_patterns(path: Path): list[Pattern]
+  + apply_patterns(content: str, patterns: list[Pattern]): str
+}
+
+interface IFileService {
+  + read_file_async(path: Path): str
+  + write_file_atomic(path: Path, content: str): void
+}
+
+interface IMetricsCollector {
+  + record_file_processed(path: Path, duration: float): void
+  + get_summary(): MetricsSummary
+}
+
+' Service Container
+class ServiceContainer {
+  - config: AdaToolConfig
+  - services: dict[type, Any]
+  - factories: dict[type, Callable]
+  + get[T](service_type: type[T]): T
+  + register_factory(service_type: type, factory: Callable): void
+  - _configure_injection(binder: Binder): void
+}
+
+' Configuration
+class AdaToolConfig {
+  + als_command: list[str]
+  + parser_cache_size: int
+  + workers: int
+  + format: FormatConfig
+  + rename: RenameConfig
+}
+
+' Concrete implementations
+class ALSClient {
+  - command: list[str]
+  - process: Process
+  + start(): void
+  + shutdown(): void
+  + send_request(method: str, params: dict): dict
+}
+
+class AdaParser {
+  - cache: LRUCache
+  + parse(content: str): ParseResult
+  + analyze_safety(ast: AST, operation: Operation): SafetyResult
+}
+
+class PatternEngine {
+  - pattern_cache: dict[Path, list[Pattern]]
+  + load_patterns(path: Path): list[Pattern]
+  + apply_patterns(content: str, patterns: list[Pattern]): str
+}
+
+class AsyncFileService {
+  + read_file_async(path: Path): str
+  + write_file_atomic(path: Path, content: str): void
+}
+
+class ThreadSafeMetrics {
+  - lock: Lock
+  - metrics: dict
+  + record_file_processed(path: Path, duration: float): void
+  + get_summary(): MetricsSummary
+}
+
+' Command Context uses abstractions
+class CommandContext {
+  + config: AdaToolConfig
+  + args: dict[str, Any]
+  + services: ServiceContainer
+  + event_bus: IEventBus
+}
+
+' Commands depend on context and abstractions
+class FormatCommand {
+  - get_als_client(): IALSClient
+  - get_parser(): IParserService
+  - get_pattern_engine(): IPatternEngine
+  + execute(context: CommandContext): Result[Any]
+}
+
+' Dependency injection
+class Injector {
+  + configure(config_func: Callable): void
+  + get[T](service_type: type[T]): T
+}
+
+' Relationships - DIP compliant
+ServiceContainer ..> IALSClient : creates abstraction
+ServiceContainer ..> IParserService : creates abstraction
+ServiceContainer ..> IPatternEngine : creates abstraction
+ServiceContainer ..> IFileService : creates abstraction
+ServiceContainer ..> IMetricsCollector : creates abstraction
+
+IALSClient <|.. ALSClient : implements
+IParserService <|.. AdaParser : implements
+IPatternEngine <|.. PatternEngine : implements
+IFileService <|.. AsyncFileService : implements
+IMetricsCollector <|.. ThreadSafeMetrics : implements
+
+CommandContext o-- ServiceContainer : contains
+FormatCommand ..> CommandContext : uses
+FormatCommand ..> IALSClient : depends on abstraction
+FormatCommand ..> IParserService : depends on abstraction
+FormatCommand ..> IPatternEngine : depends on abstraction
+
+ServiceContainer --> Injector : configures
+
+note right of ServiceContainer
+  Container creates instances but
+  returns them as abstractions.
+  High-level code never knows
+  about concrete implementations.
+end note
+
+note left of FormatCommand
+  Commands retrieve services as
+  abstractions from the container,
+  ensuring DIP compliance.
+end note
+
+@enduml

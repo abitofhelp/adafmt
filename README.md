@@ -7,13 +7,18 @@
 **Authors:** Michael Gardner, A Bit of Help, Inc.
 **Status:** Released
 
-## Development Status: Discontinued
-
-**Reason:** Running into context parsing issues that exceeded the limits of regex.
-
-Development has moved to a new unified Go-based tool that uses an ANTLR-based Ada 2022 parser for accurate, context-aware formatting.
-
----
+<!-- 
+BRANCH STATUS AND ACTIVE DEVELOPMENT NOTES:
+============================================
+- Current Branch (parser-based-formatting): Implements regex-based pattern matching for post-ALS formatting
+  Status: Working but has string literal corruption issues with regex patterns
+  
+- Development Branch (parser-based-architecture): Implementing parser-based Pre/Post-ALS architecture
+  Status: Active development - uses Ada2022 Python parser for context-aware formatting
+  Key Features: Pre-ALS phase prevents ALS bugs, Post-ALS phase fixes remaining issues, GNAT validation
+  
+- Key Difference: Parser branch uses AST visitor pattern for safe, context-aware transformations
+-->
 
 `adafmt` is an opinionated Ada 2022 formatter that leverages the Ada Language Server (ALS) to provide consistent, modern formatting while maintaining compatibility with earlier Ada versions. Built with extensibility in mind, it supports custom pattern formatting functions that allow teams to enforce project-specific style rules beyond what GNATFORMAT provides. It delivers a robust, production-ready solution for maintaining consistent code style across Ada projects of any size.
 

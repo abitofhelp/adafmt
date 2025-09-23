@@ -1,0 +1,145 @@
+@startuml command-architecture-dip
+!theme plain
+title Command Architecture with DIP Compliance
+
+' Define interfaces/abstractions
+interface ICommandProcessor {
+  + execute(args: CommandArgs): int
+  + discover_targets(args: CommandArgs): list[Any]
+  + process_targets(targets: list[Any], args: CommandArgs): list[T]
+}
+
+interface IALSClient {
+  + start(): void
+  + shutdown(): void
+  + send_request(method: str, params: dict): dict
+  + wait_until_ready(): void
+}
+
+interface IParserService {
+  + parse(content: str): ParseResult
+  + validate(ast: AST, operation: Operation): bool
+}
+
+interface IPatternEngine {
+  + apply_patterns(content: str, patterns: list[Pattern]): str
+  + load_patterns(path: Path): list[Pattern]
+}
+
+interface IFileDiscovery {
+  + discover_ada_files(paths: list[Path], recursive: bool): list[Path]
+}
+
+interface IWorkerPool {
+  + process_all(items: list[T], processor: Callable): list[R]
+}
+
+' High-level module (depends on abstractions)
+abstract class CommandProcessor {
+  - als_client: IALSClient
+  - metrics: Metrics
+  - tui: TUI
+  + {abstract} discover_targets(args: CommandArgs): list[Any]
+  + {abstract} process_targets(targets: list[Any], args: CommandArgs): list[T]
+  + execute(args: CommandArgs): int
+  # setup_environment(args: CommandArgs): void
+  # initialize_als(args: CommandArgs): IALSClient
+}
+
+' Concrete commands (high-level)
+class FormatCommand {
+  - pipeline: ProcessingPipeline
+  - worker_pool: IWorkerPool
+  + discover_targets(args: FormatArgs): list[Path]
+  + process_targets(targets: list[Path], args: FormatArgs): list[FormattedFile]
+}
+
+class RenameCommand {
+  - pipeline: ProcessingPipeline
+  + discover_targets(args: RenameArgs): list[Path]
+  + process_targets(targets: list[Path], args: RenameArgs): list[RenameResult]
+}
+
+' Low-level implementations (depend on abstractions)
+class ALSClient {
+  + start(): void
+  + shutdown(): void
+  + send_request(method: str, params: dict): dict
+  + wait_until_ready(): void
+}
+
+class AdaParser {
+  + parse(content: str): ParseResult
+  + validate(ast: AST, operation: Operation): bool
+}
+
+class PatternEngine {
+  + apply_patterns(content: str, patterns: list[Pattern]): str
+  + load_patterns(path: Path): list[Pattern]
+}
+
+class FileDiscovery {
+  + discover_ada_files(paths: list[Path], recursive: bool): list[Path]
+}
+
+class WorkerPool {
+  + process_all(items: list[T], processor: Callable): list[R]
+}
+
+' Pipeline components
+abstract class ProcessingStage {
+  + {abstract} process(item: Any): Any
+}
+
+class LSPStage {
+  - als_client: IALSClient
+  - operation: LSPOperation
+  + process(item: ValidatedFile): ProcessedFile
+}
+
+class ParseStage {
+  - parser: IParserService
+  + process(item: FileData): ParsedFile
+}
+
+class PatternStage {
+  - pattern_engine: IPatternEngine
+  + process(item: ProcessedFile): FormattedFile
+}
+
+' Relationships showing DIP compliance
+CommandProcessor ..> IALSClient : depends on abstraction
+CommandProcessor <|-- FormatCommand
+CommandProcessor <|-- RenameCommand
+
+FormatCommand ..> IWorkerPool : depends on abstraction
+FormatCommand ..> IFileDiscovery : depends on abstraction
+RenameCommand ..> IFileDiscovery : depends on abstraction
+
+LSPStage ..> IALSClient : depends on abstraction
+ParseStage ..> IParserService : depends on abstraction
+PatternStage ..> IPatternEngine : depends on abstraction
+
+IALSClient <|.. ALSClient : implements
+IParserService <|.. AdaParser : implements
+IPatternEngine <|.. PatternEngine : implements
+IFileDiscovery <|.. FileDiscovery : implements
+IWorkerPool <|.. WorkerPool : implements
+
+ProcessingStage <|-- LSPStage
+ProcessingStage <|-- ParseStage
+ProcessingStage <|-- PatternStage
+
+note right of CommandProcessor
+  High-level module depends only
+  on abstractions (interfaces),
+  not on concrete implementations
+end note
+
+note left of ALSClient
+  Low-level modules implement
+  interfaces defined by high-level
+  policy
+end note
+
+@enduml
