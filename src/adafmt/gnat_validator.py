@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import List, Optional, Union
 
 from returns.future import future_safe
-from returns.io import impure_safe
+from returns.io import IOFailure, IOResult, IOSuccess, impure_safe
 from returns.result import Failure, Result, Success
 
 from .errors import ValidationError
@@ -142,7 +142,7 @@ class GNATValidator:
         """
         result = self._check_gnat_availability_internal()
         
-        if isinstance(result, Failure):
+        if isinstance(result, IOFailure):
             exc = result.failure()
             return Failure(ValidationError(
                 path=Path(""),
@@ -151,6 +151,7 @@ class GNATValidator:
                 message=str(exc)
             ))
         
+        # result is IOSuccess[bool] here
         return Success(result.unwrap())
     
     def validate_content(
@@ -231,7 +232,22 @@ class GNATValidator:
             Result[ValidationResult, ValidationError]: Validation result or error
         """
         # Use async subprocess for validation
-        return await self._validate_content_async_internal(content, file_path, ada_version)
+        result = await self._validate_content_async_internal(content, file_path, ada_version)
+        
+        # Convert FutureResult to Result
+        if isinstance(result, Failure):
+            exc = result.failure()
+            if isinstance(exc, ValidationError):
+                return Failure(exc)
+            else:
+                return Failure(ValidationError(
+                    path=file_path or Path(""),
+                    exit_code=-1,
+                    command=self.gnat_executable,
+                    message=str(exc)
+                ))
+        
+        return Success(result.unwrap())
     
     @future_safe
     async def _validate_content_async_internal(
@@ -302,7 +318,7 @@ class GNATValidator:
             
             return ValidationResult(
                 valid=process.returncode == 0,
-                exit_code=process.returncode,
+                exit_code=process.returncode or -1,
                 stdout=stdout_text,
                 stderr=stderr_text,
                 warnings=warnings,
@@ -400,7 +416,7 @@ class GNATValidator:
         """
         result = self._validate_file_sync_internal(path, ada_version)
         
-        if isinstance(result, Failure):
+        if isinstance(result, IOFailure):
             exc = result.failure()
             return Failure(ValidationError(
                 path=path,

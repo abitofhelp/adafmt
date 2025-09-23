@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, List, Optional, Set
 
-from returns.io import IOFailure, impure_safe
+from returns.io import IOFailure, IOResult, IOSuccess, impure_safe
 from returns.result import Failure, Result, Success
 
 from .errors import VisitorError
@@ -375,7 +375,7 @@ class FormattingVisitorBase(ABC):
         Returns:
             str: Modified content
         """
-        result = self._apply_modifications_internal()
+        result: IOResult[str, Exception] = self._apply_modifications_internal()
         
         if isinstance(result, IOFailure):
             # If modification application fails, return original content

@@ -29,7 +29,7 @@ import signal
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Pattern, Tuple
+from typing import Dict, List, Optional, Pattern, Tuple, TypedDict
 
 # Try to import regex module for timeout support, fall back to re
 try:
@@ -53,6 +53,14 @@ class PatternLogger:
         """Write log data using JsonlLogger's write method."""
         if self._logger:
             self._logger.write(data)
+
+
+# Type for match information during debugging
+class MatchInfo(TypedDict):
+    start: int
+    end: int
+    matched_text: str
+    line_number: int
 
 
 # Pattern name validation regex (12 characters)
@@ -413,10 +421,10 @@ class PatternFormatter:
                     })
                 
                 # Find all matches before replacement (for debug logging)
-                matches_for_debug = []
+                matches_for_debug: List[MatchInfo] = []
                 if self.debug_logger:
                     for match in rule.find.finditer(current_text):
-                        match_info = {
+                        match_info: MatchInfo = {
                             'start': match.start(),
                             'end': match.end(),
                             'matched_text': match.group(0),
@@ -456,11 +464,9 @@ class PatternFormatter:
                     if self.debug_logger and matches_for_debug:
                         for i, match_info in enumerate(matches_for_debug[:5]):  # Limit to first 5
                             # Extract context around the match
-                            match_start = int(match_info['start'])
-                            match_end = int(match_info['end'])
-                            start = max(0, match_start - 50)
-                            end = min(len(current_text), match_end + 50)
-                            before_snippet = current_text[start:match_end]
+                            start = max(0, match_info['start'] - 50)
+                            end = min(len(current_text), match_info['end'] + 50)
+                            before_snippet = current_text[start:match_info['end']]
                             # Calculate where the replacement would be in new_text
                             # This is approximate for simplicity
                             after_snippet = new_text[start:start + len(before_snippet) + 20]
