@@ -29,7 +29,8 @@ from ..core.processing_pipeline import (
     ValidateStage,
 )
 from ..file_discovery_new import discover_files
-from ..pattern_loader import load_patterns
+# TODO: Import pattern loader when ready
+# from ..pattern_loader import load_patterns
 from ..worker_pool import WorkerPool
 from ..errors import AdafmtError
 from returns.result import Result, Success, Failure
@@ -146,41 +147,35 @@ class FormatCommandProcessor(CommandProcessor[FormattedFile]):
         pipeline = ProcessingPipeline()
         
         # Load patterns if needed
+        # TODO: Add pre_als_patterns and post_als_patterns to FormatArgs when implementing patterns
         patterns = None
-        if args.pre_als_patterns or args.post_als_patterns:
-            pattern_file = args.pattern_file or Path("adafmt_patterns.json")
-            if pattern_file.exists():
-                patterns = await load_patterns(pattern_file)
         
         # 1. Parse stage (optional)
-        if args.use_parser:
-            await self.log_info("Parser-based formatting enabled")
-            pipeline.add_stage(ParseStage())
-            
-            # Validation stage
-            pipeline.add_stage(ValidateStage())
+        # TODO: Add use_parser flag to FormatArgs when parser is fully integrated
+        use_parser = getattr(args, 'use_parser', False)
+        if use_parser:
+            try:
+                from ada2022_parser import Parser as AdaParser
+                if AdaParser:
+                    await self.log_info("Parser-based formatting enabled")
+                    pipeline.add_stage(ParseStage())
+                    
+                    # Validation stage
+                    pipeline.add_stage(ValidateStage())
+            except ImportError:
+                pass  # Parser is optional
         
         # 2. Pre-ALS patterns (optional)
-        if args.pre_als_patterns and patterns:
-            pre_patterns = [p for p in patterns if p.get("phase") == "pre-als"]
-            if pre_patterns:
-                await self.log_info(f"Applying {len(pre_patterns)} pre-ALS patterns")
-                pipeline.add_stage(PatternStage(pre_patterns, "pre-als"))
+        # TODO: Implement when pattern system is ready
         
         # 3. ALS formatting
         pipeline.add_stage(LSPStage(FormatOperation()))
         
         # 4. Post-ALS patterns (optional)
-        if args.post_als_patterns and patterns:
-            post_patterns = [p for p in patterns if p.get("phase", "post-als") == "post-als"]
-            if post_patterns:
-                await self.log_info(f"Applying {len(post_patterns)} post-ALS patterns")
-                pipeline.add_stage(PatternStage(post_patterns, "post-als"))
+        # TODO: Implement when pattern system is ready
         
         # 5. GNAT validation (optional)
-        if args.validate_with_gnat:
-            await self.log_info("GNAT validation enabled")
-            pipeline.add_stage(GNATValidationStage())
+        # TODO: Add validate_with_gnat flag to FormatArgs when GNAT validation is ready
         
         return pipeline
     
@@ -328,9 +323,10 @@ async def format_main(args: FormatArgs) -> int:
     """
     # Load configuration if specified
     config = {}
-    if args.config_file and args.config_file.exists():
+    config_file = getattr(args, 'config_file', None)
+    if config_file and config_file.exists():
         import json
-        config = json.loads(args.config_file.read_text())
+        config = json.loads(config_file.read_text())
     
     # Create and execute command
     command = create_format_command(config)

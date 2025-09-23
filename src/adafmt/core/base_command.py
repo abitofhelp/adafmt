@@ -25,7 +25,7 @@ from ..metrics import MetricsCollector
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..tui import BaseUI
+    from ..ui_base import BaseUI
 
 T = TypeVar('T')  # Result type for command
 

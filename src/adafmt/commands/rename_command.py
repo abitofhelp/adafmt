@@ -97,12 +97,9 @@ class RenameCommandProcessor(CommandProcessor[RenameResult]):
         for path in all_files:
             try:
                 content = path.read_text(encoding='utf-8')
-                if args.case_sensitive:
-                    if args.old_name in content:
-                        targets.append(path)
-                else:
-                    if args.old_name.lower() in content.lower():
-                        targets.append(path)
+                # case_sensitive is not defined in RenameArgs, always case-sensitive for now
+                if args.old_name in content:
+                    targets.append(path)
             except Exception:
                 # Skip files we can't read
                 pass
@@ -133,8 +130,8 @@ class RenameCommandProcessor(CommandProcessor[RenameResult]):
                 # Collect all changes for workspace-wide application
                 self.all_changes[path] = result.changes
         
-        # Apply all changes atomically (unless dry-run)
-        if not args.dry_run and self.all_changes:
+        # Apply all changes atomically (unless check mode)
+        if not args.check and self.all_changes:
             await self._apply_all_changes()
         
         return Success(results)
@@ -143,23 +140,24 @@ class RenameCommandProcessor(CommandProcessor[RenameResult]):
         """Build processing pipeline for rename."""
         pipeline = ProcessingPipeline()
         
-        # Always parse for rename to understand context
-        pipeline.add_stage(ParseStage())
-        
-        # Validate rename is safe
-        pipeline.add_stage(ValidateStage([
-            # Custom validators for rename
-            # e.g., check symbol exists, not a keyword, etc.
-        ]))
+        # Only parse if parser is available
+        try:
+            from ada2022_parser import Parser as AdaParser
+            if AdaParser:
+                pipeline.add_stage(ParseStage())
+                
+                # Validate rename is safe
+                pipeline.add_stage(ValidateStage([
+                    # Custom validators for rename
+                    # e.g., check symbol exists, not a keyword, etc.
+                ]))
+        except ImportError:
+            pass  # Parser is optional
         
         # Perform rename via LSP
         pipeline.add_stage(LSPStage(
             RenameOperation(args.old_name, args.new_name)
         ))
-        
-        # Optionally validate with GNAT
-        if args.validate_with_gnat:
-            pipeline.add_stage(GNATValidationStage())
         
         return pipeline
     
@@ -187,7 +185,7 @@ class RenameCommandProcessor(CommandProcessor[RenameResult]):
                 
                 # Generate preview if requested
                 preview = None
-                if args.dry_run and changes:
+                if args.check and changes:
                     preview = self._generate_preview(file_data.content, changes)
                 
                 return RenameResult(
@@ -345,8 +343,8 @@ class RenameCommandProcessor(CommandProcessor[RenameResult]):
         await self.log_info(f"  Files affected: {successful_files}")
         await self.log_info(f"  Total changes: {total_changes}")
         
-        if args.dry_run:
-            await self.log_info("\nDRY RUN - No changes were applied")
+        if args.check:
+            await self.log_info("\nCHECK MODE - No changes were applied")
             
             if args.verbose:
                 await self.log_info("\nPreview of changes:")
@@ -377,5 +375,11 @@ async def rename_main(args: RenameArgs) -> int:
     Returns:
         Exit code
     """
-    command = RenameCommand()
-    return await command.execute(args)
+    command = RenameCommandProcessor()
+    result = await command.execute(args)
+    
+    # Extract exit code from Result
+    if isinstance(result, Success):
+        return result.unwrap()
+    else:
+        return 1  # Generic error code
