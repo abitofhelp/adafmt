@@ -10,7 +10,7 @@
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Any
-from tabulate import tabulate
+from tabulate import tabulate  # type: ignore[import-untyped]
 
 from .utils import to_iso8601_basic
 

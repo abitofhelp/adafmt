@@ -196,8 +196,8 @@ class FileProcessor:
             debug_logger.write({
                 'ev': 'als_file_start',
                 'path': str(path),
-                'size': len(content),
-                'lines': content.count('\n') + 1
+                'size': len(content),  # type: ignore[arg-type]
+                'lines': content.count('\n') + 1  # type: ignore[attr-defined]
             })
         await self.client._notify("textDocument/didOpen", {
             "textDocument": {
@@ -260,12 +260,12 @@ class FileProcessor:
             # If we have edits, apply them to get the formatted content for debug log
             if debug_logger:
                 if res:
-                    formatted_content = apply_text_edits(content, res)
+                    formatted_content = apply_text_edits(content, res)  # type: ignore[arg-type]
                     debug_logger.write({
                         'ev': 'als_file_complete',
                         'path': str(path),
                         'changed': True,
-                        'original_size': len(content),
+                        'original_size': len(content),  # type: ignore[arg-type]
                         'formatted_size': len(formatted_content)
                     })
                 else:

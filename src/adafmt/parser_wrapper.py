@@ -211,7 +211,7 @@ class AdaParserWrapper:
         content = content_result.unwrap()  # type: ignore[assignment]
         
         # Parse content
-        return self.parse_content(content, path)
+        return self.parse_content(content, path)  # type: ignore[arg-type]
     
     def _map_parse_error(self, exc: Exception, path: Path) -> ParseError:
         """Map generic exception to ParseError with context.
