@@ -20,7 +20,7 @@ from returns.io import IOResult
 from .als_client import ALSClient
 from .edits import apply_text_edits, unified_diff
 from .errors import FileError
-from .file_ops import read_text_safe, stat_safe
+from .file_ops import read_text, stat
 from .logging_jsonl import JsonlLogger
 from .metrics import MetricsCollector
 from .pattern_formatter import PatternFormatter, FileApplyResult
@@ -182,7 +182,7 @@ class FileProcessor:
         debug_logger = self.client.debug_logger if self.client and hasattr(self.client, 'debug_logger') else None
         
         # Open the file in ALS
-        content_result = read_text_safe(path, encoding="utf-8", errors="ignore")
+        content_result = read_text(path, encoding="utf-8", errors="ignore")
         if isinstance(content_result, Failure):
             error = content_result.failure()
             if error.not_found:
@@ -304,7 +304,7 @@ class FileProcessor:
         file_start_time = time.time()
         
         # Check file size limit
-        stat_result = stat_safe(path)
+        stat_result = stat(path)
         if isinstance(stat_result, Failure):
             error = stat_result.failure()
             if error.not_found:
@@ -361,7 +361,7 @@ class FileProcessor:
     ) -> Tuple[str, Optional[str]]:
         """Process file with patterns only (no ALS)."""
         try:
-            content_result = read_text_safe(path, encoding="utf-8", errors="ignore")
+            content_result = read_text(path, encoding="utf-8", errors="ignore")
             if isinstance(content_result, Failure):
                 error = content_result.failure()
                 if error.not_found:
@@ -445,7 +445,7 @@ class FileProcessor:
             if edits:
                 self.als_changed += 1
                 # Apply edits to get formatted content
-                content_result = read_text_safe(path, encoding="utf-8", errors="ignore")
+                content_result = read_text(path, encoding="utf-8", errors="ignore")
                 if isinstance(content_result, Failure):
                     error = content_result.failure()
                     if error.not_found:
@@ -502,7 +502,7 @@ class FileProcessor:
             else:
                 # No ALS changes, but still check patterns
                 if self.pattern_formatter and self.pattern_formatter.enabled:
-                    content_result = read_text_safe(path, encoding="utf-8", errors="ignore")
+                    content_result = read_text(path, encoding="utf-8", errors="ignore")
                     if isinstance(content_result, Failure):
                         error = content_result.failure()
                         if error.not_found:

@@ -57,7 +57,7 @@ async def _buffered_read_internal(
     return ''.join(chunks)
 
 
-async def buffered_read_safe(
+async def buffered_read(
     path: Union[str, Path],
     buffer_size: int = 8192,
     encoding: str = 'utf-8'
@@ -122,7 +122,7 @@ async def _buffered_write_internal(
         await f.flush()
 
 
-async def buffered_write_safe(
+async def buffered_write(
     path: Union[str, Path],
     content: str,
     buffer_size: int = 8192,
@@ -157,7 +157,7 @@ async def buffered_write_safe(
         ))
 
 
-async def atomic_write_async_safe(
+async def atomic_write_async(
     path: Union[str, Path],
     content: str,
     mode: int = 0o644,
@@ -195,7 +195,7 @@ async def atomic_write_async_safe(
         os.close(temp_fd)
         
         # Write content to temp file
-        write_result = await buffered_write_safe(temp_path, content, encoding=encoding)
+        write_result = await buffered_write(temp_path, content, encoding=encoding)
         if isinstance(write_result, Failure):
             return write_result
         
@@ -263,7 +263,7 @@ async def file_exists_async(path: Union[str, Path]) -> bool:
         return False
 
 
-async def get_file_size_async_safe(path: Union[str, Path]) -> Result[int, FileError]:
+async def get_file_size_async(path: Union[str, Path]) -> Result[int, FileError]:
     """
     Get file size asynchronously.
     
@@ -291,86 +291,3 @@ async def get_file_size_async_safe(path: Union[str, Path]) -> Result[int, FileEr
         ))
 
 
-# Backward compatibility - keep old function signatures
-# These raise exceptions for compatibility with existing code
-async def buffered_read(
-    path: Union[str, Path],
-    buffer_size: int = 8192,
-    encoding: str = 'utf-8'
-) -> str:
-    """
-    Legacy version that raises exceptions.
-    
-    DEPRECATED: Use buffered_read_safe instead.
-    """
-    result = await buffered_read_safe(path, buffer_size, encoding)
-    if isinstance(result, Success):
-        return result.unwrap()
-    else:
-        error = result.failure()
-        if error.not_found:
-            raise FileNotFoundError(error.message)
-        elif error.permission_error:
-            raise PermissionError(error.message)
-        else:
-            raise IOError(error.message)
-
-
-async def buffered_write(
-    path: Union[str, Path],
-    content: str,
-    buffer_size: int = 8192,
-    encoding: str = 'utf-8'
-) -> None:
-    """
-    Legacy version that raises exceptions.
-    
-    DEPRECATED: Use buffered_write_safe instead.
-    """
-    result = await buffered_write_safe(path, content, buffer_size, encoding)
-    if isinstance(result, Failure):
-        error = result.failure()
-        if error.permission_error:
-            raise PermissionError(error.message)
-        else:
-            raise OSError(error.message)
-
-
-async def atomic_write_async(
-    path: Union[str, Path],
-    content: str,
-    mode: int = 0o644,
-    encoding: str = 'utf-8'
-) -> None:
-    """
-    Legacy version that raises exceptions.
-    
-    DEPRECATED: Use atomic_write_async_safe instead.
-    """
-    result = await atomic_write_async_safe(path, content, mode, encoding)
-    if isinstance(result, Failure):
-        error = result.failure()
-        if error.permission_error:
-            raise PermissionError(error.message)
-        else:
-            raise OSError(error.message)
-
-
-# Legacy version of get_file_size_async
-async def get_file_size_async(path: Union[str, Path]) -> int:
-    """
-    Legacy version that raises exceptions.
-    
-    DEPRECATED: Use get_file_size_async_safe instead.
-    """
-    result = await get_file_size_async_safe(path)
-    if isinstance(result, Success):
-        return result.unwrap()
-    else:
-        error = result.failure()
-        if error.not_found:
-            raise FileNotFoundError(error.message)
-        elif error.permission_error:
-            raise PermissionError(error.message)
-        else:
-            raise OSError(error.message)

@@ -44,7 +44,7 @@ def _read_text_internal(
         return Failure(e)
 
 
-def read_text_safe(
+def read_text(
     path: Union[str, Path],
     encoding: str = 'utf-8',
     errors: str = 'strict'
@@ -95,7 +95,7 @@ def _write_text_internal(
         return Failure(e)
 
 
-def write_text_safe(
+def write_text(
     path: Union[str, Path],
     content: str,
     encoding: str = 'utf-8'
@@ -139,7 +139,7 @@ def _exists_internal(path: Path) -> Result[bool, Exception]:
         return Failure(e)
 
 
-def exists_safe(path: Union[str, Path]) -> Result[bool, FileError]:
+def exists(path: Union[str, Path]) -> Result[bool, FileError]:
     """
     Check if file exists with explicit error handling.
     
@@ -179,7 +179,7 @@ def _stat_internal(path: Path) -> Result[os.stat_result, Exception]:
         return Failure(e)
 
 
-def stat_safe(path: Union[str, Path]) -> Result[os.stat_result, FileError]:
+def stat(path: Union[str, Path]) -> Result[os.stat_result, FileError]:
     """
     Get file stat with explicit error handling.
     
@@ -221,7 +221,7 @@ def _mkdir_internal(path: Path, mode: int = 0o777, parents: bool = False, exist_
         return Failure(e)
 
 
-def mkdir_safe(
+def mkdir(
     path: Union[str, Path],
     mode: int = 0o777,
     parents: bool = False,
@@ -268,7 +268,7 @@ def _rmtree_internal(path: Path) -> Result[None, Exception]:
         return Failure(e)
 
 
-def rmtree_safe(path: Union[str, Path]) -> Result[None, FileError]:
+def rmtree(path: Union[str, Path]) -> Result[None, FileError]:
     """
     Remove directory tree with explicit error handling.
     
@@ -307,7 +307,7 @@ def _remove_internal(path: Path) -> Result[None, Exception]:
         return Failure(e)
 
 
-def remove_safe(path: Union[str, Path]) -> Result[None, FileError]:
+def remove(path: Union[str, Path]) -> Result[None, FileError]:
     """
     Remove file with explicit error handling.
     
@@ -432,85 +432,3 @@ def _map_delete_error(path: Path):
     return mapper
 
 
-# Backward compatibility - legacy functions that raise exceptions
-def read_text(
-    path: Union[str, Path],
-    encoding: str = 'utf-8',
-    errors: str = 'strict'
-) -> str:
-    """
-    Legacy version that raises exceptions.
-    
-    DEPRECATED: Use read_text_safe instead.
-    """
-    result = read_text_safe(path, encoding, errors)
-    return result.unwrap()
-
-
-def write_text(
-    path: Union[str, Path],
-    content: str,
-    encoding: str = 'utf-8'
-) -> None:
-    """
-    Legacy version that raises exceptions.
-    
-    DEPRECATED: Use write_text_safe instead.
-    """
-    result = write_text_safe(path, content, encoding)
-    result.unwrap()
-
-
-def exists(path: Union[str, Path]) -> bool:
-    """
-    Legacy version that raises exceptions.
-    
-    DEPRECATED: Use exists_safe instead.
-    """
-    result = exists_safe(path)
-    return result.unwrap()
-
-
-def stat(path: Union[str, Path]) -> os.stat_result:
-    """
-    Legacy version that raises exceptions.
-    
-    DEPRECATED: Use stat_safe instead.
-    """
-    result = stat_safe(path)
-    return result.unwrap()
-
-
-def mkdir(
-    path: Union[str, Path],
-    mode: int = 0o777,
-    parents: bool = False,
-    exist_ok: bool = False
-) -> None:
-    """
-    Legacy version that raises exceptions.
-    
-    DEPRECATED: Use mkdir_safe instead.
-    """
-    result = mkdir_safe(path, mode, parents, exist_ok)
-    result.unwrap()
-
-
-def rmtree(path: Union[str, Path]) -> None:
-    """
-    Legacy version that raises exceptions.
-    
-    DEPRECATED: Use rmtree_safe instead.
-    """
-    result = rmtree_safe(path)
-    result.unwrap()
-
-
-def remove(path: Union[str, Path]) -> None:
-    """
-    Legacy version that raises exceptions.
-    
-    DEPRECATED: Use remove_safe instead.
-    """
-    result = remove_safe(path)
-    result.unwrap()

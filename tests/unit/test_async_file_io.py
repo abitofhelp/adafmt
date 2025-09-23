@@ -13,7 +13,7 @@ from pathlib import Path
 from unittest.mock import patch
 import pytest
 
-from returns.result import Failure
+from returns.result import Failure, Success
 from adafmt.errors import FileError
 
 
@@ -38,9 +38,10 @@ class TestBufferedRead:
         test_file.write_text(test_content)
         
         # Read with buffering
-        content = await buffered_read(test_file, buffer_size=64)
+        result = await buffered_read(test_file, buffer_size=64)
         
-        assert content == test_content
+        assert isinstance(result, Success)
+        assert result.unwrap() == test_content
     
     @pytest.mark.asyncio
     async def test_read_empty_file(self, tmp_path):
@@ -48,8 +49,9 @@ class TestBufferedRead:
         test_file = tmp_path / "empty.txt"
         test_file.touch()
         
-        content = await buffered_read(test_file)
-        assert content == ""
+        result = await buffered_read(test_file)
+        assert isinstance(result, Success)
+        assert result.unwrap() == ""
     
     @pytest.mark.asyncio
     async def test_read_large_file(self, tmp_path):
@@ -60,16 +62,20 @@ class TestBufferedRead:
         test_file.write_text(test_content)
         
         # Read with small buffer
-        content = await buffered_read(test_file, buffer_size=1024)
+        result = await buffered_read(test_file, buffer_size=1024)
         
+        assert isinstance(result, Success)
+        content = result.unwrap()
         assert content == test_content
         assert len(content) == 1024 * 1024
     
     @pytest.mark.asyncio
     async def test_read_nonexistent_file(self):
         """Test reading a file that doesn't exist."""
-        with pytest.raises(FileNotFoundError):
-            await buffered_read("/nonexistent/file.txt")
+        result = await buffered_read("/nonexistent/file.txt")
+        assert isinstance(result, Failure)
+        error = result.failure()
+        assert error.not_found is True
     
     @pytest.mark.asyncio
     async def test_read_with_encoding(self, tmp_path):
@@ -78,8 +84,9 @@ class TestBufferedRead:
         test_content = "Hello 世界"
         test_file.write_text(test_content, encoding='utf-16')
         
-        content = await buffered_read(test_file, encoding='utf-16')
-        assert content == test_content
+        result = await buffered_read(test_file, encoding='utf-16')
+        assert isinstance(result, Success)
+        assert result.unwrap() == test_content
     
     @pytest.mark.asyncio
     async def test_read_permission_error(self, tmp_path):
@@ -92,8 +99,10 @@ class TestBufferedRead:
             os.chmod(test_file, 0o000)
             
             try:
-                with pytest.raises(PermissionError):
-                    await buffered_read(test_file)
+                result = await buffered_read(test_file)
+                assert isinstance(result, Failure)
+                error = result.failure()
+                assert error.permission_error is True
             finally:
                 # Restore permissions for cleanup
                 os.chmod(test_file, 0o644)
@@ -205,9 +214,11 @@ class TestAtomicWrite:
             path=test_file,
             operation="write"
         )
-        with patch('adafmt.async_file_io.buffered_write_safe', return_value=Failure(mock_error)):
-            with pytest.raises(OSError):
-                await atomic_write_async(test_file, "new content")
+        with patch('adafmt.async_file_io.buffered_write', return_value=Failure(mock_error)):
+            result = await atomic_write_async(test_file, "new content")
+            assert isinstance(result, Failure)
+            error = result.failure()
+            assert "Write failed" in error.message
         
         # Original file should be unchanged
         assert test_file.read_text() == original_content
@@ -233,9 +244,11 @@ class TestAtomicWrite:
             operation="write"
         )
         with patch('os.open', side_effect=track_mkstemp):
-            with patch('adafmt.async_file_io.buffered_write_safe', return_value=Failure(mock_error)):
-                with pytest.raises(OSError):
-                    await atomic_write_async(test_file, "content")
+            with patch('adafmt.async_file_io.buffered_write', return_value=Failure(mock_error)):
+                result = await atomic_write_async(test_file, "content")
+                assert isinstance(result, Failure)
+                error = result.failure()
+                assert "Write failed" in error.message
         
         # No temp files should remain
         for temp_file in temp_files:
@@ -304,8 +317,9 @@ class TestFileSize:
         test_file = tmp_path / "empty.txt"
         test_file.touch()
         
-        size = await get_file_size_async(test_file)
-        assert size == 0
+        result = await get_file_size_async(test_file)
+        assert isinstance(result, Success)
+        assert result.unwrap() == 0
     
     @pytest.mark.asyncio
     async def test_size_of_normal_file(self, tmp_path):
@@ -314,8 +328,9 @@ class TestFileSize:
         content = "Hello, World!"
         test_file.write_text(content)
         
-        size = await get_file_size_async(test_file)
-        assert size == len(content.encode('utf-8'))
+        result = await get_file_size_async(test_file)
+        assert isinstance(result, Success)
+        assert result.unwrap() == len(content.encode('utf-8'))
     
     @pytest.mark.asyncio
     async def test_size_of_large_file(self, tmp_path):
@@ -325,11 +340,14 @@ class TestFileSize:
         content = "x" * (1024 * 1024)
         test_file.write_text(content)
         
-        size = await get_file_size_async(test_file)
-        assert size == 1024 * 1024
+        result = await get_file_size_async(test_file)
+        assert isinstance(result, Success)
+        assert result.unwrap() == 1024 * 1024
     
     @pytest.mark.asyncio
     async def test_size_of_nonexistent_file(self):
         """Test size raises error for nonexistent file."""
-        with pytest.raises(FileNotFoundError):
-            await get_file_size_async("/nonexistent/file.txt")
+        result = await get_file_size_async("/nonexistent/file.txt")
+        assert isinstance(result, Failure)
+        error = result.failure()
+        assert error.not_found is True
