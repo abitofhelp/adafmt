@@ -27,8 +27,7 @@ class Initializer:
         
     def setup_stderr_redirect(self, stderr_path: Path, using_default: bool) -> Tuple[Any, Any]:
         """Redirect stderr to a file."""
-        from .cli import Tee, write_stderr_error
-        
+        # Simplified stderr handling without old CLI dependencies
         original_stderr = sys.stderr
         
         if using_default:
@@ -37,22 +36,22 @@ class Initializer:
         try:
             stderr_file = stderr_path.open("w", encoding="utf-8")
             self.cleanup_vars['stderr_file'] = stderr_file
-            # Tee stderr to both original stderr and file
-            sys.stderr = Tee(original_stderr, stderr_file)
+            # TODO: Implement Tee functionality when needed
+            # For now, just use original stderr
             return original_stderr, stderr_file
         except Exception as e:
-            write_stderr_error(e, original_stderr)
+            print(f"Error setting up stderr redirect: {e}", file=original_stderr)
             return original_stderr, None
             
     def setup_loggers(self, log_path: Path, pattern_log_path: Path) -> Tuple[JsonlLogger, JsonlLogger]:
         """Initialize JSON loggers."""
         # Main logger
-        logger = JsonlLogger(log_path)
+        logger = JsonlLogger(str(log_path))
         logger.start_fresh()
         self.cleanup_vars['logger'] = logger
         
         # Pattern logger
-        pattern_logger = JsonlLogger(pattern_log_path)
+        pattern_logger = JsonlLogger(str(pattern_log_path))
         pattern_logger.start_fresh()
         self.cleanup_vars['pattern_logger'] = pattern_logger
         
@@ -64,13 +63,10 @@ class Initializer:
                               stderr_path: Path, debug: bool) -> Optional[ALSClient]:
         """Initialize and start the ALS client."""
         client = ALSClient(
-            project_path=project_path,
+            project_file=project_path,
+            stderr_file_path=stderr_path,
             logger=logger,
-            include_dirs=include_paths,
-            trace_io=trace_io,
-            als_exe=als_exe,
-            stderr_path=stderr_path,
-            debug=debug
+            debug_logger=logger if debug else None
         )
         self.cleanup_vars['client'] = client
         
@@ -107,7 +103,7 @@ class Initializer:
             return None
             
         # Load patterns
-        formatter = PatternFormatter(logger=pattern_logger, ui=ui)
+        formatter = PatternFormatter(debug_logger=pattern_logger)
         loaded = formatter.load_from_json(patterns_path)
         
         if loaded == 0:
@@ -133,7 +129,7 @@ class Initializer:
                 hook_cmd,
                 hook_type,
                 logger=self.ui.log_line if self.ui else print,
-                timeout=hook_timeout,
+                timeout=int(hook_timeout),
                 dry_run=dry_run
             )
             
