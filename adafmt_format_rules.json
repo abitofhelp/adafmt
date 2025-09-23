@@ -41,5 +41,35 @@
         "operators": ["+", "-", "*", "/"]
       }
     }
+  },
+  "comments": {
+    "inline": {
+      "enabled": true,
+      "description": "Fix spacing after -- in comments",
+      "parameters": {
+        "min_spaces_after": 1,
+        "preserve_alignment": true
+      }
+    },
+    "end_of_line": {
+      "enabled": true,
+      "description": "Fix spacing before end-of-line comments",
+      "parameters": {
+        "min_spaces_before": 2
+      }
+    }
+  },
+  "line_formatting": {
+    "trailing_whitespace": {
+      "enabled": true,
+      "description": "Remove trailing whitespace from lines"
+    },
+    "final_newline": {
+      "enabled": true,
+      "description": "Ensure files end with exactly one newline",
+      "parameters": {
+        "newline_count": 1
+      }
+    }
   }
 }

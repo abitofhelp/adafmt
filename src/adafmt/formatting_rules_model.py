@@ -58,60 +58,60 @@ class RuleConfig(BaseModel):
 
 class SpacingRule(RuleConfig):
     """Configuration for spacing rules."""
-    parameters: SpacingParameters = Field(default_factory=SpacingParameters)
+    parameters: SpacingParameters = Field(default_factory=lambda: SpacingParameters())
 
 
 class BinaryOperatorRule(RuleConfig):
     """Configuration for binary operator spacing."""
-    parameters: BinaryOperatorParameters = Field(default_factory=BinaryOperatorParameters)
+    parameters: BinaryOperatorParameters = Field(default_factory=lambda: BinaryOperatorParameters())
 
 
 class CommentRule(RuleConfig):
     """Configuration for comment rules."""
-    parameters: CommentParameters = Field(default_factory=CommentParameters)
+    parameters: CommentParameters = Field(default_factory=lambda: CommentParameters())
 
 
 class EndOfLineCommentRule(RuleConfig):
     """Configuration for end-of-line comment rules."""
-    parameters: EndOfLineCommentParameters = Field(default_factory=EndOfLineCommentParameters)
+    parameters: EndOfLineCommentParameters = Field(default_factory=lambda: EndOfLineCommentParameters())
 
 
 class TrailingWhitespaceRule(RuleConfig):
     """Configuration for trailing whitespace rule."""
-    parameters: TrailingWhitespaceParameters = Field(default_factory=TrailingWhitespaceParameters)
+    parameters: TrailingWhitespaceParameters = Field(default_factory=lambda: TrailingWhitespaceParameters())
 
 
 class FinalNewlineRule(RuleConfig):
     """Configuration for final newline rule."""
-    parameters: FinalNewlineParameters = Field(default_factory=FinalNewlineParameters)
+    parameters: FinalNewlineParameters = Field(default_factory=lambda: FinalNewlineParameters())
 
 
 class SpacingRules(BaseModel):
     """All spacing-related formatting rules."""
-    assignment: SpacingRule = Field(default_factory=SpacingRule)
-    type_declaration: SpacingRule = Field(default_factory=SpacingRule)
-    parameter_association: SpacingRule = Field(default_factory=SpacingRule)
-    range_operator: SpacingRule = Field(default_factory=SpacingRule)
-    binary_operators: BinaryOperatorRule = Field(default_factory=BinaryOperatorRule)
+    assignment: SpacingRule = Field(default_factory=lambda: SpacingRule())
+    type_declaration: SpacingRule = Field(default_factory=lambda: SpacingRule())
+    parameter_association: SpacingRule = Field(default_factory=lambda: SpacingRule())
+    range_operator: SpacingRule = Field(default_factory=lambda: SpacingRule())
+    binary_operators: BinaryOperatorRule = Field(default_factory=lambda: BinaryOperatorRule())
 
 
 class CommentRules(BaseModel):
     """All comment-related formatting rules."""
-    inline: CommentRule = Field(default_factory=CommentRule)
-    end_of_line: EndOfLineCommentRule = Field(default_factory=EndOfLineCommentRule)
+    inline: CommentRule = Field(default_factory=lambda: CommentRule())
+    end_of_line: EndOfLineCommentRule = Field(default_factory=lambda: EndOfLineCommentRule())
 
 
 class LineFormattingRules(BaseModel):
     """All line formatting rules."""
-    trailing_whitespace: TrailingWhitespaceRule = Field(default_factory=TrailingWhitespaceRule)
-    final_newline: FinalNewlineRule = Field(default_factory=FinalNewlineRule)
+    trailing_whitespace: TrailingWhitespaceRule = Field(default_factory=lambda: TrailingWhitespaceRule())
+    final_newline: FinalNewlineRule = Field(default_factory=lambda: FinalNewlineRule())
 
 
 class FormattingRules(BaseModel):
     """Root configuration for all formatting rules."""
-    spacing: SpacingRules = Field(default_factory=SpacingRules)
-    comments: CommentRules = Field(default_factory=CommentRules)
-    line_formatting: LineFormattingRules = Field(default_factory=LineFormattingRules)
+    spacing: SpacingRules = Field(default_factory=lambda: SpacingRules())
+    comments: CommentRules = Field(default_factory=lambda: CommentRules())
+    line_formatting: LineFormattingRules = Field(default_factory=lambda: LineFormattingRules())
     
     @classmethod
     def load(cls, path: Path) -> "FormattingRules":

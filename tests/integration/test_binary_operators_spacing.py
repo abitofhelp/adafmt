@@ -13,8 +13,10 @@ and other configured binary operators.
 
 from __future__ import annotations
 
+import io
+from contextlib import redirect_stderr
+
 import pytest
-from pathlib import Path
 
 from ada2022_parser.generated import Ada2022Lexer, Ada2022Parser
 from antlr4 import CommonTokenStream, InputStream
@@ -151,7 +153,9 @@ begin
    null;
 end Test;"""
         
-        result = self._parse_and_format(ada_code, default_rules)
+        # Suppress expected parser warning for "10 + -5" expression
+        with redirect_stderr(io.StringIO()):
+            result = self._parse_and_format(ada_code, default_rules)
         
         # Unary minus should not have space added
         assert "X : Integer := -5;" in result

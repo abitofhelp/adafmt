@@ -14,11 +14,9 @@ more reliable text manipulation.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 import re
 
 from ada2022_parser.generated import Ada2022ParserVisitor  # type: ignore[import-not-found]
-from antlr4 import ParserRuleContext, Token
 
 from .formatting_rules_model import FormattingRules
 
@@ -62,55 +60,64 @@ class AssignmentSpacingVisitor(Ada2022ParserVisitor):
         for match in comment_pattern.finditer(self.source_text):
             self.protected_regions.append((match.start(), match.end()))
     
+    def _process_assignment_operator(self, ctx):
+        """Common logic to process := operator in any context."""
+        if not self.rules.spacing.assignment.enabled:
+            return
+            
+        if not (ctx.start and ctx.stop):
+            return
+            
+        # Use token indices to get the exact text
+        start_idx = ctx.start.start
+        stop_idx = ctx.stop.stop + 1  # ANTLR uses inclusive stop
+        
+        statement_text = self.source_text[start_idx:stop_idx]
+        
+        # Find all := occurrences in this statement
+        for match in re.finditer(r':=', statement_text):
+            # Calculate absolute position in source
+            abs_pos = start_idx + match.start()
+            
+            # Check if this := is in a protected region
+            if self._is_protected(abs_pos):
+                continue
+            
+            # Check spacing before and after :=
+            spaces_before = self.rules.spacing.assignment.parameters.spaces_before
+            spaces_after = self.rules.spacing.assignment.parameters.spaces_after
+            
+            # Find the actual boundaries of the current spacing
+            # Go backwards to find start of whitespace or identifier
+            edit_start = abs_pos
+            while edit_start > 0 and self.source_text[edit_start - 1] in ' \t':
+                edit_start -= 1
+            
+            # Go forward to find end of whitespace
+            edit_end = abs_pos + 2  # Skip past :=
+            while edit_end < len(self.source_text) and self.source_text[edit_end] in ' \t':
+                edit_end += 1
+            
+            # Extract the parts before and after :=
+            before_part = self.source_text[edit_start:abs_pos].rstrip()
+            after_part = self.source_text[abs_pos + 2:edit_end].lstrip()
+            
+            # Build the properly spaced version
+            new_text = before_part + ' ' * spaces_before + ':=' + ' ' * spaces_after + after_part
+            
+            # Only add edit if something changed
+            if self.source_text[edit_start:edit_end] != new_text:
+                self.edits.append(TextEdit(edit_start, edit_end, new_text))
+    
     def visitAssignment_statement(self, ctx):
         """Visit assignment statements and fix := spacing."""
-        # Check if rule is enabled
-        if not self.rules.spacing.assignment.enabled:
-            return self.visitChildren(ctx)
-        
-        # Get the source text for this statement
-        if ctx.start and ctx.stop:
-            start_idx = ctx.start.start
-            stop_idx = ctx.stop.stop + 1  # ANTLR uses inclusive stop
-            
-            # Find := in the statement text
-            statement_text = self.source_text[start_idx:stop_idx]
-            
-            # Look for := operator
-            for match in re.finditer(r':=', statement_text):
-                # Calculate absolute position in source
-                abs_pos = start_idx + match.start()
-                
-                # Check if this := is in a protected region
-                if self._is_protected(abs_pos):
-                    continue
-                
-                # Check spacing before and after :=
-                spaces_before = self.rules.spacing.assignment.parameters.spaces_before
-                spaces_after = self.rules.spacing.assignment.parameters.spaces_after
-                
-                # Find the actual boundaries of the current spacing
-                # Go backwards to find start of whitespace or identifier
-                edit_start = abs_pos
-                while edit_start > 0 and self.source_text[edit_start - 1] in ' \t':
-                    edit_start -= 1
-                
-                # Go forward to find end of whitespace
-                edit_end = abs_pos + 2  # Skip past :=
-                while edit_end < len(self.source_text) and self.source_text[edit_end] in ' \t':
-                    edit_end += 1
-                
-                # Extract the parts before and after :=
-                before_part = self.source_text[edit_start:abs_pos].rstrip()
-                after_part = self.source_text[abs_pos + 2:edit_end].lstrip()
-                
-                # Build the properly spaced version
-                new_text = before_part + ' ' * spaces_before + ':=' + ' ' * spaces_after + after_part
-                
-                # Only add edit if something changed
-                if self.source_text[edit_start:edit_end] != new_text:
-                    self.edits.append(TextEdit(edit_start, edit_end, new_text))
-        
+        self._process_assignment_operator(ctx)
+        # Continue visiting children
+        return self.visitChildren(ctx)
+    
+    def visitObject_declaration(self, ctx):
+        """Visit object declaration (constants, variables) and fix := spacing."""
+        self._process_assignment_operator(ctx)
         # Continue visiting children
         return self.visitChildren(ctx)
     

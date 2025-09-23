@@ -14,7 +14,6 @@ type declarations.
 from __future__ import annotations
 
 import pytest
-from pathlib import Path
 
 from ada2022_parser.generated import Ada2022Lexer, Ada2022Parser
 from antlr4 import CommonTokenStream, InputStream

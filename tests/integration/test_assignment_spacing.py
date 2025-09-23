@@ -13,9 +13,11 @@ to ensure proper formatting of := operators.
 
 from __future__ import annotations
 
+import io
+import sys
+from contextlib import redirect_stderr
+
 import pytest
-from pathlib import Path
-from typing import Tuple
 
 from ada2022_parser.generated import Ada2022Lexer, Ada2022Parser
 from antlr4 import CommonTokenStream, InputStream
@@ -314,7 +316,9 @@ end Test;"""
         ada_code = ""
         
         # Should handle empty input gracefully
-        result = self._parse_and_format(ada_code, default_rules)
+        # Suppress expected parser warning for empty input
+        with redirect_stderr(io.StringIO()):
+            result = self._parse_and_format(ada_code, default_rules)
         assert result == ""
     
     def test_assignment_with_attributes(self, default_rules):
@@ -365,6 +369,23 @@ end Test;"""
 class TestEdgeCases:
     """Test edge cases and error conditions."""
     
+    @pytest.fixture
+    def default_rules(self) -> FormattingRules:
+        """Create default formatting rules with 1 space before and after :=."""
+        return FormattingRules()
+    
+    def _parse_and_format(self, ada_code: str, rules: FormattingRules) -> str:
+        """Parse Ada code and apply formatting rules."""
+        input_stream = InputStream(ada_code)
+        lexer = Ada2022Lexer(input_stream)
+        token_stream = CommonTokenStream(lexer)
+        parser = Ada2022Parser(token_stream)
+        tree = parser.compilation_unit()
+        
+        visitor = AssignmentSpacingVisitor(rules, ada_code)
+        visitor.visit(tree)
+        return visitor.apply_edits()
+    
     def test_malformed_ada_code(self, default_rules):
         """Test handling of syntactically incorrect Ada code."""
         ada_code = """procedure Test is
@@ -374,21 +395,23 @@ end Test;"""
         
         # Should handle parse errors gracefully
         rules = FormattingRules()
-        try:
-            input_stream = InputStream(ada_code)
-            lexer = Ada2022Lexer(input_stream)
-            token_stream = CommonTokenStream(lexer)
-            parser = Ada2022Parser(token_stream)
-            tree = parser.compilation_unit()
-            
-            visitor = AssignmentSpacingVisitor(rules, ada_code)
-            visitor.visit(tree)
-            result = visitor.apply_edits()
-            # Even with parse errors, should return something
-            assert isinstance(result, str)
-        except Exception:
-            # Parser errors are acceptable for malformed code
-            pass
+        # Suppress expected parser warning for malformed code
+        with redirect_stderr(io.StringIO()):
+            try:
+                input_stream = InputStream(ada_code)
+                lexer = Ada2022Lexer(input_stream)
+                token_stream = CommonTokenStream(lexer)
+                parser = Ada2022Parser(token_stream)
+                tree = parser.compilation_unit()
+                
+                visitor = AssignmentSpacingVisitor(rules, ada_code)
+                visitor.visit(tree)
+                result = visitor.apply_edits()
+                # Even with parse errors, should return something
+                assert isinstance(result, str)
+            except Exception:
+                # Parser errors are acceptable for malformed code
+                pass
     
     def test_unicode_in_strings(self, default_rules):
         """Test handling of Unicode characters in string literals."""

@@ -27,7 +27,6 @@ from ..core.processing_pipeline import (
     ProcessingPipeline,
     ValidateStage,
 )
-from ..file_discovery_new import discover_files
 # TODO: Import pattern loader when ready
 # from ..pattern_loader import load_patterns
 from ..worker_pool import WorkerPool
@@ -186,10 +185,6 @@ class FormatCommandProcessor(CommandProcessor[FormattedFile]):
     async def _build_pipeline(self, args: FormatArgs) -> ProcessingPipeline:
         """Build processing pipeline based on configuration."""
         pipeline = ProcessingPipeline()
-        
-        # Load patterns if needed
-        # TODO: Add pre_als_patterns and post_als_patterns to FormatArgs when implementing patterns
-        patterns = None
         
         # 1. Parse stage (optional)
         # TODO: Add use_parser flag to FormatArgs when parser is fully integrated
@@ -425,19 +420,32 @@ class FormatCommandProcessor(CommandProcessor[FormattedFile]):
         except Exception as e:
             await self.log_error(f"Post-ALS visitor error: {e}")
         
-        # Rule 1: Remove trailing whitespace
-        # Note: Could be parameterized with preserve_certain_files
-        original_content = current_content
-        current_content = self._remove_trailing_whitespace(current_content)
-        if current_content != original_content:
-            rules_applied.append("trailing_whitespace")
+        # Apply comment formatting rules
+        try:
+            from ..comment_visitors import CommentSpacingVisitor
+            
+            comment_visitor = CommentSpacingVisitor(self.formatting_rules, current_content)
+            if comment_visitor.edits:
+                current_content = comment_visitor.apply_edits()
+                rules_applied.append("comment_spacing")
+        except Exception as e:
+            await self.log_error(f"Comment visitor error: {e}")
         
-        # Rule 2: Ensure single final newline
-        # Note: Could be parameterized with newline_count
-        original_content = current_content
-        current_content = self._normalize_final_newline(current_content)
-        if current_content != original_content:
-            rules_applied.append("final_newline")
+        # Apply line formatting rules
+        try:
+            from ..line_formatting_visitors import LineFormattingVisitor
+            
+            line_visitor = LineFormattingVisitor(self.formatting_rules, current_content)
+            if line_visitor.edits:
+                current_content = line_visitor.apply_edits()
+                # Track which specific rules were applied
+                edit_types = {edit.edit_type for edit in line_visitor.edits}
+                if 'trailing_whitespace' in edit_types:
+                    rules_applied.append("trailing_whitespace")
+                if 'final_newline' in edit_types:
+                    rules_applied.append("final_newline")
+        except Exception as e:
+            await self.log_error(f"Line formatting visitor error: {e}")
         
         return RuleApplicationResult(
             content=current_content,
@@ -478,15 +486,6 @@ class FormatCommandProcessor(CommandProcessor[FormattedFile]):
         # Ensure at least one space after -- if there's content
         return re.sub(r'--([^\s-])', r'-- \1', content)
     
-    def _remove_trailing_whitespace(self, content: str) -> str:
-        """Remove trailing whitespace from all lines."""
-        lines = content.split('\n')
-        return '\n'.join(line.rstrip() for line in lines)
-    
-    def _normalize_final_newline(self, content: str) -> str:
-        """Ensure file ends with exactly one newline."""
-        content = content.rstrip('\n')
-        return content + '\n' if content else ''
     
     async def _process_file(self, path: Path) -> FormattedFile:
         """Process a single file through the pipeline."""
