@@ -128,7 +128,7 @@ class GNATError(ValidationError):
 @dataclass(frozen=True)
 class ConcurrencyError(AdafmtError):
     """Concurrency-related error."""
-    operation: Literal["worker_start", "worker_stop", "queue_full", "timeout", "cancelled"]
+    operation: Literal["worker_start", "worker_stop", "queue_full", "timeout", "cancelled", "queue_submit"]
     worker_id: int | None = None
     queue_size: int | None = None
 

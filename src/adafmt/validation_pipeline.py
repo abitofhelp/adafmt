@@ -102,6 +102,7 @@ class ValidationPipeline:
         self.parser = AdaParserWrapper()
         self.formatter = ParserPatternProcessor(enabled_patterns)
         
+        self.validator: GNATValidator | None
         if validate_with_gnat:
             self.validator = GNATValidator(
                 gnat_flags=gnat_flags,

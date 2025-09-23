@@ -38,11 +38,11 @@ class RenameArgs(CommandArgs):
     project_path: Path
     old_name: str
     new_name: str
-    include_path: list[Path] = None
-    exclude_path: list[Path] = None
+    include_path: list[Path] | None = None
+    exclude_path: list[Path] | None = None
     check: bool = False
     diff: bool = False
-    files: list[Path] = None
+    files: list[Path] | None = None
     
     def __post_init__(self):
         """Initialize default values for list fields."""
@@ -78,15 +78,17 @@ class RenameCommandProcessor(CommandProcessor[RenameResult]):
         self.pipeline: ProcessingPipeline | None = None
         self.all_changes: dict[Path, list[dict]] = {}
     
-    async def discover_targets(self, args: RenameArgs) -> Result[list[Path], AdafmtError]:
+    async def discover_targets(self, args: CommandArgs) -> Result[list[Any], AdafmtError]:
         """Discover files potentially containing the symbol."""
-        await self.log_info(f"Searching for files containing '{args.old_name}'...")
+        # Cast to RenameArgs to access specific fields
+        rename_args = args  # type: RenameArgs
+        await self.log_info(f"Searching for files containing '{rename_args.old_name}'...")
         
         # First, get all Ada files in project
         all_files = discover_files(
             files=None,
-            include_paths=[args.project_path],
-            exclude_paths=args.exclude_path,
+            include_paths=[rename_args.project_path],
+            exclude_paths=rename_args.exclude_path,
             ui=self.tui
         )
         
@@ -97,23 +99,25 @@ class RenameCommandProcessor(CommandProcessor[RenameResult]):
             try:
                 content = path.read_text(encoding='utf-8')
                 # case_sensitive is not defined in RenameArgs, always case-sensitive for now
-                if args.old_name in content:
+                if rename_args.old_name in content:
                     targets.append(path)
             except Exception:
                 # Skip files we can't read
                 pass
         
-        await self.log_info(f"Found {len(targets)} files potentially containing '{args.old_name}'")
+        await self.log_info(f"Found {len(targets)} files potentially containing '{rename_args.old_name}'")
         return Success(targets)
     
     async def process_targets(
         self,
-        targets: list[Path],
-        args: RenameArgs
+        targets: list[Any],
+        args: CommandArgs
     ) -> Result[list[RenameResult], AdafmtError]:
         """Process rename operation on target files."""
+        # Cast to RenameArgs to access specific fields
+        rename_args = args  # type: RenameArgs
         # Build pipeline
-        self.pipeline = self._build_pipeline(args)
+        self.pipeline = self._build_pipeline(rename_args)
         
         if self.als_client:
             self.pipeline.set_als_client(self.als_client)
@@ -142,7 +146,7 @@ class RenameCommandProcessor(CommandProcessor[RenameResult]):
         # Only parse if parser is available
         try:
             from ada2022_parser import Parser as AdaParser
-            if AdaParser:
+            if AdaParser is not None:
                 pipeline.add_stage(ParseStage())
                 
                 # Validate rename is safe
@@ -176,6 +180,13 @@ class RenameCommandProcessor(CommandProcessor[RenameResult]):
                 )
             
             # Process through pipeline
+            if self.pipeline is None:
+                return RenameResult(
+                    path=path,
+                    changes=[],
+                    success=False,
+                    error="Pipeline not initialized"
+                )
             result = await self.pipeline.process(file_data)
             
             if isinstance(result, ProcessedFile) and result.lsp_success:
@@ -332,20 +343,23 @@ class RenameCommandProcessor(CommandProcessor[RenameResult]):
     async def report_results(
         self,
         results: list[RenameResult],
-        args: RenameArgs
-    ) -> Result[None, AdafmtError]:
+        args: CommandArgs
+    ) -> None:
         """Report rename results."""
+        # Cast to RenameArgs to access specific fields
+        rename_args = args  # type: RenameArgs
+        
         total_changes = sum(len(r.changes) for r in results)
         successful_files = sum(1 for r in results if self.is_successful(r))
         
-        await self.log_info(f"\nRename '{args.old_name}' → '{args.new_name}' complete:")
+        await self.log_info(f"\nRename '{rename_args.old_name}' → '{rename_args.new_name}' complete:")
         await self.log_info(f"  Files affected: {successful_files}")
         await self.log_info(f"  Total changes: {total_changes}")
         
-        if args.check:
+        if rename_args.check:
             await self.log_info("\nCHECK MODE - No changes were applied")
             
-            if args.verbose:
+            if rename_args.verbose:
                 await self.log_info("\nPreview of changes:")
                 for result in results:
                     if result.preview:
@@ -356,11 +370,10 @@ class RenameCommandProcessor(CommandProcessor[RenameResult]):
         errors = [r for r in results if not r.success and r.error]
         if errors:
             await self.log_info(f"\nErrors encountered in {len(errors)} files")
-            if args.verbose:
+            if rename_args.verbose:
                 for result in errors:
                     await self.log_error(f"  {result.path}: {result.error}")
         
-        return Success(None)
 
 
 # CLI entry point

@@ -15,7 +15,8 @@ defining the common execution flow and shared infrastructure.
 from abc import ABC, abstractmethod
 from typing import Any, Generic, TypeVar
 
-from returns.future import future_safe
+from returns.future import FutureResult, future_safe
+from returns.io import IOResult
 from returns.result import Failure, Result, Success
 
 from ..als_client import ALSClient
@@ -67,24 +68,28 @@ class CommandProcessor(ABC, Generic[T]):
         Returns:
             Result[int, AdafmtError]: Exit code on success or error
         """
+        # Execute internal method which returns FutureResult[int, Exception]
         result = await self._execute_internal(args)
         
-        # Map exceptions to AdafmtError types
-        if isinstance(result, Failure):
-            exc = result.failure()
-            
-            if isinstance(exc, KeyboardInterrupt):
-                await self.log_info("\nOperation cancelled by user")
-                return Success(130)
-            elif isinstance(exc, AdafmtError):
-                return result  # Already the right error type
-            else:
-                # Convert other exceptions to AdafmtError
-                return Failure(AdafmtError(
-                    message=f"Unexpected error: {exc}"
-                ))
+        # Check if it's a success - if so, return as-is since int maps correctly
+        if isinstance(result, Success):
+            return result  # Success[int] is valid as Result[int, AdafmtError]
         
-        return result
+        # Handle failures - need to convert Exception to AdafmtError
+        exc = result.failure()
+        
+        if isinstance(exc, KeyboardInterrupt):
+            # For keyboard interrupt, log and return special exit code
+            await self.log_info("\nOperation cancelled by user")
+            return Success(130)
+        elif isinstance(exc, AdafmtError):
+            # Already an AdafmtError, wrap in Failure
+            return Failure(exc)
+        else:
+            # Convert other exceptions to AdafmtError
+            return Failure(AdafmtError(
+                message=f"Unexpected error: {exc}"
+            ))
     
     @future_safe
     async def _execute_internal(self, args: CommandArgs) -> int:
@@ -108,13 +113,13 @@ class CommandProcessor(ABC, Generic[T]):
             if self.requires_als():
                 als_result = await self.initialize_als(args)
                 if isinstance(als_result, Failure):
-                    raise AdafmtError(message="Failed to initialize ALS")
+                    raise RuntimeError("Failed to initialize ALS")
                 self.als_client = als_result.unwrap()
             
             # Discovery phase
             targets_result = await self.discover_targets(args)
             if isinstance(targets_result, Failure):
-                raise AdafmtError(message="Failed to discover targets")
+                raise RuntimeError("Failed to discover targets")
             
             targets = targets_result.unwrap()
             if not targets:
@@ -124,7 +129,7 @@ class CommandProcessor(ABC, Generic[T]):
             # Processing phase (command-specific)
             results = await self.process_targets(targets, args)
             if isinstance(results, Failure):
-                raise AdafmtError(message="Failed to process targets")
+                raise RuntimeError("Failed to process targets")
             
             # Finalization phase
             return await self.finalize(results.unwrap(), args)
@@ -194,15 +199,18 @@ class CommandProcessor(ABC, Generic[T]):
         Returns:
             Result[ALSClient, AdafmtError]: Initialized ALS client or error
         """
+        # Execute internal method which returns FutureResult[ALSClient, Exception]
         result = await self._initialize_als_internal(args)
         
-        if isinstance(result, Failure):
+        # @future_safe returns IOResult, not Result
+        # We need to handle IOResult -> Result conversion
+        if isinstance(result, Success):
+            return Success(result.unwrap())
+        else:
             exc = result.failure()
             return Failure(AdafmtError(
                 message=f"Failed to initialize ALS: {exc}"
             ))
-        
-        return Success(result.unwrap())
     
     @abstractmethod
     async def discover_targets(self, args: CommandArgs) -> Result[list[Any], AdafmtError]:
@@ -336,15 +344,12 @@ class CommandProcessor(ABC, Generic[T]):
         return True
     
     @abstractmethod
-    async def report_results(self, results: list[T], args: CommandArgs) -> Result[None, AdafmtError]:
+    async def report_results(self, results: list[T], args: CommandArgs) -> None:
         """
         Report command results.
         
         Args:
             results: Processing results
             args: Command arguments
-            
-        Returns:
-            Result[None, AdafmtError]: Success or error
         """
         pass

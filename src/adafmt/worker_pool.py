@@ -10,7 +10,7 @@
 import asyncio
 import signal
 import time
-from typing import List, Optional
+from typing import Any, List, Optional
 from pathlib import Path
 
 from returns.result import Failure, Result, Success
@@ -50,7 +50,7 @@ class WorkerPool:
             num_workers = 1
         
         self.num_workers = num_workers
-        self.queue = asyncio.Queue(maxsize=queue_size)
+        self.queue: asyncio.Queue[WorkItem | None] = asyncio.Queue(maxsize=queue_size)
         self.workers: List[asyncio.Task] = []
         self.context: Optional[WorkerContext] = None
         self._running = False
@@ -403,7 +403,7 @@ class WorkerPool:
                 
                 # Retry handler callback
                 def on_retry(attempt: int, error: Exception) -> None:
-                    if self.context.logger:
+                    if self.context and self.context.logger:
                         self.context.logger.write({
                             'ev': 'file_write_retry',
                             'path': str(item.path),
@@ -502,7 +502,7 @@ class SignalHandler:
             worker_pool: Worker pool to shutdown on signal
         """
         self.worker_pool = worker_pool
-        self._original_handlers = {}
+        self._original_handlers: dict[signal.Signals, Any] = {}
         
     def __enter__(self):
         """Install signal handlers."""

@@ -42,12 +42,12 @@ class FormatArgs(CommandArgs):
     als_stale_minutes: int = 30
     check: bool = False
     diff: bool = False
-    exclude_path: list[Path] = None
+    exclude_path: list[Path] | None = None
     format_timeout: int = 60
-    include_path: list[Path] = None
+    include_path: list[Path] | None = None
     init_timeout: int = 180
     write: bool = False
-    files: list[Path] = None
+    files: list[Path] | None = None
     
     def __post_init__(self):
         """Initialize default values for list fields."""

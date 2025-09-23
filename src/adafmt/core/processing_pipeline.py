@@ -16,10 +16,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol, TypeVar
 
+from returns.result import Failure
+
 try:
     from ada2022_parser import Parser as AdaParser  # type: ignore[import-not-found]
 except ImportError:
-    AdaParser = None  # type: ignore[assignment]  # Parser is optional
+    AdaParser = None  # type: ignore[misc,assignment]  # Parser is optional
 
 from ..als_client import ALSClient
 
@@ -158,11 +160,19 @@ class ParseStage:
         try:
             # Parse the Ada source
             ast = self.parser.parse(file_data.content)
+            # Handle the parsed AST
+            if hasattr(ast, 'to_dict'):
+                parsed_ast = ast.to_dict()
+            elif isinstance(ast, dict):
+                parsed_ast = ast
+            else:
+                parsed_ast = {"root": str(ast)}  # Fallback for unknown types
+                
             return ParsedFile(
                 path=file_data.path,
                 content=file_data.content,
                 encoding=file_data.encoding,
-                ast=ast.to_dict() if hasattr(ast, 'to_dict') else ast,
+                ast=parsed_ast,
                 parse_errors=[]
             )
         except Exception as e:
@@ -228,10 +238,16 @@ class LSPStage:
         try:
             # Prepare and send request
             request = self.operation.prepare_request(validated.path, validated.content)
-            response = await self.als_client.send_request(
-                request["method"],
-                request["params"]
-            )
+            # Use the request_with_timeout method instead of send_request
+            response_result = await self.als_client.request_with_timeout({
+                "method": request["method"],
+                "params": request["params"]
+            }, timeout=60.0)  # Default 60 second timeout
+            
+            if isinstance(response_result, Failure):
+                raise RuntimeError(f"ALS request failed: {response_result.failure()}")
+                
+            response = response_result.unwrap()
             
             # Process response
             result = self.operation.process_response(response)
@@ -313,14 +329,14 @@ class GNATValidationStage:
 
 # LSP Operation Protocol and implementations
 
-class LSPOperation(Protocol[R, T]):
+class LSPOperation(Protocol):
     """Protocol for LSP operations."""
     
-    def prepare_request(self, target: Path, content: str) -> R:
+    def prepare_request(self, target: Path, content: str) -> dict:
         """Prepare LSP request."""
         ...
     
-    def process_response(self, response: dict) -> T:
+    def process_response(self, response: dict | list) -> Any:
         """Process LSP response."""
         ...
 
@@ -384,7 +400,7 @@ class RenameOperation:
             }
         }
     
-    def process_response(self, response: dict) -> dict:
+    def process_response(self, response: dict | list) -> Any:
         """Process rename response."""
         # Returns WorkspaceEdit with changes across files
         return response

@@ -4,6 +4,8 @@ import asyncio
 from pathlib import Path
 from typing import List, Tuple, Any
 
+from returns.result import Failure
+
 from .als_client import ALSClient
 from .pattern_formatter import PatternFormatter
 from .logging_jsonl import JsonlLogger
@@ -71,7 +73,7 @@ class PatternValidator:
                 })
                 
                 try:
-                    edits = await self.client.request_with_timeout({
+                    edits_result = await self.client.request_with_timeout({
                         "method": "textDocument/formatting",
                         "params": {
                             "textDocument": {"uri": file_path.as_uri()},
@@ -79,6 +81,11 @@ class PatternValidator:
                         }
                     }, timeout=format_timeout)
                     
+                    # Handle Result type
+                    if isinstance(edits_result, Failure):
+                        raise edits_result.failure()
+                    
+                    edits = edits_result.unwrap()
                     if edits:
                         # ALS wants to make changes to pattern output
                         errors_encountered.append(
