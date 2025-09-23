@@ -14,7 +14,7 @@ and base command infrastructure.
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from ..core.base_command import CommandArgs, CommandProcessor
 from ..core.processing_pipeline import (
@@ -31,7 +31,7 @@ from ..file_discovery_new import discover_files
 # from ..pattern_loader import load_patterns
 from ..worker_pool import WorkerPool
 from ..errors import AdafmtError
-from returns.result import Result, Success, Failure
+from returns.result import Failure, Result, Success
 
 
 @dataclass
@@ -77,18 +77,20 @@ class FormatCommandProcessor(CommandProcessor[FormattedFile]):
         self.pipeline: ProcessingPipeline | None = None
         self.worker_pool: WorkerPool | None = None
     
-    async def discover_targets(self, args: FormatArgs) -> Result[list[Path], AdafmtError]:
+    async def discover_targets(self, args: CommandArgs) -> Result[list[Any], AdafmtError]:
         """Discover Ada files to format."""
+        # Cast to FormatArgs to access specific fields
+        format_args = cast(FormatArgs, args)
         await self.log_info("Discovering Ada files...")
         
         try:
             # Convert file paths to strings for discover_files
-            file_list = [str(f) for f in args.files] if args.files else None
+            file_list = [str(f) for f in format_args.files] if format_args.files else None
             
             files = discover_files(
                 files=file_list,
-                include_paths=args.include_path,
-                exclude_paths=args.exclude_path,
+                include_paths=format_args.include_path,
+                exclude_paths=format_args.exclude_path,
                 ui=self.tui
             )
             
@@ -101,28 +103,43 @@ class FormatCommandProcessor(CommandProcessor[FormattedFile]):
     
     async def process_targets(
         self,
-        targets: list[Path],
-        args: FormatArgs
+        targets: list[Any],
+        args: CommandArgs
     ) -> Result[list[FormattedFile], AdafmtError]:
         """Process files through formatting pipeline."""
+        # Cast to FormatArgs to access specific fields
+        format_args = cast(FormatArgs, args)
         # Build the processing pipeline
-        self.pipeline = await self._build_pipeline(args)
+        self.pipeline = await self._build_pipeline(format_args)
         
         # Inject ALS client if available
         if self.als_client:
             self.pipeline.set_als_client(self.als_client)
         
         # Create worker pool for parallel processing
+        format_args = cast(FormatArgs, args)
         self.worker_pool = WorkerPool(
-            num_workers=args.workers,
-            metrics=self.metrics
+            num_workers=format_args.workers
         )
         
-        await self.log_info(f"Processing {len(targets)} files with {args.workers} workers")
+        await self.log_info(f"Processing {len(targets)} files with {format_args.workers} workers")
         
-        # Process files
-        results = []
-        async with self.worker_pool:
+        # Start worker pool
+        start_result = await self.worker_pool.start(
+            metrics=self.metrics,
+            pattern_formatter=None,  # TODO: Add pattern formatter support
+            write_enabled=format_args.write,
+            diff_enabled=format_args.diff
+        )
+        
+        if isinstance(start_result, Failure):
+            return Failure(AdafmtError(
+                message=f"Failed to start worker pool: {start_result.failure()}"
+            ))
+        
+        try:
+            # Process files
+            results = []
             for i, path in enumerate(targets):
                 # Update progress
                 await self.update_progress(i, len(targets))
@@ -136,8 +153,12 @@ class FormatCommandProcessor(CommandProcessor[FormattedFile]):
                     self.metrics.successful_files += 1
                 else:
                     self.metrics.failed_files += 1
-        
-        return Success(results)
+            
+            return Success(results)
+        finally:
+            # Always shutdown the worker pool
+            if self.worker_pool:
+                await self.worker_pool.shutdown()
     
     async def _build_pipeline(self, args: FormatArgs) -> ProcessingPipeline:
         """Build processing pipeline based on configuration."""
@@ -153,7 +174,7 @@ class FormatCommandProcessor(CommandProcessor[FormattedFile]):
         if use_parser:
             try:
                 from ada2022_parser import Parser as AdaParser
-                if AdaParser:
+                if AdaParser is not None:
                     await self.log_info("Parser-based formatting enabled")
                     pipeline.add_stage(ParseStage())
                     
@@ -183,6 +204,14 @@ class FormatCommandProcessor(CommandProcessor[FormattedFile]):
             file_data = FileData.from_path(path)
             
             # Process through pipeline
+            if self.pipeline is None:
+                return FormattedFile(
+                    path=path,
+                    content=file_data.content,
+                    encoding=file_data.encoding,
+                    final_content=file_data.content,  # No processing applied
+                    patterns_applied=[]
+                )
             result = await self.pipeline.process(file_data)
             
             # Write result if successful
@@ -244,9 +273,12 @@ class FormatCommandProcessor(CommandProcessor[FormattedFile]):
     async def report_results(
         self, 
         results: list[FormattedFile], 
-        args: FormatArgs
-    ) -> Result[None, AdafmtError]:
+        args: CommandArgs
+    ) -> None:
         """Report formatting results."""
+        # Cast to FormatArgs to access specific fields
+        format_args = cast(FormatArgs, args)
+        
         successful = sum(1 for r in results if self.is_successful(r))
         failed = len(results) - successful
         
@@ -258,7 +290,7 @@ class FormatCommandProcessor(CommandProcessor[FormattedFile]):
             f"  Failed: {failed} files",
         ]
         
-        if args.use_parser:
+        if getattr(format_args, 'use_parser', False):
             parse_errors = sum(1 for r in results if r.parse_errors)
             if parse_errors:
                 summary.append(f"  Parse errors: {parse_errors} files")
@@ -276,7 +308,7 @@ class FormatCommandProcessor(CommandProcessor[FormattedFile]):
             await self.log_info(line)
         
         # Report errors if verbose
-        if args.verbose and failed > 0:
+        if format_args.verbose and failed > 0:
             await self.log_info("\nErrors:")
             for result in results:
                 if not self.is_successful(result):
@@ -290,7 +322,6 @@ class FormatCommandProcessor(CommandProcessor[FormattedFile]):
                     
                     await self.log_error(f"  {result.path}: {', '.join(errors)}")
         
-        return Success(None)
 
 
 # Factory function for creating format command

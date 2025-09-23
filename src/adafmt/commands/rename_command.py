@@ -14,7 +14,7 @@ across a project using the Ada Language Server.
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from ..core.base_command import CommandArgs, CommandProcessor
 from ..core.processing_pipeline import (
@@ -81,7 +81,7 @@ class RenameCommandProcessor(CommandProcessor[RenameResult]):
     async def discover_targets(self, args: CommandArgs) -> Result[list[Any], AdafmtError]:
         """Discover files potentially containing the symbol."""
         # Cast to RenameArgs to access specific fields
-        rename_args = args  # type: ignore[assignment]
+        rename_args = cast(RenameArgs, args)
         await self.log_info(f"Searching for files containing '{rename_args.old_name}'...")
         
         # First, get all Ada files in project
@@ -115,7 +115,7 @@ class RenameCommandProcessor(CommandProcessor[RenameResult]):
     ) -> Result[list[RenameResult], AdafmtError]:
         """Process rename operation on target files."""
         # Cast to RenameArgs to access specific fields
-        rename_args = args  # type: ignore[assignment]
+        rename_args = cast(RenameArgs, args)
         # Build pipeline
         self.pipeline = self._build_pipeline(rename_args)
         
@@ -347,7 +347,7 @@ class RenameCommandProcessor(CommandProcessor[RenameResult]):
     ) -> None:
         """Report rename results."""
         # Cast to RenameArgs to access specific fields
-        rename_args = args  # type: ignore[assignment]
+        rename_args = cast(RenameArgs, args)
         
         total_changes = sum(len(r.changes) for r in results)
         successful_files = sum(1 for r in results if self.is_successful(r))
