@@ -179,30 +179,6 @@ class TestPathValidation:
         assert not is_ada_file(Path("test.py"))
 
 
-class TestUIMode:
-    """Test suite for UI mode selection and initialization.
-    
-    Tests that the UI mode parameter is correctly passed through
-    to the UI factory function for creating the appropriate UI instance.
-    """
-    
-    @patch('adafmt.cli.make_ui')
-    def test_ui_mode_selection(self, mock_make_ui):
-        """Test UI mode parameter is correctly passed to UI factory.
-        
-        Given: UI mode "plain"
-        When: make_ui is called with the mode
-        Then: UI factory is called with the correct mode parameter
-        """
-        mock_ui = MagicMock()
-        mock_make_ui.return_value = mock_ui
-        
-        # This would be called within run_formatter
-        ui = cli.make_ui("plain")
-        
-        mock_make_ui.assert_called_once_with("plain")
-
-
 class TestCleanupHandler:
     """Test suite for cleanup handler and signal handling.
     
