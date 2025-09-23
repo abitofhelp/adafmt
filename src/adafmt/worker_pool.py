@@ -13,6 +13,9 @@ import time
 from typing import List, Optional
 from pathlib import Path
 
+from returns.result import Failure, Result, Success
+from returns.future import future_safe
+
 from .worker_context import WorkItem, WorkerContext
 from .thread_safe_metrics import ThreadSafeMetrics
 from .async_file_io import atomic_write_async
@@ -21,6 +24,7 @@ from .logging_jsonl import JsonlLogger
 from .worker_pool_monitor import WorkerHealthMonitor, QueueMonitor
 from .edits import unified_diff
 from .retry_handler import RetryHandler
+from .errors import WorkerError, ConcurrencyError
 
 
 class WorkerPool:
@@ -56,7 +60,8 @@ class WorkerPool:
         self._pending_tasks = 0
         self._all_tasks_done = asyncio.Event()
     
-    async def start(
+    @future_safe
+    async def _start_internal(
         self,
         metrics: ThreadSafeMetrics,
         pattern_formatter: Optional[PatternFormatter],
@@ -66,7 +71,7 @@ class WorkerPool:
         pattern_logger: Optional[JsonlLogger] = None,
         ui_queue: Optional[asyncio.Queue] = None
     ) -> None:
-        """Start the worker pool.
+        """Internal start implementation with automatic exception handling.
         
         Args:
             metrics: Thread-safe metrics collector
@@ -76,10 +81,13 @@ class WorkerPool:
             logger: Optional logger for events
             pattern_logger: Optional logger for pattern results
             ui_queue: Optional queue for UI updates
+            
+        Returns:
+            None: Success (exceptions caught by decorator)
+            
+        Note:
+            @future_safe automatically converts exceptions to IOResult[None, Exception]
         """
-        if self._running:
-            raise RuntimeError("Worker pool already running")
-        
         # Create UI queue if not provided
         if ui_queue is None:
             ui_queue = asyncio.Queue()
@@ -134,23 +142,91 @@ class WorkerPool:
                 'health_monitoring': True
             })
     
-    async def submit(self, item: WorkItem) -> None:
+    async def start(
+        self,
+        metrics: ThreadSafeMetrics,
+        pattern_formatter: Optional[PatternFormatter],
+        write_enabled: bool,
+        diff_enabled: bool = False,
+        logger: Optional[JsonlLogger] = None,
+        pattern_logger: Optional[JsonlLogger] = None,
+        ui_queue: Optional[asyncio.Queue] = None
+    ) -> Result[None, WorkerError]:
+        """Start the worker pool.
+        
+        Args:
+            metrics: Thread-safe metrics collector
+            pattern_formatter: Optional pattern formatter
+            write_enabled: Whether to write files to disk
+            diff_enabled: Whether to show diffs
+            logger: Optional logger for events
+            pattern_logger: Optional logger for pattern results
+            ui_queue: Optional queue for UI updates
+            
+        Returns:
+            Result[None, WorkerError]: Success or specific error
+        """
+        if self._running:
+            return Failure(WorkerError(
+                message="Worker pool already running",
+                operation="worker_start"
+            ))
+        
+        return await self._start_internal(
+            metrics, pattern_formatter, write_enabled, diff_enabled,
+            logger, pattern_logger, ui_queue
+        ).map_failure(
+            lambda exc: WorkerError(
+                message=f"Failed to start worker pool: {exc}",
+                operation="worker_start"
+            )
+        )
+    
+    @future_safe
+    async def _submit_internal(self, item: WorkItem) -> None:
+        """Internal submit implementation with automatic exception handling.
+        
+        Args:
+            item: Work item to process
+            
+        Returns:
+            None: Success (exceptions caught by decorator)
+            
+        Note:
+            @future_safe automatically converts exceptions to IOResult[None, Exception]
+        """
+        # Add queue time for metrics
+        item.queue_time = time.time()
+        self._pending_tasks += 1
+        self._all_tasks_done.clear()
+        
+        await self.queue.put(item)
+    
+    async def submit(self, item: WorkItem) -> Result[None, WorkerError]:
         """Submit a work item to the pool.
         
         Args:
             item: Work item to process
             
-        Raises:
-            RuntimeError: If pool not started
+        Returns:
+            Result[None, WorkerError]: Success or specific error
         """
         if not self._running:
-            raise RuntimeError("Worker pool not started")
+            return Failure(WorkerError(
+                message="Worker pool not started",
+                operation="queue_submit"
+            ))
         
-        # Add queue time for metrics
-        item.queue_time = time.time()
-        self._pending_tasks += 1
-        self._all_tasks_done.clear()
-        await self.queue.put(item)
+        result = await self._submit_internal(item)
+        if isinstance(result, Failure):
+            self._pending_tasks -= 1
+            exc = result.failure()
+            return Failure(WorkerError(
+                message=f"Failed to submit work item: {exc}",
+                operation="queue_submit",
+                path=item.path
+            ))
+        return Success(None)
     
     async def wait_for_completion(self) -> None:
         """Wait for all submitted tasks to complete."""

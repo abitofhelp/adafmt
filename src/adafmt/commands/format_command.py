@@ -28,27 +28,40 @@ from ..core.processing_pipeline import (
     ProcessingPipeline,
     ValidateStage,
 )
-from ..file_discovery import discover_ada_files
+from ..file_discovery_new import discover_files
 from ..pattern_loader import load_patterns
 from ..worker_pool import WorkerPool
+from ..errors import AdafmtError
+from returns.result import Result, Success, Failure
+from returns.future import future_safe
 
 
 @dataclass
 class FormatArgs(CommandArgs):
     """Arguments specific to format command."""
     
-    files: list[Path]
-    recursive: bool = False
-    ignore: list[str] | None = None
-    config_file: Path | None = None
-    use_parser: bool = True
-    pre_als_patterns: bool = True
-    post_als_patterns: bool = True
-    validate_with_gnat: bool = False
-    pattern_file: Path | None = None
+    project_path: Path
+    als_stale_minutes: int = 30
+    check: bool = False
+    diff: bool = False
+    exclude_path: list[Path] = None
+    format_timeout: int = 60
+    include_path: list[Path] = None
+    init_timeout: int = 180
+    write: bool = False
+    files: list[Path] = None
+    
+    def __post_init__(self):
+        """Initialize default values for list fields."""
+        if self.exclude_path is None:
+            self.exclude_path = []
+        if self.include_path is None:
+            self.include_path = []
+        if self.files is None:
+            self.files = []
 
 
-class FormatCommand(CommandProcessor[FormattedFile]):
+class FormatCommandProcessor(CommandProcessor[FormattedFile]):
     """
     Format Ada source files.
     
@@ -66,24 +79,33 @@ class FormatCommand(CommandProcessor[FormattedFile]):
         self.pipeline: ProcessingPipeline | None = None
         self.worker_pool: WorkerPool | None = None
     
-    async def discover_targets(self, args: FormatArgs) -> list[Path]:
+    async def discover_targets(self, args: FormatArgs) -> Result[list[Path], AdafmtError]:
         """Discover Ada files to format."""
         await self.log_info("Discovering Ada files...")
         
-        files = await discover_ada_files(
-            paths=args.files,
-            recursive=args.recursive,
-            ignore_patterns=args.ignore or []
-        )
-        
-        await self.log_info(f"Found {len(files)} Ada files to format")
-        return files
+        try:
+            # Convert file paths to strings for discover_files
+            file_list = [str(f) for f in args.files] if args.files else None
+            
+            files = discover_files(
+                files=file_list,
+                include_paths=args.include_path,
+                exclude_paths=args.exclude_path,
+                ui=self.tui
+            )
+            
+            await self.log_info(f"Found {len(files)} Ada files to format")
+            return Success(files)
+        except Exception as e:
+            return Failure(AdafmtError(
+                message=f"Failed to discover files: {e}"
+            ))
     
     async def process_targets(
         self,
         targets: list[Path],
         args: FormatArgs
-    ) -> list[FormattedFile]:
+    ) -> Result[list[FormattedFile], AdafmtError]:
         """Process files through formatting pipeline."""
         # Build the processing pipeline
         self.pipeline = await self._build_pipeline(args)
@@ -117,7 +139,7 @@ class FormatCommand(CommandProcessor[FormattedFile]):
                 else:
                     self.metrics.failed_files += 1
         
-        return results
+        return Success(results)
     
     async def _build_pipeline(self, args: FormatArgs) -> ProcessingPipeline:
         """Build processing pipeline based on configuration."""
@@ -231,14 +253,14 @@ class FormatCommand(CommandProcessor[FormattedFile]):
         self, 
         results: list[FormattedFile], 
         args: FormatArgs
-    ) -> None:
+    ) -> Result[None, AdafmtError]:
         """Report formatting results."""
         successful = sum(1 for r in results if self.is_successful(r))
         failed = len(results) - successful
         
         # Build summary
         summary = [
-            f"\nFormatting complete:",
+            "\nFormatting complete:",
             f"  Processed: {len(results)} files",
             f"  Successful: {successful} files",
             f"  Failed: {failed} files",
@@ -275,10 +297,12 @@ class FormatCommand(CommandProcessor[FormattedFile]):
                         errors.append(f"LSP error: {result.lsp_result}")
                     
                     await self.log_error(f"  {result.path}: {', '.join(errors)}")
+        
+        return Success(None)
 
 
 # Factory function for creating format command
-def create_format_command(config: dict[str, Any] | None = None) -> FormatCommand:
+def create_format_command(config: dict[str, Any] | None = None) -> FormatCommandProcessor:
     """
     Create a format command with configuration.
     
@@ -288,7 +312,7 @@ def create_format_command(config: dict[str, Any] | None = None) -> FormatCommand
     Returns:
         Configured format command
     """
-    return FormatCommand(config)
+    return FormatCommandProcessor(config)
 
 
 # CLI entry point
@@ -310,4 +334,10 @@ async def format_main(args: FormatArgs) -> int:
     
     # Create and execute command
     command = create_format_command(config)
-    return await command.execute(args)
+    result = await command.execute(args)
+    
+    # Extract exit code from Result
+    if isinstance(result, Success):
+        return result.unwrap()
+    else:
+        return 1  # Generic error code

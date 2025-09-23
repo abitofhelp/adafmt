@@ -5,7 +5,7 @@
 **License:** BSD-3-Clause  
 **Copyright:** © 2025 Michael Gardner, A Bit of Help, Inc.  
 **Authors:** Michael Gardner, A Bit of Help, Inc.  
-**Status:** Draft
+**Status:** Released
 
 ## 1. Introduction
 
@@ -69,28 +69,44 @@ class AdaParser:
         self.parser = Parser()  # From ada2022_parser
         
     @impure_safe
-    def read_file(self, file_path: Path) -> str:
-        """Read file with automatic exception handling."""
+    def _read_file_internal(self, file_path: Path) -> str:
+        """Internal read with automatic exception handling."""
         return file_path.read_text(encoding='utf-8')
+        
+    def read_file(self, file_path: Path) -> Result[str, FileError]:
+        """Read file with specific error mapping."""
+        return self._read_file_internal(file_path).map_failure(
+            lambda exc: FileError(
+                path=file_path,
+                operation="read",
+                message=str(exc),
+                permission_error=isinstance(exc, PermissionError)
+            )
+        )
+        
+    @impure_safe
+    def _parse_content_internal(self, content: str) -> Any:
+        """Internal parse with automatic exception handling."""
+        return self.parser.parse(content)
         
     def parse_content(self, content: str, path: Path) -> Result[ParseResult, ParseError]:
         """Parse Ada content and return Result type."""
-        try:
-            tree = self.parser.parse(content)
-            return Success(ParseResult(
+        return self._parse_content_internal(content).map_failure(
+            lambda exc: ParseError(
+                path=path,
+                line=getattr(exc, 'line', 0),
+                column=getattr(exc, 'column', 0),
+                message=str(exc)
+            )
+        ).map(
+            lambda tree: ParseResult(
                 ast=tree,
                 source_lines=content.split('\n'),
                 path=path
-            ))
-        except Exception as e:
-            return Failure(ParseError(
-                path=path,
-                line=getattr(e, 'line', 0),
-                column=getattr(e, 'column', 0),
-                message=str(e)
-            ))
+            )
+        )
     
-    def parse_file(self, file_path: Path) -> IOResult[ParseResult, ParseError | FileError]:
+    def parse_file(self, file_path: Path) -> Result[ParseResult, ParseError | FileError]:
         """Parse Ada file with full error handling."""
         return self.read_file(file_path).bind(
             lambda content: self.parse_content(content, file_path)
@@ -454,7 +470,60 @@ casing:
     HTTP_Client: "HTTP_Client"
 ```
 
-## 5. Functional Error Handling
+## 5. Functional Error Handling with Decorators
+
+### 5.0 Decorator Pattern Architecture
+
+The parser-based architecture uses dry-python/returns decorators to achieve functional error handling with minimal boilerplate:
+
+#### 5.0.1 Decorator Selection Guidelines
+- **@impure_safe**: For synchronous functions that may raise exceptions
+- **@future_safe**: For async functions that may raise exceptions  
+- **Error mapping**: Always map generic exceptions to specific error types
+
+#### 5.0.2 Standard Pattern
+```python
+# Internal function with decorator (catches exceptions automatically)
+@impure_safe
+def _internal_operation(path: Path, data: str) -> str:
+    """Internal operation with automatic exception handling."""
+    return path.write_text(data)  # May raise exceptions
+
+# Public API with error mapping
+def public_operation(path: Path, data: str) -> Result[str, FileError]:
+    """Public API with specific error types."""
+    return _internal_operation(path, data).map_failure(
+        lambda exc: FileError(
+            path=path,
+            operation="write",
+            message=str(exc),
+            permission_error=isinstance(exc, PermissionError)
+        )
+    )
+
+# Async variant
+@future_safe
+async def _async_internal_operation(path: Path) -> str:
+    """Async internal operation with automatic exception handling."""
+    return await async_read_file(path)
+
+async def async_public_operation(path: Path) -> Result[str, FileError]:
+    """Async public API with specific error types."""
+    return await _async_internal_operation(path).map_failure(
+        lambda exc: FileError(
+            path=path,
+            operation="read",
+            message=str(exc)
+        )
+    )
+```
+
+#### 5.0.3 Benefits of Decorator Pattern
+1. **Reduced Boilerplate**: No manual try/catch blocks
+2. **Consistent Error Handling**: All exceptions caught at function boundary
+3. **Type Safety**: IOResult types ensure exceptions don't propagate
+4. **Testability**: Easy to test error conditions
+5. **Composability**: Results can be chained with bind(), map(), etc.
 
 ### 5.1 Error Type Hierarchy
 ```python
@@ -564,11 +633,22 @@ class ALSClient:
     """ALS client with functional error handling."""
     
     @future_safe
-    async def format_document(self, path: Path, content: str) -> str:
-        """Format with automatic exception handling."""
+    async def _format_document_internal(self, path: Path, content: str) -> str:
+        """Internal format with automatic exception handling."""
         request = self.create_format_request(path, content)
         response = await self.send_request(request)
         return self.apply_edits(content, response['result'])
+        
+    async def format_document(self, path: Path, content: str) -> Result[str, ALSError]:
+        """Format with specific error mapping."""
+        return await self._format_document_internal(path, content).map_failure(
+            lambda exc: ALSError(
+                path=path,
+                operation="format",
+                message=str(exc),
+                timeout=isinstance(exc, asyncio.TimeoutError)
+            )
+        )
     
     async def format_with_retry(
         self, 
@@ -598,30 +678,52 @@ class GNATValidator:
     """GNAT validation with error handling."""
     
     @impure_safe
-    def validate_file(self, path: Path) -> None:
-        """Validate with GNAT, exceptions become Results."""
-        result = subprocess.run(
+    def _validate_file_internal(self, path: Path) -> subprocess.CompletedProcess:
+        """Internal validation with automatic exception handling."""
+        return subprocess.run(
             ['gcc', '-c', '-gnatc', '-gnatf', '-gnat2022', '-gnatwe', str(path)],
             capture_output=True,
-            text=True
+            text=True,
+            check=True  # Raises on non-zero exit
         )
         
-        if result.returncode != 0:
-            raise GNATValidationError(
+    def validate_file(self, path: Path) -> Result[None, GNATError]:
+        """Validate with GNAT, mapping subprocess errors."""
+        return self._validate_file_internal(path).map_failure(
+            lambda exc: GNATError(
                 path=path,
-                exit_code=result.returncode,
-                stdout=result.stdout,
-                stderr=result.stderr
+                exit_code=getattr(exc, 'returncode', -1),
+                stdout=getattr(exc, 'stdout', ''),
+                stderr=getattr(exc, 'stderr', str(exc))
             )
+        ).map(lambda _: None)  # Success returns None
 ```
 
 ### 5.6 Concurrent Error Handling
 ```python
-from returns.future import FutureResult
+from returns.future import future_safe
 from typing import List
 
 class WorkerPool:
     """Worker pool with functional error handling."""
+    
+    @future_safe
+    async def _process_single_file_internal(self, path: Path) -> FormattedFile:
+        """Internal file processing with automatic exception handling."""
+        # All exceptions automatically caught by decorator
+        content = await self.read_file(path)
+        formatted = await self.format_content(content, path)
+        return await self.write_file(path, formatted)
+        
+    async def process_single_file(self, path: Path) -> Result[FormattedFile, FormattingError]:
+        """Process single file with specific error mapping."""
+        return await self._process_single_file_internal(path).map_failure(
+            lambda exc: FormattingError(
+                path=path,
+                message=str(exc),
+                operation="format"
+            )
+        )
     
     async def process_files(
         self, 
@@ -634,22 +736,18 @@ class WorkerPool:
             for path in paths
         ]
         
-        # Gather results (never raises exceptions)
-        results = await asyncio.gather(*futures, return_exceptions=True)
+        # Gather results (never raises exceptions due to Result types)
+        results = await asyncio.gather(*futures, return_exceptions=False)
         
         # Separate successes and failures
         successes = []
         failures = []
         
         for result in results:
-            match result:
-                case Success(value):
-                    successes.append(value)
-                case Failure(error):
-                    failures.append(error)
-                case Exception() as e:
-                    # This should never happen with proper error handling
-                    failures.append(UnhandledError(str(e)))
+            if isinstance(result, Success):
+                successes.append(result.unwrap())
+            elif isinstance(result, Failure):
+                failures.append(result.failure())
         
         if failures:
             return Failure(failures)
@@ -663,6 +761,7 @@ class WorkerPool:
 ```python
 def format_with_fallback(self, path: Path) -> Result[FormattedFile, FormattingError]:
     """Try full formatting, fall back to partial."""
+    # Using chained error recovery with alt() method
     return (
         self.full_format(path)
         .alt(lambda _: self.als_only_format(path))

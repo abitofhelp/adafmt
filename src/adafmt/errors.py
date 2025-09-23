@@ -52,12 +52,49 @@ class FileError(AdafmtError):
 
 @dataclass(frozen=True)
 class ParseError(AdafmtError):
-    """Ada source code parsing error."""
+    """Ada parsing error."""
     path: Path
     line: int
     column: int
-    syntax_error: bool = True
-    preprocessing_directive: bool = False
+    # message inherited from AdafmtError
+
+
+# =============================================================================
+# Visitor Pattern Errors
+# =============================================================================
+
+@dataclass(frozen=True)
+class VisitorError(AdafmtError):
+    """Error from formatting visitor."""
+    path: Path
+    visitor_name: str
+    node_type: str
+    # message inherited from AdafmtError
+
+
+@dataclass(frozen=True)
+class PatternError(AdafmtError):
+    """Pattern application error."""
+    path: Path
+    pattern_name: str
+    line: int = 0
+    original_error: str | None = None
+    # message inherited from AdafmtError
+
+
+# =============================================================================
+# Validation Errors
+# =============================================================================
+
+@dataclass(frozen=True)
+class ValidationError(AdafmtError):
+    """GNAT compiler validation error."""
+    path: Path
+    exit_code: int
+    stdout: str = ""
+    stderr: str = ""
+    command: str = ""
+    # message inherited from AdafmtError
 
 
 # =============================================================================
@@ -74,20 +111,6 @@ class ALSError(AdafmtError):
     path: Path | None = None
 
 
-# =============================================================================
-# Validation Errors
-# =============================================================================
-
-@dataclass(frozen=True)
-class ValidationError(AdafmtError):
-    """Validation error from external tools."""
-    path: Path
-    tool: Literal["gnat", "gprbuild", "alr"]
-    exit_code: int
-    stdout: str
-    stderr: str
-
-
 @dataclass(frozen=True)
 class GNATError(ValidationError):
     """GNAT compiler validation error."""
@@ -96,29 +119,6 @@ class GNATError(ValidationError):
     def __post_init__(self):
         # Override the tool field from parent
         object.__setattr__(self, 'tool', 'gnat')
-
-
-# =============================================================================
-# Pattern/Visitor Errors
-# =============================================================================
-
-@dataclass(frozen=True)
-class PatternError(AdafmtError):
-    """Pattern application error."""
-    path: Path
-    pattern_name: str
-    phase: Literal["pre-als", "post-als"]
-    node_type: str | None = None
-
-
-@dataclass(frozen=True)
-class VisitorError(AdafmtError):
-    """AST visitor error."""
-    path: Path
-    visitor_name: str
-    node_type: str | None = None
-    phase: Literal["pre-als", "post-als"] = "post-als"
-    line_number: int | None = None
 
 
 # =============================================================================
@@ -181,17 +181,17 @@ WorkerEither = Result[Path, WorkerError]  # For processed files
 # Error Helpers
 # =============================================================================
 
-def file_not_found(path: Path) -> FileError:
+def file_not_found(path: Path, operation: Literal["read", "write", "create", "delete", "stat"] = "read") -> FileError:
     """Create a file not found error."""
     return FileError(
         message=f"File not found: {path}",
         path=path,
-        operation="read",
+        operation=operation,
         not_found=True
     )
 
 
-def permission_denied(path: Path, operation: Literal["read", "write", "create", "delete"]) -> FileError:
+def permission_denied(path: Path, operation: Literal["read", "write", "create", "delete", "stat"]) -> FileError:
     """Create a permission denied error."""
     return FileError(
         message=f"Permission denied: {operation} {path}",

@@ -20,6 +20,9 @@ from unittest.mock import Mock, MagicMock, AsyncMock
 
 import pytest
 
+# Enable dry-python/returns pytest plugin
+pytest_plugins = ['returns.contrib.pytest']
+
 # Add src to path for imports during testing
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 

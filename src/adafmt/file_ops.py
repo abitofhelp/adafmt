@@ -16,39 +16,16 @@ import shutil
 from pathlib import Path
 from typing import Union
 
-from returns.result import Failure, Result, Success
+from returns.io import IOResult, impure_safe
 
 from .errors import FileError, file_not_found, permission_denied
-
-
-def _read_text_internal(
-    path: Path,
-    encoding: str = 'utf-8',
-    errors: str = 'strict'
-) -> Result[str, Exception]:
-    """
-    Internal read function that catches exceptions.
-    
-    Args:
-        path: Path to file to read
-        encoding: Text encoding
-        errors: Error handling strategy
-        
-    Returns:
-        Result[str, Exception]: File contents or exception
-    """
-    try:
-        content = path.read_text(encoding=encoding, errors=errors)
-        return Success(content)
-    except Exception as e:
-        return Failure(e)
 
 
 def read_text(
     path: Union[str, Path],
     encoding: str = 'utf-8',
     errors: str = 'strict'
-) -> Result[str, FileError]:
+) -> IOResult[str, FileError]:
     """
     Read file with explicit error handling.
     
@@ -58,48 +35,24 @@ def read_text(
         errors: Error handling strategy ('strict', 'ignore', 'replace')
         
     Returns:
-        Result[str, FileError]: File contents or specific error
+        IOResult[str, FileError]: File contents or specific error
     """
     path = Path(path)
     
-    result = _read_text_internal(path, encoding, errors)
-    if isinstance(result, Success):
-        return result
-    else:
-        # Map exception to FileError
-        exc = result.failure()
-        mapper = _map_read_error(path)
-        return Failure(mapper(exc))
-
-
-def _write_text_internal(
-    path: Path,
-    content: str,
-    encoding: str = 'utf-8'
-) -> Result[None, Exception]:
-    """
-    Internal write function that catches exceptions.
+    @impure_safe
+    def _read() -> str:
+        # No try/except needed - decorator will catch exceptions
+        return path.read_text(encoding=encoding, errors=errors)
     
-    Args:
-        path: Path to file to write
-        content: Content to write
-        encoding: Text encoding
-        
-    Returns:
-        Result[None, Exception]: Success or exception
-    """
-    try:
-        path.write_text(content, encoding=encoding)
-        return Success(None)
-    except Exception as e:
-        return Failure(e)
+    # Map IOFailure[Exception] -> IOFailure[FileError]
+    return _read().alt(_map_read_error(path))
 
 
 def write_text(
     path: Union[str, Path],
     content: str,
     encoding: str = 'utf-8'
-) -> Result[None, FileError]:
+) -> IOResult[None, FileError]:
     """
     Write file with explicit error handling.
     
@@ -109,37 +62,21 @@ def write_text(
         encoding: Text encoding
         
     Returns:
-        Result[None, FileError]: Success or specific error
+        IOResult[None, FileError]: Success or specific error
     """
     path = Path(path)
     
-    result = _write_text_internal(path, content, encoding)
-    if isinstance(result, Success):
-        return result
-    else:
-        # Map exception to FileError
-        exc = result.failure()
-        mapper = _map_write_error(path)
-        return Failure(mapper(exc))
-
-
-def _exists_internal(path: Path) -> Result[bool, Exception]:
-    """
-    Internal exists function that catches exceptions.
+    @impure_safe
+    def _write() -> None:
+        # No try/except needed - decorator will catch exceptions
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding=encoding)
     
-    Args:
-        path: Path to check
-        
-    Returns:
-        Result[bool, Exception]: True if exists, False if not, or exception
-    """
-    try:
-        return Success(path.exists())
-    except Exception as e:
-        return Failure(e)
+    # Map IOFailure[Exception] -> IOFailure[FileError]
+    return _write().alt(_map_write_error(path))
 
 
-def exists(path: Union[str, Path]) -> Result[bool, FileError]:
+def exists(path: Union[str, Path]) -> IOResult[bool, FileError]:
     """
     Check if file exists with explicit error handling.
     
@@ -147,39 +84,23 @@ def exists(path: Union[str, Path]) -> Result[bool, FileError]:
         path: Path to check
         
     Returns:
-        Result[bool, FileError]: True if exists, False if not, or error
+        IOResult[bool, FileError]: True if exists, False if not, or error
         
     Note: In practice this rarely fails, but could on some systems
     """
     path = Path(path)
     
-    result = _exists_internal(path)
-    if isinstance(result, Success):
-        return result
-    else:
-        # Map exception to FileError
-        exc = result.failure()
-        mapper = _map_stat_error(path)
-        return Failure(mapper(exc))
-
-
-def _stat_internal(path: Path) -> Result[os.stat_result, Exception]:
-    """
-    Internal stat function that catches exceptions.
+    @impure_safe
+    def _exists() -> bool:
+        return path.exists()
     
-    Args:
-        path: Path to stat
-        
-    Returns:
-        Result[os.stat_result, Exception]: File stat information or exception
-    """
-    try:
-        return Success(path.stat())
-    except Exception as e:
-        return Failure(e)
+    # Map IOFailure[Exception] -> IOFailure[FileError]
+    return _exists().alt(_map_stat_error(path))
 
 
-def stat(path: Union[str, Path]) -> Result[os.stat_result, FileError]:
+
+
+def stat(path: Union[str, Path]) -> IOResult[os.stat_result, FileError]:
     """
     Get file stat with explicit error handling.
     
@@ -187,38 +108,18 @@ def stat(path: Union[str, Path]) -> Result[os.stat_result, FileError]:
         path: Path to stat
         
     Returns:
-        Result[os.stat_result, FileError]: Stat result or specific error
+        IOResult[os.stat_result, FileError]: Stat result or specific error
     """
     path = Path(path)
     
-    result = _stat_internal(path)
-    if isinstance(result, Success):
-        return result
-    else:
-        # Map exception to FileError
-        exc = result.failure()
-        mapper = _map_stat_error(path)
-        return Failure(mapper(exc))
-
-
-def _mkdir_internal(path: Path, mode: int = 0o777, parents: bool = False, exist_ok: bool = False) -> Result[None, Exception]:
-    """
-    Internal mkdir function that catches exceptions.
+    @impure_safe
+    def _stat() -> os.stat_result:
+        return path.stat()
     
-    Args:
-        path: Path to create
-        mode: Directory permissions
-        parents: Create parent directories if needed
-        exist_ok: Don't error if directory already exists
-        
-    Returns:
-        Result[None, Exception]: Success or exception
-    """
-    try:
-        path.mkdir(mode=mode, parents=parents, exist_ok=exist_ok)
-        return Success(None)
-    except Exception as e:
-        return Failure(e)
+    # Map IOFailure[Exception] -> IOFailure[FileError]
+    return _stat().alt(_map_stat_error(path))
+
+
 
 
 def mkdir(
@@ -226,7 +127,7 @@ def mkdir(
     mode: int = 0o777,
     parents: bool = False,
     exist_ok: bool = False
-) -> Result[None, FileError]:
+) -> IOResult[None, FileError]:
     """
     Create directory with explicit error handling.
     
@@ -237,38 +138,21 @@ def mkdir(
         exist_ok: Don't error if directory already exists
         
     Returns:
-        Result[None, FileError]: Success or specific error
+        IOResult[None, FileError]: Success or specific error
     """
     path = Path(path)
     
-    result = _mkdir_internal(path, mode, parents, exist_ok)
-    if isinstance(result, Success):
-        return result
-    else:
-        # Map exception to FileError
-        exc = result.failure()
-        mapper = _map_create_error(path)
-        return Failure(mapper(exc))
-
-
-def _rmtree_internal(path: Path) -> Result[None, Exception]:
-    """
-    Internal rmtree function that catches exceptions.
+    @impure_safe
+    def _mkdir() -> None:
+        path.mkdir(mode=mode, parents=parents, exist_ok=exist_ok)
     
-    Args:
-        path: Path to remove recursively
-        
-    Returns:
-        Result[None, Exception]: Success or exception
-    """
-    try:
-        shutil.rmtree(path)
-        return Success(None)
-    except Exception as e:
-        return Failure(e)
+    # Map IOFailure[Exception] -> IOFailure[FileError]
+    return _mkdir().alt(_map_create_error(path))
 
 
-def rmtree(path: Union[str, Path]) -> Result[None, FileError]:
+
+
+def rmtree(path: Union[str, Path]) -> IOResult[None, FileError]:
     """
     Remove directory tree with explicit error handling.
     
@@ -276,38 +160,21 @@ def rmtree(path: Union[str, Path]) -> Result[None, FileError]:
         path: Path to remove recursively
         
     Returns:
-        Result[None, FileError]: Success or specific error
+        IOResult[None, FileError]: Success or specific error
     """
     path = Path(path)
     
-    result = _rmtree_internal(path)
-    if isinstance(result, Success):
-        return result
-    else:
-        # Map exception to FileError
-        exc = result.failure()
-        mapper = _map_delete_error(path)
-        return Failure(mapper(exc))
-
-
-def _remove_internal(path: Path) -> Result[None, Exception]:
-    """
-    Internal remove function that catches exceptions.
+    @impure_safe
+    def _rmtree() -> None:
+        shutil.rmtree(path)
     
-    Args:
-        path: Path to remove
-        
-    Returns:
-        Result[None, Exception]: Success or exception
-    """
-    try:
-        path.unlink()
-        return Success(None)
-    except Exception as e:
-        return Failure(e)
+    # Map IOFailure[Exception] -> IOFailure[FileError]
+    return _rmtree().alt(_map_delete_error(path))
 
 
-def remove(path: Union[str, Path]) -> Result[None, FileError]:
+
+
+def remove(path: Union[str, Path]) -> IOResult[None, FileError]:
     """
     Remove file with explicit error handling.
     
@@ -315,18 +182,16 @@ def remove(path: Union[str, Path]) -> Result[None, FileError]:
         path: Path to remove
         
     Returns:
-        Result[None, FileError]: Success or specific error
+        IOResult[None, FileError]: Success or specific error
     """
     path = Path(path)
     
-    result = _remove_internal(path)
-    if isinstance(result, Success):
-        return result
-    else:
-        # Map exception to FileError
-        exc = result.failure()
-        mapper = _map_delete_error(path)
-        return Failure(mapper(exc))
+    @impure_safe
+    def _remove() -> None:
+        path.unlink()
+    
+    # Map IOFailure[Exception] -> IOFailure[FileError]
+    return _remove().alt(_map_delete_error(path))
 
 
 # Error mapping functions
@@ -380,7 +245,7 @@ def _map_stat_error(path: Path):
     """Map exceptions to FileError for stat operations."""
     def mapper(exc: Exception) -> FileError:
         if isinstance(exc, FileNotFoundError):
-            return file_not_found(path)
+            return file_not_found(path, "stat")
         elif isinstance(exc, PermissionError):
             return permission_denied(path, "stat")
         else:
@@ -419,7 +284,7 @@ def _map_delete_error(path: Path):
     """Map exceptions to FileError for delete operations."""
     def mapper(exc: Exception) -> FileError:
         if isinstance(exc, FileNotFoundError):
-            return file_not_found(path)
+            return file_not_found(path, "delete")
         elif isinstance(exc, PermissionError):
             return permission_denied(path, "delete")
         else:

@@ -287,6 +287,68 @@ match node.type:
 3. **Define specific error types**, not generic strings
 4. **Chain operations** using bind, map, and other combinators
 5. **Handle concurrency errors** explicitly in async functions
+6. **Use decorators for automatic exception handling**:
+   - @impure_safe for synchronous functions
+   - @future_safe for async functions
+7. **Map generic exceptions to specific error types** with context
+
+#### Standard Decorator Pattern
+
+All exception-prone operations must follow this pattern:
+
+```python
+from returns.io import impure_safe
+from returns.future import future_safe
+from returns.result import Result
+
+# For synchronous operations
+@impure_safe
+def _read_file_internal(path: Path, encoding: str = 'utf-8') -> str:
+    """Internal read with automatic exception handling."""
+    return path.read_text(encoding=encoding)
+
+def read_file(path: Path, encoding: str = 'utf-8') -> Result[str, FileError]:
+    """Public API with specific error mapping."""
+    return _read_file_internal(path, encoding).map_failure(
+        _map_to_file_error(path, "read")
+    )
+
+# For async operations
+@future_safe
+async def _start_worker_internal(worker_id: int) -> None:
+    """Internal async operation with automatic exception handling."""
+    await start_worker_process(worker_id)
+
+async def start_worker(worker_id: int) -> Result[None, WorkerError]:
+    """Public async API with specific error mapping."""
+    return await _start_worker_internal(worker_id).map_failure(
+        lambda exc: WorkerError(
+            message=f"Failed to start worker {worker_id}: {exc}",
+            operation="worker_start"
+        )
+    )
+
+# Error mapping functions
+def _map_to_file_error(path: Path, operation: str):
+    """Map generic exceptions to FileError with context."""
+    def mapper(exc: Exception) -> FileError:
+        return FileError(
+            path=path,
+            operation=operation,
+            message=str(exc),
+            permission_error=isinstance(exc, PermissionError),
+            not_found=isinstance(exc, FileNotFoundError)
+        )
+    return mapper
+```
+
+#### Decorator Usage Guidelines
+
+1. **Internal functions**: Always use @impure_safe or @future_safe
+2. **Public APIs**: Map IOResult[T, Exception] to Result[T, SpecificError]
+3. **Error context**: Always preserve original exception context
+4. **Consistency**: Use same pattern across all modules
+5. **Testing**: Decorators make error testing straightforward
 
 #### Error Type Definitions
 
@@ -360,18 +422,19 @@ def parse_ada(content: str, path: Path) -> Result[AST, ParseError]:
             message=str(e)
         ))
 
-# I/O functions return IOResult
-def read_file(path: Path) -> IOResult[str, FileError]:
-    """Read file - I/O operation."""
-    @impure_safe
-    def _read():
-        return path.read_text(encoding="utf-8")
-    
-    return _read().alt(
-        lambda e: Failure(FileError(
+# I/O functions return IOResult with decorator pattern
+@impure_safe
+def _read_file_internal(path: Path) -> str:
+    """Internal read with automatic exception handling."""
+    return path.read_text(encoding="utf-8")
+
+def read_file(path: Path) -> Result[str, FileError]:
+    """Read file - I/O operation with specific error mapping."""
+    return _read_file_internal(path).map_failure(
+        lambda exc: FileError(
             path=path,
             operation="read",
-            message=f"Failed to read file",
+            message=f"Failed to read file: {exc}",
             original_error=str(e)
         ))
     )

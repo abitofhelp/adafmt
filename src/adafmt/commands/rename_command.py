@@ -27,22 +27,32 @@ from ..core.processing_pipeline import (
     RenameOperation,
     ValidateStage,
 )
-from ..file_discovery import discover_ada_files
-from ..worker_pool import WorkerPool
+from ..file_discovery_new import discover_files
+from ..errors import AdafmtError
+from returns.result import Result, Success, Failure
 
 
 @dataclass
 class RenameArgs(CommandArgs):
     """Arguments specific to rename command."""
     
+    project_path: Path
     old_name: str
     new_name: str
-    project_root: Path
-    recursive: bool = True
-    ignore: list[str] | None = None
-    validate_with_gnat: bool = True
-    dry_run: bool = False
-    case_sensitive: bool = True
+    include_path: list[Path] = None
+    exclude_path: list[Path] = None
+    check: bool = False
+    diff: bool = False
+    files: list[Path] = None
+    
+    def __post_init__(self):
+        """Initialize default values for list fields."""
+        if self.include_path is None:
+            self.include_path = []
+        if self.exclude_path is None:
+            self.exclude_path = []
+        if self.files is None:
+            self.files = []
 
 
 @dataclass
@@ -56,7 +66,7 @@ class RenameResult:
     preview: str | None = None
 
 
-class RenameCommand(CommandProcessor[RenameResult]):
+class RenameCommandProcessor(CommandProcessor[RenameResult]):
     """
     Rename Ada symbols across a project.
     
@@ -69,15 +79,16 @@ class RenameCommand(CommandProcessor[RenameResult]):
         self.pipeline: ProcessingPipeline | None = None
         self.all_changes: dict[Path, list[dict]] = {}
     
-    async def discover_targets(self, args: RenameArgs) -> list[Path]:
+    async def discover_targets(self, args: RenameArgs) -> Result[list[Path], AdafmtError]:
         """Discover files potentially containing the symbol."""
         await self.log_info(f"Searching for files containing '{args.old_name}'...")
         
         # First, get all Ada files in project
-        all_files = await discover_ada_files(
-            paths=[args.project_root],
-            recursive=args.recursive,
-            ignore_patterns=args.ignore or []
+        all_files = discover_files(
+            files=None,
+            include_paths=[args.project_path],
+            exclude_paths=args.exclude_path,
+            ui=self.tui
         )
         
         # Filter to files containing the symbol
@@ -97,13 +108,13 @@ class RenameCommand(CommandProcessor[RenameResult]):
                 pass
         
         await self.log_info(f"Found {len(targets)} files potentially containing '{args.old_name}'")
-        return targets
+        return Success(targets)
     
     async def process_targets(
         self,
         targets: list[Path],
         args: RenameArgs
-    ) -> list[RenameResult]:
+    ) -> Result[list[RenameResult], AdafmtError]:
         """Process rename operation on target files."""
         # Build pipeline
         self.pipeline = self._build_pipeline(args)
@@ -126,7 +137,7 @@ class RenameCommand(CommandProcessor[RenameResult]):
         if not args.dry_run and self.all_changes:
             await self._apply_all_changes()
         
-        return results
+        return Success(results)
     
     def _build_pipeline(self, args: RenameArgs) -> ProcessingPipeline:
         """Build processing pipeline for rename."""
@@ -325,7 +336,7 @@ class RenameCommand(CommandProcessor[RenameResult]):
         self,
         results: list[RenameResult],
         args: RenameArgs
-    ) -> None:
+    ) -> Result[None, AdafmtError]:
         """Report rename results."""
         total_changes = sum(len(r.changes) for r in results)
         successful_files = sum(1 for r in results if self.is_successful(r))
@@ -351,6 +362,8 @@ class RenameCommand(CommandProcessor[RenameResult]):
             if args.verbose:
                 for result in errors:
                     await self.log_error(f"  {result.path}: {result.error}")
+        
+        return Success(None)
 
 
 # CLI entry point

@@ -14,12 +14,10 @@ import traceback
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 
-from returns.result import Success, Failure
-from returns.io import IOResult
+from returns.result import Failure
 
 from .als_client import ALSClient
 from .edits import apply_text_edits, unified_diff
-from .errors import FileError
 from .file_ops import read_text, stat
 from .logging_jsonl import JsonlLogger
 from .metrics import MetricsCollector

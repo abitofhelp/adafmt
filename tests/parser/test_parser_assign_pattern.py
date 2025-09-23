@@ -51,52 +51,52 @@ if PARSER_AVAILABLE:
             return result
         
         def visitAssignment_statement(self, ctx):
-        """Check assignment statements for proper := spacing."""
-        if self._in_string_literal:
+            """Check assignment statements for proper := spacing."""
+            if self._in_string_literal:
+                return self.visitChildren(ctx)
+            
+            # Get the source text for this statement
+            start_idx = ctx.start.tokenIndex
+            stop_idx = ctx.stop.tokenIndex
+            
+            # Find the := token
+            for i in range(ctx.getChildCount()):
+                child = ctx.getChild(i)
+                if hasattr(child, 'getText') and child.getText() == ':=':
+                    # Check spacing before and after
+                    prev_child = ctx.getChild(i - 1) if i > 0 else None
+                    next_child = ctx.getChild(i + 1) if i < ctx.getChildCount() - 1 else None
+                    
+                    # Get the actual text around the assignment
+                    line = ctx.start.line
+                    # In real implementation, we'd check actual whitespace
+                    # For now, mark all assignments for checking
+                    self.issues.append(AssignmentIssue(
+                        line=line,
+                        column=ctx.start.column,
+                        current_text=':=',
+                        context=ctx.getText()
+                    ))
+                    break
+            
             return self.visitChildren(ctx)
-        
-        # Get the source text for this statement
-        start_idx = ctx.start.tokenIndex
-        stop_idx = ctx.stop.tokenIndex
-        
-        # Find the := token
-        for i in range(ctx.getChildCount()):
-            child = ctx.getChild(i)
-            if hasattr(child, 'getText') and child.getText() == ':=':
-                # Check spacing before and after
-                prev_child = ctx.getChild(i - 1) if i > 0 else None
-                next_child = ctx.getChild(i + 1) if i < ctx.getChildCount() - 1 else None
-                
-                # Get the actual text around the assignment
-                line = ctx.start.line
-                # In real implementation, we'd check actual whitespace
-                # For now, mark all assignments for checking
+    
+        def visitObject_declaration(self, ctx):
+            """Check object declarations for := spacing."""
+            if self._in_string_literal:
+                return self.visitChildren(ctx)
+            
+            # Object declarations can have initialization with :=
+            text = ctx.getText()
+            if ':=' in text:
                 self.issues.append(AssignmentIssue(
-                    line=line,
+                    line=ctx.start.line,
                     column=ctx.start.column,
                     current_text=':=',
-                    context=ctx.getText()
+                    context=text
                 ))
-                break
-        
-        return self.visitChildren(ctx)
-    
-    def visitObject_declaration(self, ctx):
-        """Check object declarations for := spacing."""
-        if self._in_string_literal:
+            
             return self.visitChildren(ctx)
-        
-        # Object declarations can have initialization with :=
-        text = ctx.getText()
-        if ':=' in text:
-            self.issues.append(AssignmentIssue(
-                line=ctx.start.line,
-                column=ctx.start.column,
-                current_text=':=',
-                context=text
-            ))
-        
-        return self.visitChildren(ctx)
 
 
 @pytest.mark.skipif(not PARSER_AVAILABLE, reason="ada2022_parser not installed")

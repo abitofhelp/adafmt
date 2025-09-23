@@ -5,7 +5,7 @@
 **License:** BSD-3-Clause  
 **Copyright:** © 2025 Michael Gardner, A Bit of Help, Inc.  
 **Authors:** Michael Gardner, A Bit of Help, Inc.  
-**Status:** Draft
+**Status:** Released
 
 ## 1. Introduction
 
@@ -146,20 +146,30 @@ The system is designed for Ada developers who need reliable, automated code form
   - ALSError for ALS communication issues
   - ValidationError for GNAT validation failures
   - ConcurrencyError for worker pool issues
-- **REQ-ERR-004**: Exceptions SHALL be caught at the point of origin
+- **REQ-ERR-004**: Exceptions SHALL be caught at the point of origin using decorators
 - **REQ-ERR-005**: Error messages SHALL include full context and path information
+- **REQ-ERR-006**: System SHALL use @impure_safe decorator for synchronous functions
+- **REQ-ERR-007**: System SHALL use @future_safe decorator for async functions
+- **REQ-ERR-008**: Generic exceptions SHALL be mapped to specific error types with context
 
 #### 3.3.2 Concurrency Error Handling
-- **REQ-ERR-006**: Worker pool SHALL handle timeout errors explicitly
-- **REQ-ERR-007**: Concurrent operations SHALL use FutureResult for async error handling
-- **REQ-ERR-008**: Failed workers SHALL NOT crash the entire process
-- **REQ-ERR-009**: System SHALL track and report per-worker error rates
+- **REQ-ERR-009**: Worker pool SHALL handle timeout errors explicitly
+- **REQ-ERR-010**: Concurrent operations SHALL use IOResult for async error handling
+- **REQ-ERR-011**: Failed workers SHALL NOT crash the entire process
+- **REQ-ERR-012**: System SHALL track and report per-worker error rates
 
 #### 3.3.3 Error Recovery
-- **REQ-ERR-010**: System SHALL continue processing remaining files on error
-- **REQ-ERR-011**: System SHALL support retry logic for transient failures
-- **REQ-ERR-012**: System SHALL implement circuit breaker for ALS failures
-- **REQ-ERR-013**: System SHALL provide default values where appropriate
+- **REQ-ERR-013**: System SHALL continue processing remaining files on error
+- **REQ-ERR-014**: System SHALL support retry logic for transient failures
+- **REQ-ERR-015**: System SHALL implement circuit breaker for ALS failures
+- **REQ-ERR-016**: System SHALL provide default values where appropriate
+
+#### 3.3.4 Decorator Pattern Requirements
+- **REQ-ERR-017**: All exception-prone operations SHALL use appropriate safety decorators
+- **REQ-ERR-018**: Internal functions SHALL be decorated with @impure_safe or @future_safe
+- **REQ-ERR-019**: Public API functions SHALL map IOResult[T, Exception] to Result[T, SpecificError]
+- **REQ-ERR-020**: Error mapping functions SHALL preserve original exception context
+- **REQ-ERR-021**: Decorator usage SHALL be consistent across all modules
 
 ### 3.4 Interface Requirements
 
@@ -201,12 +211,40 @@ class AssignmentSpacingVisitor(Ada2022ParserVisitor):
         return self.fix_assignment_spacing(ctx)
 ```
 
-### 5.2 GNAT Validation Command
+### 5.2 Example Decorator Pattern for Error Handling
+```python
+@impure_safe
+def _read_file_internal(path: Path, encoding: str) -> str:
+    """Internal function with automatic exception handling."""
+    return path.read_text(encoding=encoding)
+
+def read_file(path: Path, encoding: str = 'utf-8') -> Result[str, FileError]:
+    """Public API with specific error types."""
+    return _read_file_internal(path, encoding).map_failure(
+        _map_to_file_error(path, "read")
+    )
+
+@future_safe
+async def _start_worker_internal(worker_id: int) -> None:
+    """Internal async function with automatic exception handling."""
+    await start_worker_process(worker_id)
+
+async def start_worker(worker_id: int) -> Result[None, WorkerError]:
+    """Public async API with specific error types."""
+    return await _start_worker_internal(worker_id).map_failure(
+        lambda exc: WorkerError(
+            message=f"Failed to start worker {worker_id}: {exc}",
+            operation="worker_start"
+        )
+    )
+```
+
+### 5.3 GNAT Validation Command
 ```bash
 gcc -c -gnatc -gnatf -gnat2022 -gnatwe -o /tmp/test.ali file.adb
 ```
 
-### 5.3 Pre-ALS String Breaking Example
+### 5.4 Pre-ALS String Breaking Example
 ```ada
 -- Before Pre-ALS
 Message : String := "This very long string exceeds line limit";

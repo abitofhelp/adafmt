@@ -41,6 +41,7 @@ from shutil import which
 from typing import Any, Dict, Optional, Tuple
 
 from returns.result import Failure, Result, Success
+from returns.future import future_safe
 
 from .errors import ALSError, als_timeout
 from .utils import extract_log_path_from_traces_cfg, to_iso8601_basic
@@ -378,17 +379,15 @@ class ALSClient:
         await self.shutdown()
         await self.start()
 
-    async def shutdown(self) -> None:
-        """Gracefully shut down the ALS process.
+    @future_safe
+    async def _shutdown_internal(self) -> None:
+        """Internal shutdown implementation with automatic exception handling.
         
-        Attempts a clean shutdown by:
-        1. Sending LSP 'shutdown' request
-        2. Sending LSP 'exit' notification
-        3. Cancelling the reader task
-        4. Terminating the process (with fallback to kill)
-        
-        All errors are suppressed to ensure cleanup completes even
-        if ALS is already dead or unresponsive.
+        Returns:
+            None: Success (exceptions caught by decorator)
+            
+        Note:
+            @future_safe automatically converts exceptions to IOResult[None, Exception]
         """
         # Try a clean shutdown; tolerate any errors.
         with contextlib.suppress(Exception):
@@ -417,14 +416,30 @@ class ALSClient:
                 await self._stderr_task
 
         # Clean up tasks and process
+        shutdown_errors = []
         await self._cleanup_resources(shutdown_errors)
         
         if shutdown_errors:
-            return Failure(ALSError(
-                message=f"Shutdown completed with errors: {'; '.join(shutdown_errors)}",
+            raise RuntimeError(f"Shutdown completed with errors: {'; '.join(shutdown_errors)}")
+    
+    async def shutdown(self) -> Result[None, ALSError]:
+        """Gracefully shut down the ALS process.
+        
+        Attempts a clean shutdown by:
+        1. Sending LSP 'shutdown' request
+        2. Sending LSP 'exit' notification
+        3. Cancelling the reader task
+        4. Terminating the process (with fallback to kill)
+        
+        Returns:
+            Result[None, ALSError]: Success or specific error
+        """
+        return await self._shutdown_internal().map_failure(
+            lambda exc: ALSError(
+                message=f"Shutdown failed: {exc}",
                 operation="shutdown"
-            ))
-        return Success(None)
+            )
+        )
 
     # --------------- JSON-RPC plumbing ---------------
     def _next_id(self) -> str:
@@ -673,16 +688,30 @@ class ALSClient:
         self._returncode = rc
         return rc
 
+    @future_safe
+    async def _notify_internal(self, method: str, params: Any) -> None:
+        """Internal notify implementation with automatic exception handling.
+        
+        Args:
+            method: LSP method name (e.g., 'textDocument/didOpen')
+            params: Method parameters as JSON-serializable object
+            
+        Returns:
+            None: Success (exceptions caught by decorator)
+            
+        Note:
+            @future_safe automatically converts exceptions to IOResult[None, Exception]
+        """
+        await self._notify(method, params)
+    
     async def _notify_safe(self, method: str, params: Any) -> Result[None, ALSError]:
         """Send notification with error handling."""
-        try:
-            await self._notify(method, params)
-            return Success(None)
-        except Exception as e:
-            return Failure(ALSError(
-                message=f"Failed to send notification {method}: {e}",
+        return await self._notify_internal(method, params).map_failure(
+            lambda exc: ALSError(
+                message=f"Failed to send notification {method}: {exc}",
                 operation="request"
-            ))
+            )
+        )
     
     async def _cleanup_on_error(self) -> None:
         """Clean up resources when an error occurs during startup."""

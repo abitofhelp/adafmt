@@ -16,7 +16,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol, TypeVar
 
-from ada2022_parser import Parser as AdaParser
+try:
+    from ada2022_parser import Parser as AdaParser
+except ImportError:
+    AdaParser = None  # Parser is optional
 
 from ..als_client import ALSClient
 
@@ -41,29 +44,45 @@ class FileData:
 @dataclass
 class ParsedFile(FileData):
     """File with parsed AST."""
-    ast: dict[str, Any]
-    parse_errors: list[str]
+    ast: dict[str, Any] = None
+    parse_errors: list[str] = None
+    
+    def __post_init__(self):
+        if self.parse_errors is None:
+            self.parse_errors = []
+        if self.ast is None:
+            self.ast = {}
 
 
 @dataclass  
 class ValidatedFile(ParsedFile):
     """File with validation results."""
-    is_safe: bool
-    validation_messages: list[str]
+    is_safe: bool = True
+    validation_messages: list[str] = None
+    
+    def __post_init__(self):
+        super().__post_init__()
+        if self.validation_messages is None:
+            self.validation_messages = []
 
 
 @dataclass
 class ProcessedFile(ValidatedFile):
     """File after LSP processing."""
-    lsp_result: Any
-    lsp_success: bool
+    lsp_result: Any = None
+    lsp_success: bool = True
 
 
 @dataclass
 class FormattedFile(ProcessedFile):
     """File after formatting/pattern application."""
-    final_content: str
-    patterns_applied: list[str]
+    final_content: str = ""
+    patterns_applied: list[str] = None
+    
+    def __post_init__(self):
+        super().__post_init__()
+        if self.patterns_applied is None:
+            self.patterns_applied = []
 
 
 class ProcessingStage(Protocol):
