@@ -381,7 +381,7 @@ class FormattingVisitorBase(ABC):
             # If modification application fails, return original content
             return self.original_content
         
-        return result.unwrap()
+        return result.unwrap()  # type: ignore[return-value]
     
     def _apply_single_modification(
         self,

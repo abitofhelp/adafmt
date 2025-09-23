@@ -446,7 +446,10 @@ class PatternFormatter:
                 # Apply pattern with timeout protection
                 if HAS_TIMEOUT and REGEX_MODULE == 'regex':
                     # Use regex module's built-in timeout
-                    new_text, count = rule.find.subn(
+                    # Use regex module with timeout
+                    import regex  # type: ignore[import-untyped]
+                    new_text, count = regex.subn(
+                        rule.find.pattern,
                         rule.replace,
                         current_text,
                         timeout=int(timeout_seconds)

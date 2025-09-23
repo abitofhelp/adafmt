@@ -208,7 +208,7 @@ class AdaParserWrapper:
                     not_found=isinstance(error, FileNotFoundError)
                 ))
         
-        content = content_result.unwrap()
+        content = content_result.unwrap()  # type: ignore[assignment]
         
         # Parse content
         return self.parse_content(content, path)

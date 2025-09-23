@@ -151,8 +151,17 @@ class GNATValidator:
                 message=str(exc)
             ))
         
-        # result is IOSuccess[bool] here
-        return Success(result.unwrap())
+        # result is IOSuccess[bool] here - extract the bool value
+        if isinstance(result, IOSuccess):
+            return Success(result.unwrap())  # type: ignore[arg-type]
+        else:
+            # Should not happen but type safety
+            return Failure(ValidationError(
+                path=Path(""),
+                exit_code=-1,
+                command=f"{self.gnat_executable} --version",
+                message="Unknown error"
+            ))
     
     def validate_content(
         self,
@@ -247,7 +256,7 @@ class GNATValidator:
                     message=str(exc)
                 ))
         
-        return Success(result.unwrap())
+        return Success(result.unwrap())  # type: ignore[arg-type]
     
     @future_safe
     async def _validate_content_async_internal(
@@ -425,7 +434,7 @@ class GNATValidator:
                 message=str(exc)
             ))
         
-        return Success(result.unwrap())
+        return Success(result.unwrap())  # type: ignore[arg-type]
     
     def _build_command(self, file_path: Path, ada_version: str) -> List[str]:
         """Build GNAT command for validation.

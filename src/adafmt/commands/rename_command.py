@@ -81,7 +81,7 @@ class RenameCommandProcessor(CommandProcessor[RenameResult]):
     async def discover_targets(self, args: CommandArgs) -> Result[list[Any], AdafmtError]:
         """Discover files potentially containing the symbol."""
         # Cast to RenameArgs to access specific fields
-        rename_args = args  # type: RenameArgs
+        rename_args = args  # type: ignore[assignment]
         await self.log_info(f"Searching for files containing '{rename_args.old_name}'...")
         
         # First, get all Ada files in project
@@ -115,7 +115,7 @@ class RenameCommandProcessor(CommandProcessor[RenameResult]):
     ) -> Result[list[RenameResult], AdafmtError]:
         """Process rename operation on target files."""
         # Cast to RenameArgs to access specific fields
-        rename_args = args  # type: RenameArgs
+        rename_args = args  # type: ignore[assignment]
         # Build pipeline
         self.pipeline = self._build_pipeline(rename_args)
         
@@ -127,14 +127,14 @@ class RenameCommandProcessor(CommandProcessor[RenameResult]):
         for i, path in enumerate(targets):
             await self.update_progress(i, len(targets))
             
-            result = await self._process_file(path, args)
+            result = await self._process_file(path, rename_args)
             if result.changes:
                 results.append(result)
                 # Collect all changes for workspace-wide application
                 self.all_changes[path] = result.changes
         
         # Apply all changes atomically (unless check mode)
-        if not args.check and self.all_changes:
+        if not rename_args.check and self.all_changes:
             await self._apply_all_changes()
         
         return Success(results)
@@ -347,7 +347,7 @@ class RenameCommandProcessor(CommandProcessor[RenameResult]):
     ) -> None:
         """Report rename results."""
         # Cast to RenameArgs to access specific fields
-        rename_args = args  # type: RenameArgs
+        rename_args = args  # type: ignore[assignment]
         
         total_changes = sum(len(r.changes) for r in results)
         successful_files = sum(1 for r in results if self.is_successful(r))
