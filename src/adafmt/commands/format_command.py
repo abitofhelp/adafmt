@@ -307,14 +307,12 @@ class FormatCommandProcessor(CommandProcessor[FormattedFile]):
             
             # Apply assignment spacing rule via AST visitor
             if self.formatting_rules and self.formatting_rules.spacing.assignment.enabled:
-                source_lines = content.split('\n')
-                visitor = AssignmentSpacingVisitor(self.formatting_rules, source_lines)
+                visitor = AssignmentSpacingVisitor(self.formatting_rules, content)
                 visitor.visit(tree)
                 
                 if visitor.edits:
                     # Apply edits
-                    result_lines = visitor.apply_edits()
-                    content = '\n'.join(result_lines)
+                    content = visitor.apply_edits()
                     rules_applied.append("assignment_spacing")
                     
         except ImportError:
@@ -334,6 +332,98 @@ class FormatCommandProcessor(CommandProcessor[FormattedFile]):
         """Apply Post-ALS cleanup and final correction rules."""
         current_content = content
         rules_applied = []
+        
+        # Apply AST-based visitors for spacing rules (Post-ALS)
+        try:
+            from ada2022_parser.generated import Ada2022Lexer, Ada2022Parser
+            from antlr4 import CommonTokenStream, InputStream
+            from ..ast_visitors import (
+                AssignmentSpacingVisitor, 
+                TypeDeclarationSpacingVisitor, 
+                RangeOperatorSpacingVisitor,
+                ParameterAssociationSpacingVisitor,
+                BinaryOperatorSpacingVisitor
+            )
+            
+            # Parse the content once
+            input_stream = InputStream(current_content)
+            lexer = Ada2022Lexer(input_stream)
+            token_stream = CommonTokenStream(lexer)
+            parser = Ada2022Parser(token_stream)
+            tree = parser.compilation_unit()
+            
+            # Apply assignment spacing visitor
+            visitor = AssignmentSpacingVisitor(self.formatting_rules, current_content)
+            visitor.visit(tree)
+            if visitor.edits:
+                current_content = visitor.apply_edits()
+                rules_applied.append("assignment_spacing")
+            
+            # Re-parse after assignment changes (if any) for type declaration visitor
+            if "assignment_spacing" in rules_applied:
+                input_stream = InputStream(current_content)
+                lexer = Ada2022Lexer(input_stream)
+                token_stream = CommonTokenStream(lexer)
+                parser = Ada2022Parser(token_stream)
+                tree = parser.compilation_unit()
+            
+            # Apply type declaration spacing visitor
+            type_visitor = TypeDeclarationSpacingVisitor(self.formatting_rules, current_content)
+            type_visitor.visit(tree)
+            if type_visitor.edits:
+                current_content = type_visitor.apply_edits()
+                rules_applied.append("type_declaration_spacing")
+            
+            # Re-parse after type declaration changes (if any) for range operator visitor
+            if "type_declaration_spacing" in rules_applied:
+                input_stream = InputStream(current_content)
+                lexer = Ada2022Lexer(input_stream)
+                token_stream = CommonTokenStream(lexer)
+                parser = Ada2022Parser(token_stream)
+                tree = parser.compilation_unit()
+            
+            # Apply range operator spacing visitor
+            range_visitor = RangeOperatorSpacingVisitor(self.formatting_rules, current_content)
+            range_visitor.visit(tree)
+            if range_visitor.edits:
+                current_content = range_visitor.apply_edits()
+                rules_applied.append("range_operator_spacing")
+            
+            # Re-parse after range operator changes (if any) for parameter association visitor
+            if "range_operator_spacing" in rules_applied:
+                input_stream = InputStream(current_content)
+                lexer = Ada2022Lexer(input_stream)
+                token_stream = CommonTokenStream(lexer)
+                parser = Ada2022Parser(token_stream)
+                tree = parser.compilation_unit()
+            
+            # Apply parameter association spacing visitor
+            param_visitor = ParameterAssociationSpacingVisitor(self.formatting_rules, current_content)
+            param_visitor.visit(tree)
+            if param_visitor.edits:
+                current_content = param_visitor.apply_edits()
+                rules_applied.append("parameter_association_spacing")
+            
+            # Re-parse after parameter association changes (if any) for binary operators visitor
+            if "parameter_association_spacing" in rules_applied:
+                input_stream = InputStream(current_content)
+                lexer = Ada2022Lexer(input_stream)
+                token_stream = CommonTokenStream(lexer)
+                parser = Ada2022Parser(token_stream)
+                tree = parser.compilation_unit()
+            
+            # Apply binary operators spacing visitor
+            binary_visitor = BinaryOperatorSpacingVisitor(self.formatting_rules, current_content)
+            binary_visitor.visit(tree)
+            if binary_visitor.edits:
+                current_content = binary_visitor.apply_edits()
+                rules_applied.append("binary_operators_spacing")
+            
+        except ImportError:
+            # Parser not available, skip AST-based rules
+            pass
+        except Exception as e:
+            await self.log_error(f"Post-ALS visitor error: {e}")
         
         # Rule 1: Remove trailing whitespace
         # Note: Could be parameterized with preserve_certain_files

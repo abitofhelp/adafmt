@@ -7,6 +7,39 @@
         "spaces_before": 1,
         "spaces_after": 1
       }
+    },
+    "type_declaration": {
+      "enabled": true,
+      "description": "Fix spacing around 'is' in type declarations",
+      "parameters": {
+        "spaces_before": 1,
+        "spaces_after": 1
+      }
+    },
+    "range_operator": {
+      "enabled": true,
+      "description": "Fix spacing around '..' range operator",
+      "parameters": {
+        "spaces_before": 1,
+        "spaces_after": 1
+      }
+    },
+    "parameter_association": {
+      "enabled": true,
+      "description": "Fix spacing around '=>' parameter association operator",
+      "parameters": {
+        "spaces_before": 1,
+        "spaces_after": 1
+      }
+    },
+    "binary_operators": {
+      "enabled": true,
+      "description": "Fix spacing around binary operators",
+      "parameters": {
+        "spaces_before": 1,
+        "spaces_after": 1,
+        "operators": ["+", "-", "*", "/"]
+      }
     }
   }
 }
