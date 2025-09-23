@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, List, Optional, Union
 
-from returns.io import impure_safe
+from returns.io import IOFailure, impure_safe
 from returns.result import Failure, Result, Success
 
 from .errors import FileError, ParseError
@@ -83,7 +83,7 @@ class AdaParserWrapper:
         try:
             # Import ada2022_parser components
             # Note: This assumes ada2022_parser follows standard ANTLR patterns
-            from ada2022_parser import Ada2022Lexer, Ada2022Parser
+            from ada2022_parser import Ada2022Lexer, Ada2022Parser  # type: ignore[attr-defined]
             from antlr4 import CommonTokenStream, InputStream
             
             # Store classes for later use
@@ -194,9 +194,19 @@ class AdaParserWrapper:
         # Read file content
         content_result = read_text(path, encoding="utf-8", errors="ignore")
         
-        if isinstance(content_result, Failure):
-            # File operation failed - return FileError as-is
-            return content_result
+        if isinstance(content_result, IOFailure):
+            # File operation failed - extract FileError and wrap in regular Failure
+            error = content_result.failure()
+            if isinstance(error, FileError):
+                return Failure(error)
+            else:
+                # Shouldn't happen given read_text implementation
+                return Failure(FileError(
+                    message=str(error),
+                    path=path,
+                    operation="read",
+                    not_found=isinstance(error, FileNotFoundError)
+                ))
         
         content = content_result.unwrap()
         

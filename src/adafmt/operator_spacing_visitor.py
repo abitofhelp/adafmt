@@ -17,11 +17,18 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, TypedDict
 
 from returns.result import Failure
 
 from .formatting_visitor import FormattingVisitorBase, TextPosition
+
+
+class OperatorInfo(TypedDict):
+    """Type definition for operator spacing configuration."""
+    spaces_before: int
+    spaces_after: int
+    rule: str
 
 
 class OperatorSpacingVisitor(FormattingVisitorBase):
@@ -42,7 +49,7 @@ class OperatorSpacingVisitor(FormattingVisitorBase):
     """
     
     # Operator definitions with their required spacing
-    OPERATORS = {
+    OPERATORS: Dict[str, OperatorInfo] = {
         ':=': {'spaces_before': 1, 'spaces_after': 1, 'rule': 'assignment_spacing'},
         '=>': {'spaces_before': 1, 'spaces_after': 1, 'rule': 'arrow_spacing'},
         '..': {'spaces_before': 1, 'spaces_after': 1, 'rule': 'range_spacing'},
@@ -53,7 +60,7 @@ class OperatorSpacingVisitor(FormattingVisitorBase):
     }
     
     # Single character operators that need context checking
-    SINGLE_CHAR_OPERATORS = {
+    SINGLE_CHAR_OPERATORS: Dict[str, OperatorInfo] = {
         '=': {'spaces_before': 1, 'spaces_after': 1, 'rule': 'equality_spacing'},
         '<': {'spaces_before': 1, 'spaces_after': 1, 'rule': 'comparison_spacing'},
         '>': {'spaces_before': 1, 'spaces_after': 1, 'rule': 'comparison_spacing'},
