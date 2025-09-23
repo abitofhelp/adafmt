@@ -118,7 +118,7 @@ async def finalize_and_report(
     pattern_elapsed = 0
     if pattern_formatter and pattern_formatter.enabled:
         # Rough estimate: patterns take about 10% of total processing time
-        pattern_elapsed = elapsed_seconds * 0.1
+        pattern_elapsed = int(elapsed_seconds * 0.1)
     
     als_elapsed = elapsed_seconds - pattern_elapsed
     
@@ -174,7 +174,7 @@ async def finalize_and_report(
     # Run post-hook if provided
     if post_hook:
         from .utils import run_hook
-        run_hook(post_hook, "post", logger=(ui.log_line if ui else print) if ui else print, timeout=hook_timeout, dry_run=False)
+        run_hook(post_hook, "post", logger=(ui.log_line if ui else print) if ui else print, timeout=int(hook_timeout), dry_run=False)
 
     if check and total_changed:
         return 1

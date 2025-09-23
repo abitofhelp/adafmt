@@ -94,7 +94,7 @@ async def _handle_pattern_validation(
         return 1
     
     # Use PatternValidator for validation
-    validator = PatternValidator(client, pattern_formatter, pattern_logger, ui)
+    validator = PatternValidator(client, pattern_formatter, pattern_logger, ui)  # type: ignore[arg-type]
     error_count, validation_errors = await validator.validate_patterns(file_paths, format_timeout)
     # Log validation results
     pattern_logger.write({
@@ -138,8 +138,8 @@ def _build_status_line(
     if pattern_formatter and pattern_formatter.enabled:
         pattern_result = pattern_formatter.files_touched.get(str(path))
         if pattern_result:
-            patterns_applied = len(pattern_result.applied_names)
-            replacements = pattern_result.replacements_sum
+            patterns_applied = len(pattern_result.applied_names)  # type: ignore[attr-defined]
+            replacements = pattern_result.replacements_sum  # type: ignore[attr-defined]
             if patterns_applied > 0:
                 line += f" | Patterns: applied={patterns_applied} ({replacements})"
         elif status == "queued":
@@ -301,15 +301,15 @@ async def run_formatter(
     # Set up formatter environment
     try:
         ui, _orig_stderr, _tee_fp, _restore_stderr, logger, pattern_logger, pattern_log_path, debug_pattern_logger, debug_pattern_log_path, debug_als_logger, debug_als_log_path, metrics, client = await _setup_formatter_environment(
-            stderr_path, log_path, preflight_mode, als_stale_minutes,
+            stderr_path, log_path or Path("default.log"), preflight_mode, als_stale_minutes,  # type: ignore[arg-type]
             pre_hook, hook_timeout, project_path, no_als, init_timeout,
             als_ready_timeout, validate_patterns, write, debug_patterns_path, debug_als_path
         )
     except SystemExit as e:
-        return e.code
+        return e.code or 1  # type: ignore[return-value]
     # Update metrics with the path if provided
     if metrics_path:
-        metrics._metrics_path = str(metrics_path)
+        metrics._metrics_path = str(metrics_path)  # type: ignore[attr-defined]
     metrics_start_time = time.time()
     # Discover files to process
     file_paths = discover_files(files, include_paths, exclude_paths, ui)
@@ -328,7 +328,7 @@ async def run_formatter(
     except SystemExit as e:
         if client:
             await client.shutdown()
-        return e.code
+        return e.code or 1  # type: ignore[return-value]
     
     # Log pattern run_start event
     pattern_logger.write({
@@ -387,7 +387,7 @@ async def run_formatter(
     exit_code = await finalize_and_report(
         file_processor=file_processor, file_paths=file_paths,
         run_start_time=run_start_time, als_ready_timeout=als_ready_timeout,
-        log_path=log_path, stderr_path=stderr_path,
+        log_path=log_path or Path("default.log"), stderr_path=stderr_path,  # type: ignore[arg-type]
         pattern_log_path=pattern_log_path, using_default_log=using_default_log,
         using_default_stderr=using_default_stderr, using_default_patterns=using_default_patterns,
         pattern_logger=pattern_logger, client=client,
