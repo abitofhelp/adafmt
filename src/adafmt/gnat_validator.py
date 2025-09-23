@@ -153,7 +153,10 @@ class GNATValidator:
         
         # result is IOSuccess[bool] here - extract the bool value
         if isinstance(result, IOSuccess):
-            return Success(result.unwrap())  # type: ignore[arg-type]
+            availability = result.unwrap()
+            if hasattr(availability, 'unwrap'):
+                availability = availability.unwrap()
+            return Success(availability)
         else:
             # Should not happen but type safety
             return Failure(ValidationError(
@@ -256,7 +259,11 @@ class GNATValidator:
                     message=str(exc)
                 ))
         
-        return Success(result.unwrap())  # type: ignore[arg-type]
+        # Handle IOResult unwrapping properly
+        validation_result = result.unwrap()
+        if hasattr(validation_result, 'unwrap'):
+            validation_result = validation_result.unwrap()
+        return Success(validation_result)
     
     @future_safe
     async def _validate_content_async_internal(
@@ -434,7 +441,12 @@ class GNATValidator:
                 message=str(exc)
             ))
         
-        return Success(result.unwrap())  # type: ignore[arg-type]
+        # IOSuccess contains an IO object, need to extract the actual ValidationResult
+        validation_result = result.unwrap()
+        if hasattr(validation_result, 'unwrap'):
+            # If it's still wrapped in IO, unwrap it again
+            validation_result = validation_result.unwrap()
+        return Success(validation_result)
     
     def _build_command(self, file_path: Path, ada_version: str) -> List[str]:
         """Build GNAT command for validation.
